@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,8 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final Clock clock;
 
@@ -77,6 +81,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataAccessException.class)
     ResponseEntity<ErrorResponse> handleDataAccessError(DataAccessException exception, HttpServletRequest request) {
+        log.error("Database operation failed", exception);
+
         return errorResponse(
             ReasonCode.INTERNAL_ERROR,
             "Internal server error",
@@ -87,6 +93,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorResponse> handleUnexpectedError(Exception exception, HttpServletRequest request) {
+        log.error("Unhandled runtime exception", exception);
+
         return errorResponse(
             ReasonCode.INTERNAL_ERROR,
             "Internal server error",

@@ -10,6 +10,7 @@ DOCKER_RUN_GRADLE_TEST := docker run --rm --network adp-local \
 	-e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adp \
 	-e SPRING_DATASOURCE_USERNAME=adp \
 	-e SPRING_DATASOURCE_PASSWORD=adp \
+	-e ADP_MOCK_RUNTIME_ENABLED=true \
 	-v "$(CURDIR)":/workspace \
 	-v adp-be-gradle-cache:/home/gradle/.gradle \
 	-w /workspace \

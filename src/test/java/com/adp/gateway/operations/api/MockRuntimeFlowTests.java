@@ -13,7 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = "adp.mock-runtime.enabled=true")
 @AutoConfigureMockMvc
 class MockRuntimeFlowTests {
 

@@ -5,9 +5,11 @@ import java.util.List;
 import com.adp.gateway.policy.domain.PolicyArtifact;
 import com.adp.gateway.policy.domain.PolicyArtifactPort;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "true")
 public class ProjectProvisionalPolicyArtifactAdapter implements PolicyArtifactPort {
 
     @Override

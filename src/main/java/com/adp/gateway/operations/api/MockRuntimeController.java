@@ -12,6 +12,7 @@ import com.adp.gateway.policy.domain.PolicyArtifact;
 import com.adp.gateway.policy.domain.PolicyArtifactPort;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/runtime")
+@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "true")
 public class MockRuntimeController {
 
     private final RuntimeContextFactory runtimeContextFactory;
@@ -47,7 +49,12 @@ public class MockRuntimeController {
         @Valid @RequestBody MockRuntimeRequest request,
         HttpServletRequest httpRequest
     ) {
-        RuntimeRequestContext context = runtimeContextFactory.create(httpRequest, request);
+        RuntimeRequestContext context = runtimeContextFactory.create(
+            httpRequest,
+            request.workloadId(),
+            request.purpose(),
+            request.subject()
+        );
         PolicyArtifact artifact = policyArtifactPort.load(context.workloadId());
         DecisionResult decision = fakeDecisionService.evaluate(context, artifact);
         ConnectorResult connector = fakeConnector.execute(context, decision);
