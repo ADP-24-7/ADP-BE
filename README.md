@@ -73,6 +73,12 @@ curl -X POST http://localhost:8080/api/runtime/data-access/preview \
   -H 'X-Request-Id: req_data_access_local' \
   -H 'X-Trace-Id: trace_data_access_local' \
   -d '{"workloadId":"customer_summary","purpose":"CUSTOMER_SUPPORT","subject":"customer:customer-100"}'
+curl -X POST http://localhost:8080/api/runtime/context/preview \
+  -H 'Content-Type: application/json' \
+  -H 'X-ADP-API-Key: local-dev-api-key' \
+  -H 'X-Request-Id: req_context_local' \
+  -H 'X-Trace-Id: trace_context_local' \
+  -d '{"workloadId":"customer_summary","purpose":"CUSTOMER_SUPPORT","subject":"customer:customer-100"}'
 ```
 
 ## Make 명령
@@ -149,3 +155,19 @@ make docker-down
 - [x] Dataset별 Row Limit와 기간 제한 검증
 - [x] 다른 Subject와 다른 Purpose 조회 차단
 - [x] Retrieval Profile 없음 또는 Workload 미등록 시 임의 조회 금지
+
+## BE-3 완료 기준
+
+- [x] Canonical Context Schema 추가
+- [x] Retrieval 결과를 Canonical Context로 조립하는 Context Builder 추가
+- [x] Context Field에 Data Class Metadata 부여
+- [x] 선택되지 않은 원문 Field는 Context 조립 단계에서 제거
+- [x] Context/API 응답에는 raw value 대신 value digest 노출
+- [x] Subject 원문 대신 subject digest 유지
+- [x] `SensitiveDataDetector` Port 추가
+- [x] 초기 Rule/Regex Detector Adapter 추가
+- [x] 이름, 전화, 계좌, 이메일, 주민번호 형식 탐지 규칙 추가
+- [x] Detector Version Metadata 포함
+- [x] Detector Finding에 Type, Location, Offset, Evidence Digest 포함
+- [x] Unknown Data Class 처리 테스트 추가
+- [x] Local 검증용 Context Preview API 추가
