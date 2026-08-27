@@ -39,6 +39,10 @@ public class UserHeaderAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Set<AdpRole> roles = roles(request.getHeader(USER_ROLES_HEADER));
+        if (roles == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         AuthPrincipal principal = new AuthPrincipal(
             userId.trim(),
             PrincipalType.USER,
@@ -63,10 +67,14 @@ public class UserHeaderAuthenticationFilter extends OncePerRequestFilter {
         if (value == null || value.isBlank()) {
             return Set.of();
         }
-        return Arrays.stream(value.split(","))
-            .map(String::trim)
-            .filter(role -> !role.isBlank())
-            .map(AdpRole::valueOf)
-            .collect(Collectors.toUnmodifiableSet());
+        try {
+            return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(role -> !role.isBlank())
+                .map(AdpRole::valueOf)
+                .collect(Collectors.toUnmodifiableSet());
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 }

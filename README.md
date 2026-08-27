@@ -117,8 +117,11 @@ make docker-down
   - purpose
   - subject grant
 - [x] `RUNTIME_EXECUTOR` 권한 기반 Mock Runtime 실행 인가
+- [x] Purpose 검증을 Subject 검증 여부와 독립적으로 적용
+- [x] Privileged Action은 `PRIVILEGED_OPERATOR` 권한으로 분리
 - [x] 인증 실패 / 인가 실패 공통 `ErrorResponse` 및 reason code 분리
 - [x] `/api/internal/auth/context` 인증 컨텍스트 확인 API
 - [x] Runtime Service credential / Admin User credential 인증 경계 분리
+- [x] Local User Header Stub은 `adp.local-user-auth.enabled=true`에서만 활성화
 - [x] Actuator health와 internal info는 인증 없이 조회 허용
 - [x] Local Test Harness API key fixture 제공

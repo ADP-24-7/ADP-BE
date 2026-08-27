@@ -12,4 +12,11 @@ public interface SubjectAuthorizationPort {
         String purpose,
         SubjectRef subject
     );
+
+    boolean canUsePurpose(
+        String principalId,
+        String workloadId,
+        RuntimeAction action,
+        String purpose
+    );
 }

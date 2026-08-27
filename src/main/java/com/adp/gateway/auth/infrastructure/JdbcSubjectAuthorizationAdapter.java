@@ -44,4 +44,29 @@ public class JdbcSubjectAuthorizationAdapter implements SubjectAuthorizationPort
 
         return grantCount > 0;
     }
+
+    @Override
+    public boolean canUsePurpose(
+        String principalId,
+        String workloadId,
+        RuntimeAction action,
+        String purpose
+    ) {
+        Integer grantCount = jdbcClient.sql("""
+                select count(*)
+                from auth_subject_grant
+                where principal_id = :principalId
+                  and workload_id = :workloadId
+                  and action_name = :actionName
+                  and purpose = :purpose
+                """)
+            .param("principalId", principalId)
+            .param("workloadId", workloadId)
+            .param("actionName", action.name())
+            .param("purpose", purpose)
+            .query(Integer.class)
+            .single();
+
+        return grantCount > 0;
+    }
 }

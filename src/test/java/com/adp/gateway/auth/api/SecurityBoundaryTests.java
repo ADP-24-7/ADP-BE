@@ -10,7 +10,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.local-fixtures.enabled=true")
+@SpringBootTest(properties = {
+    "adp.local-fixtures.enabled=true",
+    "adp.local-user-auth.enabled=true"
+})
 @AutoConfigureMockMvc
 class SecurityBoundaryTests {
 
@@ -41,5 +44,14 @@ class SecurityBoundaryTests {
                 .header("X-ADP-User-Roles", "OPERATOR"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.reasonCode").value("MALFORMED_REQUEST"));
+    }
+
+    @Test
+    void adminApiRejectsInvalidLocalUserRoleHeader() throws Exception {
+        mockMvc.perform(get("/api/admin/not-created")
+                .header("X-ADP-User-Id", "admin-local")
+                .header("X-ADP-User-Roles", "INVALID_ROLE"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHENTICATION_FAILED"));
     }
 }

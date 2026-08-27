@@ -8,6 +8,7 @@ public enum AdpRole {
     SECURITY_REVIEWER,
     DEVELOPER,
     OPERATOR,
+    PRIVILEGED_OPERATOR,
     AUDITOR,
     RUNTIME_EXECUTOR
 }

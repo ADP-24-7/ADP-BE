@@ -11,6 +11,7 @@ import com.adp.gateway.common.error.ReasonCode;
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -31,22 +32,22 @@ public class SecurityConfig {
         ApiKeyHasher apiKeyHasher,
         AuthPrincipalLookup authPrincipalLookup,
         ObjectMapper objectMapper,
-        Clock clock
+        Clock clock,
+        @Value("${adp.local-user-auth.enabled:false}") boolean localUserAuthEnabled
     ) throws Exception {
         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter =
             new ApiKeyAuthenticationFilter(apiKeyHasher, authPrincipalLookup, objectMapper, clock);
-        UserHeaderAuthenticationFilter userHeaderAuthenticationFilter = new UserHeaderAuthenticationFilter();
 
         http
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(userHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/api/internal/info").permitAll()
                 .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
                 .requestMatchers("/api/admin/**").hasRole("OPERATOR")
+                .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exception -> exception
@@ -55,6 +56,10 @@ public class SecurityConfig {
                 .accessDeniedHandler((request, response, accessDeniedException) ->
                     writeError(response, objectMapper, clock, HttpStatus.FORBIDDEN, request))
             );
+
+        if (localUserAuthEnabled) {
+            http.addFilterBefore(new UserHeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+        }
 
         return http.build();
     }
