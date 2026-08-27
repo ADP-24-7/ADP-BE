@@ -26,6 +26,7 @@ services:
       ADP_LOCAL_USER_AUTH_ENABLED: "true"
       ADP_LOCAL_FIXTURES_ENABLED: "true"
       ADP_MOCK_RUNTIME_ENABLED: "true"
+      ADP_DATA_ACCESS_PREVIEW_ENABLED: "true"
     ports:
       - "8080:8080"
     depends_on:

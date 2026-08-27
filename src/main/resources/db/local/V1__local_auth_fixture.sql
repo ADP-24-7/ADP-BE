@@ -19,7 +19,8 @@ on conflict (principal_id, role_name) do nothing;
 
 insert into auth_principal_workload (principal_id, workload_id) values
     ('svc_local_runtime', 'workload_be0'),
-    ('svc_local_runtime', 'workload_local')
+    ('svc_local_runtime', 'workload_local'),
+    ('svc_local_runtime', 'customer_summary')
 on conflict (principal_id, workload_id) do nothing;
 
 insert into auth_subject_grant (
@@ -31,7 +32,8 @@ insert into auth_subject_grant (
     subject_id
 ) values
     ('svc_local_runtime', 'workload_be0', 'RUNTIME_EXECUTE', 'BE-0 local E2E', 'customer', 'mock-subject'),
-    ('svc_local_runtime', 'workload_local', 'RUNTIME_EXECUTE', 'local-smoke', 'customer', 'mock-subject')
+    ('svc_local_runtime', 'workload_local', 'RUNTIME_EXECUTE', 'local-smoke', 'customer', 'mock-subject'),
+    ('svc_local_runtime', 'customer_summary', 'RUNTIME_EXECUTE', 'CUSTOMER_SUPPORT', 'customer', 'customer-100')
 on conflict (principal_id, workload_id, action_name, purpose, subject_type, subject_id) do nothing;
 
 insert into auth_api_key (
