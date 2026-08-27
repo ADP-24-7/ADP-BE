@@ -246,4 +246,107 @@ class DataAccessPreviewControllerTests {
             .andExpect(jsonPath("$.records[*].fields.transaction_id").doesNotExist())
             .andExpect(jsonPath("$.records[*].fields.amount").doesNotExist());
     }
+
+    @Test
+    void deniesInvalidTransactionTimeWindowWithoutServerError() throws Exception {
+        insertProfile("profile_invalid_transaction_window", "CUSTOMER_SUPPORT_INVALID_WINDOW");
+        jdbcClient.sql("""
+                insert into retrieval_profile_dataset (profile_id, dataset_name, row_limit, time_window_days)
+                values ('profile_invalid_transaction_window', 'transaction', 2, null)
+                on conflict (profile_id, dataset_name) do nothing
+                """).update();
+        jdbcClient.sql("""
+                insert into retrieval_profile_field (profile_id, dataset_name, field_name, data_class)
+                values (
+                    'profile_invalid_transaction_window',
+                    'transaction',
+                    'transaction_id',
+                    'TRANSACTION_IDENTIFIER'
+                )
+                on conflict (profile_id, dataset_name, field_name) do nothing
+                """).update();
+        insertGrant("CUSTOMER_SUPPORT_INVALID_WINDOW", "customer-100");
+
+        mockMvc.perform(post("/api/runtime/data-access/preview")
+                .header("X-Request-Id", "req_invalid_time_window")
+                .header("X-Trace-Id", "trace_invalid_time_window")
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purpose": "CUSTOMER_SUPPORT_INVALID_WINDOW",
+                      "subject": "customer:customer-100"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("DATA_ACCESS_DENIED"));
+    }
+
+    @Test
+    void deniesProfileFieldThatIsNotInServerCatalog() throws Exception {
+        insertProfile("profile_unsupported_field", "CUSTOMER_SUPPORT_UNSUPPORTED_FIELD");
+        jdbcClient.sql("""
+                insert into retrieval_profile_dataset (profile_id, dataset_name, row_limit, time_window_days)
+                values ('profile_unsupported_field', 'customer', 1, null)
+                on conflict (profile_id, dataset_name) do nothing
+                """).update();
+        jdbcClient.sql("""
+                insert into retrieval_profile_field (profile_id, dataset_name, field_name, data_class)
+                values (
+                    'profile_unsupported_field',
+                    'customer',
+                    'phone_number',
+                    'CUSTOMER_IDENTIFIER'
+                )
+                on conflict (profile_id, dataset_name, field_name) do nothing
+                """).update();
+        insertGrant("CUSTOMER_SUPPORT_UNSUPPORTED_FIELD", "customer-100");
+
+        mockMvc.perform(post("/api/runtime/data-access/preview")
+                .header("X-Request-Id", "req_unsupported_field")
+                .header("X-Trace-Id", "trace_unsupported_field")
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purpose": "CUSTOMER_SUPPORT_UNSUPPORTED_FIELD",
+                      "subject": "customer:customer-100"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("DATA_ACCESS_DENIED"));
+    }
+
+    private void insertProfile(String profileId, String purpose) {
+        jdbcClient.sql("""
+                insert into retrieval_profile (
+                    profile_id, workload_id, purpose, subject_type, enabled
+                ) values (
+                    :profileId,
+                    'customer_summary',
+                    :purpose,
+                    'customer',
+                    true
+                ) on conflict (profile_id) do nothing
+                """)
+            .param("profileId", profileId)
+            .param("purpose", purpose)
+            .update();
+    }
+
+    private void insertGrant(String purpose, String subjectId) {
+        jdbcClient.sql("""
+                insert into auth_subject_grant (
+                    principal_id, workload_id, action_name, purpose, subject_type, subject_id
+                ) values (
+                    'svc_local_runtime', 'customer_summary', 'RUNTIME_EXECUTE',
+                    :purpose, 'customer', :subjectId
+                ) on conflict (principal_id, workload_id, action_name, purpose, subject_type, subject_id) do nothing
+                """)
+            .param("purpose", purpose)
+            .param("subjectId", subjectId)
+            .update();
+    }
 }

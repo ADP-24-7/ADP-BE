@@ -8,5 +8,7 @@ public interface PredefinedRetrievalAdapter {
 
     boolean supports(String workloadId);
 
+    void validateProfile(RetrievalProfile profile);
+
     RetrievalResult retrieve(DataAccessRequest request, RetrievalProfile profile);
 }

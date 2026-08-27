@@ -34,6 +34,7 @@ public class RetrievalService {
             .findFirst()
             .orElseThrow(() -> new DataAccessDeniedException("Predefined retrieval adapter is not registered"));
 
+        adapter.validateProfile(profile);
         RetrievalResult result = adapter.retrieve(request, profile);
         String dataAccessId = auditRecorder.record(request, result);
         return new RetrievalResult(

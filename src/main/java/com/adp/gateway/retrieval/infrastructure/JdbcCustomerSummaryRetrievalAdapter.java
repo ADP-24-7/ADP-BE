@@ -14,6 +14,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
+import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.retrieval.application.PredefinedRetrievalAdapter;
 import com.adp.gateway.retrieval.domain.RetrievalDatasetScope;
 import com.adp.gateway.retrieval.domain.RetrievalField;
@@ -56,6 +57,21 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
     @Override
     public boolean supports(String workloadId) {
         return WORKLOAD_ID.equals(workloadId);
+    }
+
+    @Override
+    public void validateProfile(RetrievalProfile profile) {
+        for (RetrievalField field : profile.fields()) {
+            if (!FIELD_CATALOG.getOrDefault(field.datasetName(), Map.of()).containsKey(field.fieldName())) {
+                throw new DataAccessDeniedException("Retrieval profile contains an unsupported field");
+            }
+        }
+
+        profile.scopeFor("transaction").ifPresent(scope -> {
+            if (scope.timeWindowDays() == null || scope.timeWindowDays() < 1) {
+                throw new DataAccessDeniedException("Transaction time window is invalid");
+            }
+        });
     }
 
     @Override
