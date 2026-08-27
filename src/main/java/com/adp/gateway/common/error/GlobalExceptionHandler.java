@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
+import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +86,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.AUTHORIZATION_DENIED,
             "Authorization denied",
+            HttpStatus.FORBIDDEN,
+            request
+        );
+    }
+
+    @ExceptionHandler(DataAccessDeniedException.class)
+    ResponseEntity<ErrorResponse> handleDataAccessDenied(
+        DataAccessDeniedException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.DATA_ACCESS_DENIED,
+            "Data access denied",
             HttpStatus.FORBIDDEN,
             request
         );

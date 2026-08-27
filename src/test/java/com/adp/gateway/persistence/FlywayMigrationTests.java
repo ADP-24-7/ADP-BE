@@ -61,4 +61,26 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(5);
     }
+
+    @Test
+    void migrationCreatesDataAccessBaselineTables() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where table_schema = 'public'
+                  and table_name in (
+                    'workload_registry',
+                    'retrieval_profile',
+                    'retrieval_profile_field',
+                    'synthetic_customer',
+                    'synthetic_account',
+                    'synthetic_transaction',
+                    'data_access_event'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(7);
+    }
 }

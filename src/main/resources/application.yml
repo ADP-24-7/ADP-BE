@@ -21,6 +21,8 @@ adp:
     enabled: ${ADP_LOCAL_FIXTURES_ENABLED:false}
   mock-runtime:
     enabled: ${ADP_MOCK_RUNTIME_ENABLED:false}
+  data-access-preview:
+    enabled: ${ADP_DATA_ACCESS_PREVIEW_ENABLED:false}
 
 server:
   port: ${SERVER_PORT:8080}

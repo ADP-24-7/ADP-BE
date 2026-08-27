@@ -67,6 +67,12 @@ curl -X POST http://localhost:8080/api/runtime/mock \
   -H 'X-Trace-Id: trace_local_001' \
   -H 'Idempotency-Key: idem_local_001' \
   -d '{"workloadId":"workload_local","purpose":"local-smoke","subject":"customer:mock-subject"}'
+curl -X POST http://localhost:8080/api/runtime/data-access/preview \
+  -H 'Content-Type: application/json' \
+  -H 'X-ADP-API-Key: local-dev-api-key' \
+  -H 'X-Request-Id: req_data_access_local' \
+  -H 'X-Trace-Id: trace_data_access_local' \
+  -d '{"workloadId":"customer_summary","purpose":"CUSTOMER_SUPPORT","subject":"customer:customer-100"}'
 ```
 
 ## Make 명령
@@ -125,3 +131,18 @@ make docker-down
 - [x] Local User Header Stub은 `adp.local-user-auth.enabled=true`에서만 활성화
 - [x] Actuator health와 internal info는 인증 없이 조회 허용
 - [x] Local Test Harness API key fixture 제공
+
+## BE-2 완료 기준
+
+- [x] Workload Registry baseline
+- [x] Retrieval Profile baseline
+- [x] Dataset/Field allowlist와 Data Class metadata
+- [x] Subject Scope, Time Window, Row Limit 기반 Data Access Guard
+- [x] 자유 SQL 없이 Workload별 Predefined Retrieval Adapter 사용
+- [x] Demo Synthetic Financial Schema와 Seed Data
+- [x] Query/Data Access Audit Metadata 저장
+- [x] 조회 결과 원문은 Audit에 저장하지 않고 field/data class/row count만 기록
+- [x] 허용 Field만 조회되는지 검증
+- [x] Row Limit와 기간 제한 검증
+- [x] 다른 Subject와 다른 Purpose 조회 차단
+- [x] Retrieval Profile 없음 또는 Workload 미등록 시 임의 조회 금지
