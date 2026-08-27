@@ -23,6 +23,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/adp
       SPRING_DATASOURCE_USERNAME: adp
       SPRING_DATASOURCE_PASSWORD: adp
+      ADP_LOCAL_USER_AUTH_ENABLED: "true"
+      ADP_LOCAL_FIXTURES_ENABLED: "true"
       ADP_MOCK_RUNTIME_ENABLED: "true"
     ports:
       - "8080:8080"
