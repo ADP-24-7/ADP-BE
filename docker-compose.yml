@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: adp
+      POSTGRES_USER: adp
+      POSTGRES_PASSWORD: adp
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adp -d adp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - adp-local
+
+  adp-be:
+    build:
+      context: .
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/adp
+      SPRING_DATASOURCE_USERNAME: adp
+      SPRING_DATASOURCE_PASSWORD: adp
+      ADP_MOCK_RUNTIME_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    networks:
+      - adp-local
+
+networks:
+  adp-local:
+    external: true

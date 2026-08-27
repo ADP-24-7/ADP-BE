@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: adp
+          POSTGRES_USER: adp
+          POSTGRES_PASSWORD: adp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U adp -d adp"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/adp
+      SPRING_DATASOURCE_USERNAME: adp
+      SPRING_DATASOURCE_PASSWORD: adp
+      ADP_MOCK_RUNTIME_ENABLED: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        run: gradle --no-daemon test
+
+      - name: Package
+        run: gradle --no-daemon bootJar
