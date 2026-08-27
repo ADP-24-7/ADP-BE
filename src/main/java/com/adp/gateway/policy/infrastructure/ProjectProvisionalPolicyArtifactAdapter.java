@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.adp.gateway.policy.domain.PolicyArtifact;
 import com.adp.gateway.policy.domain.PolicyArtifactPort;
+import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,7 +15,7 @@ public class ProjectProvisionalPolicyArtifactAdapter implements PolicyArtifactPo
         return new PolicyArtifact(
             "PROJECT_PROVISIONAL",
             "0.0.0",
-            "candidate",
+            PolicyLifecycleStage.PROJECT_PROVISIONAL,
             workloadId,
             List.of("BE-0 fixture. Not approved for production policy enforcement."),
             "local-fixture"

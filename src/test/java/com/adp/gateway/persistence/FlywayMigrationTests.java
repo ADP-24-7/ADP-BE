@@ -26,4 +26,19 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(1);
     }
+
+    @Test
+    void migrationCreatesPolicySnapshotColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_event'
+                  and column_name in ('policy_artifact_id', 'policy_version', 'policy_digest')
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(3);
+    }
 }

@@ -16,7 +16,9 @@ public class FakeDecisionService {
             "dec_" + UUID.nameUUIDFromBytes((context.requestId() + policyArtifact.artifactId()).getBytes()),
             "ALLOW",
             ReasonCode.MOCK_DECISION_ALLOW,
-            policyArtifact.artifactId()
+            policyArtifact.artifactId(),
+            policyArtifact.artifactVersion(),
+            policyArtifact.digest()
         );
     }
 }

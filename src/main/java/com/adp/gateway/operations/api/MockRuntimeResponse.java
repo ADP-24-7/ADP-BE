@@ -6,6 +6,8 @@ public record MockRuntimeResponse(
     String idempotencyKey,
     String policyArtifactId,
     String policyArtifactStatus,
+    String policyVersion,
+    String policyDigest,
     String decisionId,
     String outcome,
     String reasonCode,

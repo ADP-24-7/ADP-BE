@@ -6,6 +6,8 @@ public record DecisionResult(
     String decisionId,
     String outcome,
     ReasonCode reasonCode,
-    String policyArtifactId
+    String policyArtifactId,
+    String policyVersion,
+    String policyDigest
 ) {
 }

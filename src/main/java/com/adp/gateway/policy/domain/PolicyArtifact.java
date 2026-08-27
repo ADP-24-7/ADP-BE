@@ -5,7 +5,7 @@ import java.util.List;
 public record PolicyArtifact(
     String artifactId,
     String artifactVersion,
-    String status,
+    PolicyLifecycleStage status,
     String workloadId,
     List<String> limitations,
     String digest

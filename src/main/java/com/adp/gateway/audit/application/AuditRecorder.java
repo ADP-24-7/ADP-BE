@@ -34,6 +34,9 @@ public class AuditRecorder {
             context.idempotencyKey(),
             context.workloadId(),
             decisionResult.decisionId(),
+            decisionResult.policyArtifactId(),
+            decisionResult.policyVersion(),
+            decisionResult.policyDigest(),
             decisionResult.reasonCode().name(),
             connectorResult.status(),
             OffsetDateTime.now(clock)
@@ -42,11 +45,13 @@ public class AuditRecorder {
         jdbcClient.sql("""
             insert into audit_event (
                 audit_id, request_id, trace_id, idempotency_key, workload_id,
-                decision_id, reason_code, connector_status, created_at
+                decision_id, policy_artifact_id, policy_version, policy_digest,
+                reason_code, connector_status, created_at
             )
             values (
                 :auditId, :requestId, :traceId, :idempotencyKey, :workloadId,
-                :decisionId, :reasonCode, :connectorStatus, :createdAt
+                :decisionId, :policyArtifactId, :policyVersion, :policyDigest,
+                :reasonCode, :connectorStatus, :createdAt
             )
             """)
             .param("auditId", auditContext.auditId())
@@ -55,6 +60,9 @@ public class AuditRecorder {
             .param("idempotencyKey", auditContext.idempotencyKey())
             .param("workloadId", auditContext.workloadId())
             .param("decisionId", auditContext.decisionId())
+            .param("policyArtifactId", auditContext.policyArtifactId())
+            .param("policyVersion", auditContext.policyVersion())
+            .param("policyDigest", auditContext.policyDigest())
             .param("reasonCode", auditContext.reasonCode())
             .param("connectorStatus", auditContext.connectorStatus())
             .param("createdAt", auditContext.createdAt())

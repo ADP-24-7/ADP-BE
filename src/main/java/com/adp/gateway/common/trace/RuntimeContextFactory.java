@@ -1,8 +1,10 @@
 package com.adp.gateway.common.trace;
 
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
+import com.adp.gateway.common.error.InvalidRuntimeHeaderException;
 import com.adp.gateway.operations.api.MockRuntimeRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
@@ -10,11 +12,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class RuntimeContextFactory {
 
+    private static final Pattern SAFE_IDEMPOTENCY_VALUE = Pattern.compile("^[A-Za-z0-9._:-]{1,120}$");
+
     public RuntimeRequestContext create(HttpServletRequest httpRequest, MockRuntimeRequest request) {
+        String idempotencyKey = valueOrNew(httpRequest.getHeader(TraceHeaders.IDEMPOTENCY_KEY));
+        if (!SAFE_IDEMPOTENCY_VALUE.matcher(idempotencyKey).matches()) {
+            throw new InvalidRuntimeHeaderException(TraceHeaders.IDEMPOTENCY_KEY);
+        }
+
         return new RuntimeRequestContext(
             valueOrNew(attribute(httpRequest, TraceHeaders.REQUEST_ID_ATTRIBUTE)),
             valueOrNew(attribute(httpRequest, TraceHeaders.TRACE_ID_ATTRIBUTE)),
-            valueOrNew(httpRequest.getHeader(TraceHeaders.IDEMPOTENCY_KEY)),
+            idempotencyKey,
             request.workloadId(),
             request.purpose(),
             request.subject()
