@@ -14,10 +14,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceContextFilter extends OncePerRequestFilter {
 
     private static final Pattern SAFE_TRACE_VALUE = Pattern.compile("^[A-Za-z0-9._:-]{1,80}$");

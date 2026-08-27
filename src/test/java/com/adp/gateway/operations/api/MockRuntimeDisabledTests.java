@@ -22,6 +22,7 @@ class MockRuntimeDisabledTests {
         mockMvc.perform(post("/api/runtime/mock")
                 .header("X-Request-Id", "req_mock_disabled")
                 .header("X-Trace-Id", "trace_mock_disabled")
+                .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("""
                     {

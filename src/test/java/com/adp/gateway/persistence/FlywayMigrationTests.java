@@ -41,4 +41,18 @@ class FlywayMigrationTests {
 
         assertThat(columnCount).isEqualTo(3);
     }
+
+    @Test
+    void migrationCreatesAuthBaselineTables() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where table_schema = 'public'
+                  and table_name in ('auth_principal', 'auth_principal_role', 'auth_api_key')
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(3);
+    }
 }

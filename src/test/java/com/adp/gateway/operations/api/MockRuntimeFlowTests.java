@@ -29,6 +29,7 @@ class MockRuntimeFlowTests {
                 .header("X-Request-Id", "req_be0_test")
                 .header("X-Trace-Id", "trace_be0_test")
                 .header("Idempotency-Key", "idem_be0_test")
+                .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("""
                     {
@@ -73,6 +74,7 @@ class MockRuntimeFlowTests {
         mockMvc.perform(post("/api/runtime/mock")
                 .header("X-Request-Id", "req_bad_json")
                 .header("X-Trace-Id", "trace_bad_json")
+                .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("{"))
             .andExpect(status().isBadRequest())
@@ -88,6 +90,7 @@ class MockRuntimeFlowTests {
         mockMvc.perform(post("/api/runtime/mock")
                 .header("X-Request-Id", "x".repeat(81))
                 .header("X-Trace-Id", "trace_bad_header")
+                .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("""
                     {

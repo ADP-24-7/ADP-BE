@@ -58,8 +58,11 @@ make docker-up
 curl http://localhost:8080/actuator/health
 curl http://localhost:8080/actuator/health/readiness
 curl http://localhost:8080/api/internal/info
+curl http://localhost:8080/api/internal/auth/context \
+  -H 'X-ADP-API-Key: local-dev-api-key'
 curl -X POST http://localhost:8080/api/runtime/mock \
   -H 'Content-Type: application/json' \
+  -H 'X-ADP-API-Key: local-dev-api-key' \
   -H 'X-Request-Id: req_local_001' \
   -H 'X-Trace-Id: trace_local_001' \
   -H 'Idempotency-Key: idem_local_001' \
@@ -99,3 +102,19 @@ make docker-down
 - [x] Trace propagation / Mock Runtime Flow Test
 - [x] Mock Request -> Fake Decision -> Fake Connector -> Audit Record
 - [x] Redis/Kafka 미도입
+
+## BE-1 완료 기준
+
+- [x] Spring Security 기반 stateless API 인증
+- [x] `X-ADP-API-Key` 기반 Service Principal 인증
+- [x] API Key 원문 미저장, SHA-256 hash 기반 lookup
+- [x] Principal / Role / API Key PostgreSQL baseline
+- [x] RBAC role model
+- [x] Context 권한 모델
+  - workload scope
+  - subject authorization required 여부
+- [x] `RUNTIME_EXECUTOR` 권한 기반 Mock Runtime 실행 인가
+- [x] 인증 실패 / 인가 실패 공통 `ErrorResponse`
+- [x] `/api/internal/auth/context` 인증 컨텍스트 확인 API
+- [x] Actuator health와 internal info는 인증 없이 조회 허용
+- [x] Local Test Harness API key fixture 제공
