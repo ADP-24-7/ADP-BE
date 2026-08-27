@@ -42,6 +42,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/admin/");
+    }
+
+    @Override
     protected void doFilterInternal(
         HttpServletRequest request,
         HttpServletResponse response,
@@ -55,7 +60,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         AuthPrincipal principal = authPrincipalLookup.findByApiKeyHash(apiKeyHasher.hash(apiKey))
             .orElse(null);
-        if (principal == null) {
+        if (principal == null || principal.principalType() != com.adp.gateway.auth.domain.PrincipalType.SERVICE) {
             writeUnauthorized(response, request);
             return;
         }
@@ -76,7 +81,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType("application/json");
 
         ErrorResponse errorResponse = new ErrorResponse(
-            ReasonCode.AUTHORIZATION_DENIED.name(),
+            ReasonCode.AUTHENTICATION_FAILED.name(),
             "Authentication required",
             attribute(request, TraceHeaders.REQUEST_ID_ATTRIBUTE),
             attribute(request, TraceHeaders.TRACE_ID_ATTRIBUTE),

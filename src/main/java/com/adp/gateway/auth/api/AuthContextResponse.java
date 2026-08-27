@@ -6,7 +6,7 @@ public record AuthContextResponse(
     String principalId,
     String principalType,
     Set<String> roles,
-    String workloadScope,
+    Set<String> workloadIds,
     boolean subjectAuthorizationRequired
 ) {
 }

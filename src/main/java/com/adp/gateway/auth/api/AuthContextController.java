@@ -20,7 +20,7 @@ public class AuthContextController {
             principal.principalId(),
             principal.principalType().name(),
             principal.roles().stream().map(AdpRole::name).collect(java.util.stream.Collectors.toSet()),
-            principal.workloadScope(),
+            principal.workloadIds(),
             principal.subjectAuthorizationRequired()
         ));
     }

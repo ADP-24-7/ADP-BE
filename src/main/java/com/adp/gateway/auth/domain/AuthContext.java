@@ -6,7 +6,7 @@ public record AuthContext(
     String principalId,
     PrincipalType principalType,
     Set<AdpRole> roles,
-    String workloadScope,
+    Set<String> workloadIds,
     boolean subjectAuthorizationRequired
 ) {
 
@@ -15,7 +15,7 @@ public record AuthContext(
             principal.principalId(),
             principal.principalType(),
             principal.roles(),
-            principal.workloadScope(),
+            principal.workloadIds(),
             principal.subjectAuthorizationRequired()
         );
     }

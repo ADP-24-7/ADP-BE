@@ -13,7 +13,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.mock-runtime.enabled=true")
+@SpringBootTest(properties = {
+    "adp.local-fixtures.enabled=true",
+    "adp.mock-runtime.enabled=true"
+})
 @AutoConfigureMockMvc
 class MockRuntimeFlowTests {
 
@@ -105,5 +108,47 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.requestId").doesNotExist())
             .andExpect(jsonPath("$.traceId").value("trace_bad_header"))
             .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    void runtimeExecutionRejectsSubjectWithoutGrant() throws Exception {
+        mockMvc.perform(post("/api/runtime/mock")
+                .header("X-Request-Id", "req_forbidden_subject")
+                .header("X-Trace-Id", "trace_forbidden_subject")
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "workload_be0",
+                      "purpose": "BE-0 local E2E",
+                      "subject": "customer:not-granted"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
+            .andExpect(jsonPath("$.message").value("Authorization denied"))
+            .andExpect(jsonPath("$.requestId").value("req_forbidden_subject"))
+            .andExpect(jsonPath("$.traceId").value("trace_forbidden_subject"));
+    }
+
+    @Test
+    void runtimeExecutionRejectsPurposeWithoutGrant() throws Exception {
+        mockMvc.perform(post("/api/runtime/mock")
+                .header("X-Request-Id", "req_forbidden_purpose")
+                .header("X-Trace-Id", "trace_forbidden_purpose")
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "workload_be0",
+                      "purpose": "MODEL_TRAINING",
+                      "subject": "customer:mock-subject"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
+            .andExpect(jsonPath("$.message").value("Authorization denied"))
+            .andExpect(jsonPath("$.requestId").value("req_forbidden_purpose"))
+            .andExpect(jsonPath("$.traceId").value("trace_forbidden_purpose"));
     }
 }

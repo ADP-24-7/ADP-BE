@@ -6,8 +6,8 @@ public record AuthPrincipal(
     String principalId,
     PrincipalType principalType,
     String displayName,
-    String workloadScope,
     boolean subjectAuthorizationRequired,
+    Set<String> workloadIds,
     Set<AdpRole> roles
 ) {
 
@@ -16,6 +16,6 @@ public record AuthPrincipal(
     }
 
     public boolean canAccessWorkload(String workloadId) {
-        return "*".equals(workloadScope) || workloadScope.equals(workloadId);
+        return workloadIds.contains("*") || workloadIds.contains(workloadId);
     }
 }

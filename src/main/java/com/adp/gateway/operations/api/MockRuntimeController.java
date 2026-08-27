@@ -2,8 +2,11 @@ package com.adp.gateway.operations.api;
 
 import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.audit.domain.AuditContext;
+import com.adp.gateway.auth.application.AuthorizationRequest;
 import com.adp.gateway.auth.application.AuthorizationService;
 import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.auth.domain.RuntimeAction;
+import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.connector.application.FakeConnector;
@@ -58,7 +61,13 @@ public class MockRuntimeController {
         Authentication authentication
     ) {
         AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
-        if (!authorizationService.canExecuteRuntime(principal, request.workloadId(), request.subject())) {
+        if (!authorizationService.authorize(new AuthorizationRequest(
+            principal,
+            request.workloadId(),
+            RuntimeAction.RUNTIME_EXECUTE,
+            request.purpose(),
+            SubjectRef.from(request.subject())
+        )).allowed()) {
             throw new AccessDeniedException("Runtime execution is not allowed");
         }
 

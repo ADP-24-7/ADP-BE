@@ -48,11 +48,17 @@ class FlywayMigrationTests {
                 select count(*)
                 from information_schema.tables
                 where table_schema = 'public'
-                  and table_name in ('auth_principal', 'auth_principal_role', 'auth_api_key')
+                  and table_name in (
+                    'auth_principal',
+                    'auth_principal_role',
+                    'auth_api_key',
+                    'auth_principal_workload',
+                    'auth_subject_grant'
+                  )
                 """)
             .query(Integer.class)
             .single();
 
-        assertThat(tableCount).isEqualTo(3);
+        assertThat(tableCount).isEqualTo(5);
     }
 }

@@ -10,7 +10,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.mock-runtime.enabled=false")
+@SpringBootTest(properties = {
+    "adp.local-fixtures.enabled=true",
+    "adp.mock-runtime.enabled=false"
+})
 @AutoConfigureMockMvc
 class MockRuntimeDisabledTests {
 

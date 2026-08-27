@@ -10,7 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = "adp.local-fixtures.enabled=true")
 @AutoConfigureMockMvc
 class AuthContextControllerTests {
 
@@ -25,8 +25,8 @@ class AuthContextControllerTests {
             .andExpect(jsonPath("$.principalId").value("svc_local_runtime"))
             .andExpect(jsonPath("$.principalType").value("SERVICE"))
             .andExpect(jsonPath("$.roles").isArray())
-            .andExpect(jsonPath("$.workloadScope").value("*"))
-            .andExpect(jsonPath("$.subjectAuthorizationRequired").value(false));
+            .andExpect(jsonPath("$.workloadIds").isArray())
+            .andExpect(jsonPath("$.subjectAuthorizationRequired").value(true));
     }
 
     @Test
@@ -35,7 +35,7 @@ class AuthContextControllerTests {
                 .header("X-Request-Id", "req_missing_auth")
                 .header("X-Trace-Id", "trace_missing_auth"))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
+            .andExpect(jsonPath("$.reasonCode").value("AUTHENTICATION_FAILED"))
             .andExpect(jsonPath("$.message").value("Authentication required"))
             .andExpect(jsonPath("$.requestId").value("req_missing_auth"))
             .andExpect(jsonPath("$.traceId").value("trace_missing_auth"));
@@ -48,7 +48,7 @@ class AuthContextControllerTests {
                 .header("X-Trace-Id", "trace_invalid_auth")
                 .header("X-ADP-API-Key", "wrong-key"))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
+            .andExpect(jsonPath("$.reasonCode").value("AUTHENTICATION_FAILED"))
             .andExpect(jsonPath("$.message").value("Authentication required"))
             .andExpect(jsonPath("$.requestId").value("req_invalid_auth"))
             .andExpect(jsonPath("$.traceId").value("trace_invalid_auth"));

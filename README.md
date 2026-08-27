@@ -66,7 +66,7 @@ curl -X POST http://localhost:8080/api/runtime/mock \
   -H 'X-Request-Id: req_local_001' \
   -H 'X-Trace-Id: trace_local_001' \
   -H 'Idempotency-Key: idem_local_001' \
-  -d '{"workloadId":"workload_local","purpose":"local-smoke","subject":"mock-subject"}'
+  -d '{"workloadId":"workload_local","purpose":"local-smoke","subject":"customer:mock-subject"}'
 ```
 
 ## Make 명령
@@ -108,13 +108,17 @@ make docker-down
 - [x] Spring Security 기반 stateless API 인증
 - [x] `X-ADP-API-Key` 기반 Service Principal 인증
 - [x] API Key 원문 미저장, SHA-256 hash 기반 lookup
-- [x] Principal / Role / API Key PostgreSQL baseline
+- [x] Principal / Role / Workload / API Key PostgreSQL schema baseline
+- [x] Local Test Harness credential은 opt-in fixture로 분리
 - [x] RBAC role model
 - [x] Context 권한 모델
-  - workload scope
-  - subject authorization required 여부
+  - workload mapping
+  - action
+  - purpose
+  - subject grant
 - [x] `RUNTIME_EXECUTOR` 권한 기반 Mock Runtime 실행 인가
-- [x] 인증 실패 / 인가 실패 공통 `ErrorResponse`
+- [x] 인증 실패 / 인가 실패 공통 `ErrorResponse` 및 reason code 분리
 - [x] `/api/internal/auth/context` 인증 컨텍스트 확인 API
+- [x] Runtime Service credential / Admin User credential 인증 경계 분리
 - [x] Actuator health와 internal info는 인증 없이 조회 허용
 - [x] Local Test Harness API key fixture 제공

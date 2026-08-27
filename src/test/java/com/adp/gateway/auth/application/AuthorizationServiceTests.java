@@ -7,55 +7,94 @@ import java.util.Set;
 import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.PrincipalType;
+import com.adp.gateway.auth.domain.RuntimeAction;
+import com.adp.gateway.auth.domain.SubjectRef;
 import org.junit.jupiter.api.Test;
 
 class AuthorizationServiceTests {
 
-    private final AuthorizationService authorizationService = new AuthorizationService();
-
     @Test
     void allowsRuntimeExecutorInWorkloadScope() {
-        AuthPrincipal principal = principal("workload-a", false, AdpRole.RUNTIME_EXECUTOR);
+        AuthorizationService authorizationService = authorizationService(true);
+        AuthPrincipal principal = principal(Set.of("workload-a"), false, AdpRole.RUNTIME_EXECUTOR);
 
-        boolean allowed = authorizationService.canExecuteRuntime(principal, "workload-a", null);
+        boolean allowed = authorizationService.authorize(request(principal, "workload-a", "purpose-a", null)).allowed();
 
         assertThat(allowed).isTrue();
     }
 
     @Test
     void deniesRuntimeExecutionWithoutRole() {
-        AuthPrincipal principal = principal("*", false, AdpRole.AUDITOR);
+        AuthorizationService authorizationService = authorizationService(true);
+        AuthPrincipal principal = principal(Set.of("*"), false, AdpRole.AUDITOR);
 
-        boolean allowed = authorizationService.canExecuteRuntime(principal, "workload-a", "subject-a");
+        boolean allowed = authorizationService.authorize(
+            request(principal, "workload-a", "purpose-a", SubjectRef.from("customer:subject-a"))
+        ).allowed();
 
         assertThat(allowed).isFalse();
     }
 
     @Test
     void deniesRuntimeExecutionOutsideWorkloadScope() {
-        AuthPrincipal principal = principal("workload-a", false, AdpRole.RUNTIME_EXECUTOR);
+        AuthorizationService authorizationService = authorizationService(true);
+        AuthPrincipal principal = principal(Set.of("workload-a"), false, AdpRole.RUNTIME_EXECUTOR);
 
-        boolean allowed = authorizationService.canExecuteRuntime(principal, "workload-b", "subject-b");
+        boolean allowed = authorizationService.authorize(
+            request(principal, "workload-b", "purpose-a", SubjectRef.from("customer:subject-b"))
+        ).allowed();
 
         assertThat(allowed).isFalse();
     }
 
     @Test
     void deniesMissingSubjectWhenSubjectAuthorizationIsRequired() {
-        AuthPrincipal principal = principal("*", true, AdpRole.RUNTIME_EXECUTOR);
+        AuthorizationService authorizationService = authorizationService(true);
+        AuthPrincipal principal = principal(Set.of("*"), true, AdpRole.RUNTIME_EXECUTOR);
 
-        boolean allowed = authorizationService.canExecuteRuntime(principal, "workload-a", " ");
+        boolean allowed = authorizationService.authorize(request(principal, "workload-a", "purpose-a", null)).allowed();
 
         assertThat(allowed).isFalse();
     }
 
-    private AuthPrincipal principal(String workloadScope, boolean subjectAuthorizationRequired, AdpRole role) {
+    @Test
+    void deniesDifferentSubjectWhenSubjectAuthorizationIsRequired() {
+        AuthorizationService authorizationService = authorizationService(false);
+        AuthPrincipal principal = principal(Set.of("workload-a"), true, AdpRole.RUNTIME_EXECUTOR);
+
+        boolean allowed = authorizationService.authorize(
+            request(principal, "workload-a", "purpose-a", SubjectRef.from("customer:subject-b"))
+        ).allowed();
+
+        assertThat(allowed).isFalse();
+    }
+
+    private AuthorizationService authorizationService(boolean subjectGrantAllowed) {
+        return new AuthorizationService((principalId, workloadId, action, purpose, subject) -> subjectGrantAllowed);
+    }
+
+    private com.adp.gateway.auth.application.AuthorizationRequest request(
+        AuthPrincipal principal,
+        String workloadId,
+        String purpose,
+        SubjectRef subject
+    ) {
+        return new com.adp.gateway.auth.application.AuthorizationRequest(
+            principal,
+            workloadId,
+            RuntimeAction.RUNTIME_EXECUTE,
+            purpose,
+            subject
+        );
+    }
+
+    private AuthPrincipal principal(Set<String> workloadIds, boolean subjectAuthorizationRequired, AdpRole role) {
         return new AuthPrincipal(
             "principal",
             PrincipalType.SERVICE,
             "Principal",
-            workloadScope,
             subjectAuthorizationRequired,
+            workloadIds,
             Set.of(role)
         );
     }

@@ -35,14 +35,18 @@ public class SecurityConfig {
     ) throws Exception {
         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter =
             new ApiKeyAuthenticationFilter(apiKeyHasher, authPrincipalLookup, objectMapper, clock);
+        UserHeaderAuthenticationFilter userHeaderAuthenticationFilter = new UserHeaderAuthenticationFilter();
 
         http
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(userHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/api/internal/info").permitAll()
+                .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
+                .requestMatchers("/api/admin/**").hasRole("OPERATOR")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exception -> exception
@@ -65,8 +69,12 @@ public class SecurityConfig {
         response.setStatus(status.value());
         response.setContentType("application/json");
 
+        ReasonCode reasonCode = status == HttpStatus.UNAUTHORIZED
+            ? ReasonCode.AUTHENTICATION_FAILED
+            : ReasonCode.AUTHORIZATION_DENIED;
+
         ErrorResponse errorResponse = new ErrorResponse(
-            ReasonCode.AUTHORIZATION_DENIED.name(),
+            reasonCode.name(),
             status == HttpStatus.UNAUTHORIZED ? "Authentication required" : "Authorization denied",
             attribute(request, TraceHeaders.REQUEST_ID_ATTRIBUTE),
             attribute(request, TraceHeaders.TRACE_ID_ATTRIBUTE),
