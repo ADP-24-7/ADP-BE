@@ -1,0 +1,13 @@
+package com.adp.gateway.policy.domain;
+
+import java.util.List;
+
+public record PolicyArtifact(
+    String artifactId,
+    String artifactVersion,
+    String status,
+    String workloadId,
+    List<String> limitations,
+    String digest
+) {
+}

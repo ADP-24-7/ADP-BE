@@ -1,35 +1,52 @@
 SHELL := /bin/sh
 
-MVN_IMAGE ?= maven:3.9.16-eclipse-temurin-21
-DOCKER_RUN_MVN := docker run --rm -v "$(CURDIR)":/workspace -w /workspace $(MVN_IMAGE) mvn
+GRADLE_IMAGE ?= gradle:8.14.3-jdk21
+DOCKER_RUN_GRADLE := docker run --rm \
+	-v "$(CURDIR)":/workspace \
+	-v adp-be-gradle-cache:/home/gradle/.gradle \
+	-w /workspace \
+	$(GRADLE_IMAGE) gradle --no-daemon
+DOCKER_RUN_GRADLE_TEST := docker run --rm --network adp-local \
+	-e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/adp \
+	-e SPRING_DATASOURCE_USERNAME=adp \
+	-e SPRING_DATASOURCE_PASSWORD=adp \
+	-v "$(CURDIR)":/workspace \
+	-v adp-be-gradle-cache:/home/gradle/.gradle \
+	-w /workspace \
+	$(GRADLE_IMAGE) gradle --no-daemon
 
-.PHONY: help setup test package check run docker-up docker-down
+.PHONY: help setup postgres-up test package check run docker-up docker-down
 
 help:
 	@printf "%s\n" \
 		"ADP-BE commands:" \
-		"  make setup       Verify Docker-based Maven toolchain" \
+		"  make setup       Verify Docker-based Gradle toolchain" \
+		"  make postgres-up Start PostgreSQL for local tests" \
 		"  make test        Run unit/integration tests" \
 		"  make package     Build executable jar" \
 		"  make check       Run BE-0 verification" \
-		"  make run         Run locally through Docker Maven image" \
+		"  make run         Run locally through Docker Gradle image" \
 		"  make docker-up   Build and start container" \
 		"  make docker-down Stop container"
 
 setup:
 	docker --version
-	docker run --rm $(MVN_IMAGE) mvn -version
+	docker run --rm $(GRADLE_IMAGE) gradle --version
 
-test:
-	$(DOCKER_RUN_MVN) test
+postgres-up:
+	docker network inspect adp-local >/dev/null 2>&1 || docker network create adp-local
+	docker compose up -d postgres
+
+test: postgres-up
+	$(DOCKER_RUN_GRADLE_TEST) test
 
 package:
-	$(DOCKER_RUN_MVN) package
+	$(DOCKER_RUN_GRADLE) bootJar
 
 check: test package
 
-run:
-	$(DOCKER_RUN_MVN) spring-boot:run
+run: postgres-up
+	$(DOCKER_RUN_GRADLE_TEST) bootRun
 
 docker-up:
 	docker network inspect adp-local >/dev/null 2>&1 || docker network create adp-local
