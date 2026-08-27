@@ -30,7 +30,17 @@ public class DataAccessGuard {
             .findEnabled(request.workloadId(), request.purpose(), request.subject().subjectType())
             .orElseThrow(() -> new DataAccessDeniedException("Retrieval profile is not registered"));
 
-        if (profile.rowLimit() < 1 || profile.timeWindowDays() < 1 || profile.fields().isEmpty()) {
+        if (profile.datasetScopes().isEmpty() || profile.fields().isEmpty()) {
+            throw new DataAccessDeniedException("Retrieval profile is invalid");
+        }
+        boolean invalidDatasetScope = profile.datasetScopes().stream()
+            .anyMatch(scope -> scope.rowLimit() < 1);
+        if (invalidDatasetScope) {
+            throw new DataAccessDeniedException("Retrieval profile is invalid");
+        }
+        boolean fieldWithoutDatasetScope = profile.fields().stream()
+            .anyMatch(field -> profile.scopeFor(field.datasetName()).isEmpty());
+        if (fieldWithoutDatasetScope) {
             throw new DataAccessDeniedException("Retrieval profile is invalid");
         }
         return profile;

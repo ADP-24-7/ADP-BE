@@ -14,10 +14,12 @@ public class DataAccessAuditRecorder {
 
     private final JdbcClient jdbcClient;
     private final Clock clock;
+    private final SubjectRefHasher subjectRefHasher;
 
-    public DataAccessAuditRecorder(JdbcClient jdbcClient, Clock clock) {
+    public DataAccessAuditRecorder(JdbcClient jdbcClient, Clock clock, SubjectRefHasher subjectRefHasher) {
         this.jdbcClient = jdbcClient;
         this.clock = clock;
+        this.subjectRefHasher = subjectRefHasher;
     }
 
     public String record(DataAccessRequest request, RetrievalResult result) {
@@ -30,10 +32,10 @@ public class DataAccessAuditRecorder {
         jdbcClient.sql("""
                 insert into data_access_event (
                     data_access_id, request_id, trace_id, workload_id, purpose,
-                    subject_type, subject_id, profile_id, selected_fields, row_count, created_at
+                    subject_type, subject_ref_digest, profile_id, selected_fields, row_count, created_at
                 ) values (
                     :dataAccessId, :requestId, :traceId, :workloadId, :purpose,
-                    :subjectType, :subjectId, :profileId, :selectedFields, :rowCount, :createdAt
+                    :subjectType, :subjectRefDigest, :profileId, :selectedFields, :rowCount, :createdAt
                 )
                 """)
             .param("dataAccessId", dataAccessId)
@@ -42,7 +44,7 @@ public class DataAccessAuditRecorder {
             .param("workloadId", request.workloadId())
             .param("purpose", request.purpose())
             .param("subjectType", request.subject().subjectType())
-            .param("subjectId", request.subject().subjectId())
+            .param("subjectRefDigest", subjectRefHasher.hash(request.subject()))
             .param("profileId", result.profileId())
             .param("selectedFields", selectedFields)
             .param("rowCount", result.rowCount())

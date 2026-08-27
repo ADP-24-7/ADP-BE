@@ -71,6 +71,7 @@ class FlywayMigrationTests {
                   and table_name in (
                     'workload_registry',
                     'retrieval_profile',
+                    'retrieval_profile_dataset',
                     'retrieval_profile_field',
                     'synthetic_customer',
                     'synthetic_account',
@@ -81,6 +82,6 @@ class FlywayMigrationTests {
             .query(Integer.class)
             .single();
 
-        assertThat(tableCount).isEqualTo(7);
+        assertThat(tableCount).isEqualTo(8);
     }
 }

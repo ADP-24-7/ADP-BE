@@ -12,8 +12,8 @@ public record DataAccessPreviewResponse(
     String subjectType,
     String subjectId,
     String profileId,
-    int rowLimit,
     int rowCount,
+    List<DatasetScopeResponse> datasetScopes,
     List<FieldResponse> selectedFields,
     List<RecordResponse> records
 ) {
@@ -26,8 +26,14 @@ public record DataAccessPreviewResponse(
             result.subjectType(),
             result.subjectId(),
             result.profileId(),
-            result.rowLimit(),
             result.rowCount(),
+            result.datasetScopes().stream()
+                .map(scope -> new DatasetScopeResponse(
+                    scope.datasetName(),
+                    scope.rowLimit(),
+                    scope.timeWindowDays()
+                ))
+                .toList(),
             result.selectedFields().stream()
                 .map(field -> new FieldResponse(
                     field.datasetName(),
@@ -45,6 +51,13 @@ public record DataAccessPreviewResponse(
         String datasetName,
         String fieldName,
         String dataClass
+    ) {
+    }
+
+    public record DatasetScopeResponse(
+        String datasetName,
+        int rowLimit,
+        Integer timeWindowDays
     ) {
     }
 

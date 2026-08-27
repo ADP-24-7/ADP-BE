@@ -9,8 +9,8 @@ public record RetrievalResult(
     String subjectType,
     String subjectId,
     String profileId,
-    int rowLimit,
     int rowCount,
+    List<RetrievalDatasetScope> datasetScopes,
     List<RetrievalField> selectedFields,
     List<RetrievalRecord> records
 ) {

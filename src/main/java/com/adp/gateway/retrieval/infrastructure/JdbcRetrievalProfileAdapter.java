@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.adp.gateway.retrieval.domain.DataClass;
+import com.adp.gateway.retrieval.domain.RetrievalDatasetScope;
 import com.adp.gateway.retrieval.domain.RetrievalField;
 import com.adp.gateway.retrieval.domain.RetrievalProfile;
 import com.adp.gateway.retrieval.domain.RetrievalProfilePort;
@@ -22,7 +23,7 @@ public class JdbcRetrievalProfileAdapter implements RetrievalProfilePort {
     @Override
     public Optional<RetrievalProfile> findEnabled(String workloadId, String purpose, String subjectType) {
         return jdbcClient.sql("""
-                select profile_id, workload_id, purpose, subject_type, time_window_days, row_limit
+                select profile_id, workload_id, purpose, subject_type
                 from retrieval_profile
                 where workload_id = :workloadId
                   and purpose = :purpose
@@ -39,12 +40,30 @@ public class JdbcRetrievalProfileAdapter implements RetrievalProfilePort {
                     rs.getString("workload_id"),
                     rs.getString("purpose"),
                     rs.getString("subject_type"),
-                    rs.getInt("time_window_days"),
-                    rs.getInt("row_limit"),
+                    datasetScopes(profileId),
                     fields(profileId)
                 );
             })
             .optional();
+    }
+
+    private List<RetrievalDatasetScope> datasetScopes(String profileId) {
+        return jdbcClient.sql("""
+                select dataset_name, row_limit, time_window_days
+                from retrieval_profile_dataset
+                where profile_id = :profileId
+                order by dataset_name
+                """)
+            .param("profileId", profileId)
+            .query((rs, rowNum) -> {
+                Integer timeWindowDays = rs.getObject("time_window_days", Integer.class);
+                return new RetrievalDatasetScope(
+                    rs.getString("dataset_name"),
+                    rs.getInt("row_limit"),
+                    timeWindowDays
+                );
+            })
+            .list();
     }
 
     private List<RetrievalField> fields(String profileId) {

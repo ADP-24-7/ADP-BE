@@ -43,8 +43,8 @@ public class RetrievalService {
             result.subjectType(),
             result.subjectId(),
             result.profileId(),
-            result.rowLimit(),
             result.rowCount(),
+            result.datasetScopes(),
             result.selectedFields(),
             result.records()
         );

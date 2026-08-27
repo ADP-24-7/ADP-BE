@@ -137,12 +137,15 @@ make docker-down
 - [x] Workload Registry baseline
 - [x] Retrieval Profile baseline
 - [x] Dataset/Field allowlist와 Data Class metadata
-- [x] Subject Scope, Time Window, Row Limit 기반 Data Access Guard
+- [x] Subject Scope, Dataset별 Time Window, Dataset별 Row Limit 기반 Data Access Guard
 - [x] 자유 SQL 없이 Workload별 Predefined Retrieval Adapter 사용
-- [x] Demo Synthetic Financial Schema와 Seed Data
+- [x] Demo Synthetic Financial Schema
+- [x] Synthetic Seed Data는 opt-in local fixture로 분리
 - [x] Query/Data Access Audit Metadata 저장
+- [x] Audit에는 subject 원문 대신 subject digest 저장
 - [x] 조회 결과 원문은 Audit에 저장하지 않고 field/data class/row count만 기록
-- [x] 허용 Field만 조회되는지 검증
-- [x] Row Limit와 기간 제한 검증
+- [x] 허용 Field만 DB SELECT list에 포함
+- [x] 허용 Field가 없는 Dataset은 조회 자체를 생략
+- [x] Dataset별 Row Limit와 기간 제한 검증
 - [x] 다른 Subject와 다른 Purpose 조회 차단
 - [x] Retrieval Profile 없음 또는 Workload 미등록 시 임의 조회 금지
