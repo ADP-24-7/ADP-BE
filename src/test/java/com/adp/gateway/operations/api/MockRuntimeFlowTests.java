@@ -52,8 +52,13 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.policyVersion").value("0.0.0"))
             .andExpect(jsonPath("$.policyDigest").value("local-fixture"))
             .andExpect(jsonPath("$.decisionId").exists())
+            .andExpect(jsonPath("$.policyAction").value("ALLOW"))
+            .andExpect(jsonPath("$.finalAction").value("ALLOW"))
+            .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
+            .andExpect(jsonPath("$.applicabilityResult").value("APPLICABLE"))
+            .andExpect(jsonPath("$.matchedRuleIds").value("PROJECT_PROVISIONAL_RULE"))
             .andExpect(jsonPath("$.outcome").value("ALLOW"))
-            .andExpect(jsonPath("$.reasonCode").value("MOCK_DECISION_ALLOW"))
+            .andExpect(jsonPath("$.reasonCode").value("PROJECT_PROVISIONAL_ALLOW"))
             .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
             .andExpect(jsonPath("$.auditId").exists());
 
@@ -61,6 +66,11 @@ class MockRuntimeFlowTests {
                 select count(*) from audit_event
                 where request_id = :requestId and trace_id = :traceId
                   and policy_artifact_id = 'PROJECT_PROVISIONAL'
+                  and policy_action = 'ALLOW'
+                  and final_action = 'ALLOW'
+                  and authorization_result = 'ALLOWED'
+                  and applicability_result = 'APPLICABLE'
+                  and matched_rule_ids = 'PROJECT_PROVISIONAL_RULE'
                   and policy_version = '0.0.0'
                   and policy_digest = 'local-fixture'
                 """)

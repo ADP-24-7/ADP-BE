@@ -11,10 +11,12 @@ import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.connector.application.FakeConnector;
 import com.adp.gateway.connector.domain.ConnectorResult;
-import com.adp.gateway.decision.application.FakeDecisionService;
-import com.adp.gateway.decision.domain.DecisionResult;
-import com.adp.gateway.policy.domain.PolicyArtifact;
-import com.adp.gateway.policy.domain.PolicyArtifactPort;
+import com.adp.gateway.decision.application.RuntimeDecisionService;
+import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
+import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.policy.domain.ApplicabilityResult;
+import com.adp.gateway.policy.domain.PolicySnapshot;
+import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,23 +34,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class MockRuntimeController {
 
     private final RuntimeContextFactory runtimeContextFactory;
-    private final PolicyArtifactPort policyArtifactPort;
-    private final FakeDecisionService fakeDecisionService;
+    private final PolicySnapshotPort policySnapshotPort;
+    private final RuntimeDecisionService runtimeDecisionService;
     private final FakeConnector fakeConnector;
     private final AuditRecorder auditRecorder;
     private final AuthorizationService authorizationService;
 
     public MockRuntimeController(
         RuntimeContextFactory runtimeContextFactory,
-        PolicyArtifactPort policyArtifactPort,
-        FakeDecisionService fakeDecisionService,
+        PolicySnapshotPort policySnapshotPort,
+        RuntimeDecisionService runtimeDecisionService,
         FakeConnector fakeConnector,
         AuditRecorder auditRecorder,
         AuthorizationService authorizationService
     ) {
         this.runtimeContextFactory = runtimeContextFactory;
-        this.policyArtifactPort = policyArtifactPort;
-        this.fakeDecisionService = fakeDecisionService;
+        this.policySnapshotPort = policySnapshotPort;
+        this.runtimeDecisionService = runtimeDecisionService;
         this.fakeConnector = fakeConnector;
         this.auditRecorder = auditRecorder;
         this.authorizationService = authorizationService;
@@ -77,8 +79,13 @@ public class MockRuntimeController {
             request.purpose(),
             request.subject()
         );
-        PolicyArtifact artifact = policyArtifactPort.load(context.workloadId());
-        DecisionResult decision = fakeDecisionService.evaluate(context, artifact);
+        PolicySnapshot snapshot = policySnapshotPort.load(context.workloadId());
+        RuntimeDecision decision = runtimeDecisionService.decide(
+            context,
+            snapshot,
+            RuntimeAuthorizationResult.ALLOWED,
+            ApplicabilityResult.APPLICABLE
+        );
         ConnectorResult connector = fakeConnector.execute(context, decision);
         AuditContext audit = auditRecorder.record(context, decision, connector);
 
@@ -86,13 +93,18 @@ public class MockRuntimeController {
             context.requestId(),
             context.traceId(),
             context.idempotencyKey(),
-            artifact.artifactId(),
-            artifact.status().name(),
-            artifact.artifactVersion(),
-            artifact.digest(),
+            snapshot.sourceArtifact().artifactId(),
+            snapshot.lifecycleStage().name(),
+            snapshot.policyVersion(),
+            snapshot.snapshotDigest(),
             decision.decisionId(),
-            decision.outcome(),
-            decision.reasonCode().name(),
+            decision.policyAction().name(),
+            decision.finalAction().name(),
+            decision.authorizationResult().name(),
+            decision.applicabilityResult().name(),
+            String.join(",", decision.matchedRuleIds()),
+            decision.finalAction().name(),
+            decision.primaryReasonCode().name(),
             connector.status(),
             audit.auditId()
         ));

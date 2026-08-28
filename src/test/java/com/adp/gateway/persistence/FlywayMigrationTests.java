@@ -43,6 +43,27 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesRuntimeDecisionAuditColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_event'
+                  and column_name in (
+                    'policy_action',
+                    'final_action',
+                    'authorization_result',
+                    'applicability_result',
+                    'matched_rule_ids'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(5);
+    }
+
+    @Test
     void migrationCreatesAuthBaselineTables() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)
