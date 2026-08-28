@@ -11,10 +11,7 @@ public class ProvisionalPolicyApplicabilityEvaluator implements PolicyApplicabil
 
     @Override
     public ApplicabilityResult evaluate(PolicySnapshot snapshot, RuntimePolicyContext context) {
-        if (!snapshot.sourceArtifact().workloadId().equals(context.workloadId())) {
-            return ApplicabilityResult.NOT_APPLICABLE;
-        }
-        if (snapshot.matchedRuleIds().isEmpty()) {
+        if (snapshot.matchedRuleRefs().isEmpty()) {
             return ApplicabilityResult.INCOMPLETE;
         }
         if (context.canonicalContextDigest() == null || context.runtimeDataClasses().isEmpty()) {

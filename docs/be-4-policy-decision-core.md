@@ -7,6 +7,7 @@ BE-4는 DA의 1차 Policy Decision과 BE의 최종 Runtime Decision을 분리하
 - DA에서 생성된 Evidence-backed 1차 Policy Decision을 BE Runtime에 직접 집행하지 않는다.
 - BE는 현재 Caller, Workload, Action, Purpose, Subject Scope, Provider, Runtime DataClass, Canonical Context를 기준으로 2차 Applicability와 Runtime Guard를 수행한다.
 - BE 최종 Decision은 DA 1차 판정보다 느슨해질 수 없다.
+- DA `PolicyEvaluation Artifact`의 artifact identity와 BE `PolicySnapshot` identity는 서로 다르며, BE는 source artifact를 reference로만 보존한다.
 
 ## Fixed Boundaries
 
@@ -22,18 +23,35 @@ BE-4는 DA의 1차 Policy Decision과 BE의 최종 Runtime Decision을 분리하
 
 DA 1차 결과를 표현한다.
 
-- `matched_rule_ids`
+- `matched_policy_refs`
+- `matched_rule_refs`
+- `requirement_refs`
 - `evidence_refs`
-- `policy_action`
+- `policy_action`: BE runtime policy action enum인 `ALLOW`, `TRANSFORM`, `REVIEW`, `BLOCK`
 - `required_controls`
+- `validation_artifact_refs`
+
+DA handoff schema의 현재 `policy_action` 값이 `candidate_handoff`, `requires_evaluation`, `hold`, `reject`, `no_runtime_action`이면 BE의 runtime `PolicyAction`으로 직접 소비하지 않는다. 해당 값은 handoff/analysis disposition으로 해석하고, BE runtime `PolicyAction`은 별도 normalizer에서 확정해야 한다.
+
+### PolicySnapshot
+
+BE runtime snapshot을 표현한다.
+
 - `policy_version`
 - `snapshot_digest`
+- `effective_at`
+- `lifecycle_stage`
+- `source_policy_evaluation_artifact_ref`
+- `evaluation`
+
+`source_policy_evaluation_artifact_ref.artifact_version/digest`는 DA artifact의 identity이고, `policy_version/snapshot_digest`는 BE runtime snapshot의 identity다. 두 identity가 같아야 한다는 invariant를 두지 않는다.
 
 ### RuntimeDecision
 
 BE 최종 결과를 표현한다.
 
 - `decision_id`
+- `policy_action`
 - `final_action`
 - `runtime_reason_codes`
 - `authorization_result`
@@ -44,6 +62,8 @@ BE 최종 결과를 표현한다.
 - `policy_version`
 - `snapshot_digest`
 - `runtime_context_digest`
+
+`policy_action`과 `final_action`은 이름이 같더라도 서로 다른 타입이다. `PolicyAction`은 BE가 정규화한 1차 정책 판단이고, `FinalAction`은 runtime authorization/applicability guard까지 반영한 최종 집행 판단이다.
 
 ## Decision Monotonicity
 
@@ -67,10 +87,14 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 5. [x] Runtime Policy Context와 Applicability Evaluator 경계를 만든다.
 6. [x] Monotonic Decision Combiner로 최종 Decision을 생성한다.
 7. [x] Audit에 DA 1차 결과, BE 최종 결과, evidence/control/runtime context digest를 함께 남긴다.
-8. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
-9. [ ] Versioned DataClass Crosswalk를 추가한다.
-10. [ ] Runtime Binding Contract를 추가한다.
-11. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
+8. [x] `PolicyAction`과 `FinalAction`을 실제 코드 타입으로 분리한다.
+9. [x] DA source artifact identity와 BE snapshot identity를 분리한다.
+10. [x] DA reference를 `ref_id/ref_type/version` typed reference로 보존한다.
+11. [x] Runtime processing context를 복수형으로 모델링한다.
+12. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
+13. [ ] Versioned DataClass Crosswalk를 추가한다.
+14. [ ] Runtime Binding Contract를 추가한다.
+15. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
 
 ## Tests
 
@@ -82,6 +106,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Rule 미매칭, Rule 충돌, Unknown Data Class는 default allow가 되지 않는다.
 - Audit에서 `policy_action`과 `final_action`을 함께 조회할 수 있다.
 - Audit에서 `runtime_context_digest`, `evidence_refs`, `required_controls`를 함께 조회할 수 있다.
+- DA source artifact version/digest와 BE snapshot version/digest가 달라도 snapshot 생성이 가능하다.
 
 ## Out of Scope
 

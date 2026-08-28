@@ -2,6 +2,7 @@ package com.adp.gateway.audit.application;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.UUID;
 
@@ -9,6 +10,7 @@ import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.policy.domain.ArtifactReference;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -28,9 +30,9 @@ public class AuditRecorder {
         RuntimeDecision decision,
         ConnectorResult connectorResult
     ) {
-        String matchedRuleIds = String.join(",", decision.matchedRuleIds());
-        String evidenceRefs = String.join(",", decision.evidenceRefs());
-        String requiredControls = String.join(",", decision.requiredControls());
+        String matchedRuleIds = auditValue(decision.matchedRuleRefs());
+        String evidenceRefs = auditValue(decision.evidenceRefs());
+        String requiredControls = auditValue(decision.requiredControls());
         AuditContext auditContext = new AuditContext(
             "aud_" + UUID.randomUUID(),
             context.requestId(),
@@ -95,5 +97,11 @@ public class AuditRecorder {
             .update();
 
         return auditContext;
+    }
+
+    private String auditValue(List<ArtifactReference> references) {
+        return references.stream()
+            .map(ArtifactReference::auditValue)
+            .collect(Collectors.joining(","));
     }
 }

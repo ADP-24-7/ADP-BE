@@ -1,21 +1,22 @@
 package com.adp.gateway.decision.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.error.ReasonCode;
-import com.adp.gateway.decision.domain.DecisionAction;
+import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
-import com.adp.gateway.policy.domain.PolicyArtifact;
+import com.adp.gateway.policy.domain.ArtifactDigest;
+import com.adp.gateway.policy.domain.ArtifactReference;
+import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
+import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,7 @@ class RuntimeDecisionServiceTests {
 
     @Test
     void createsReproducibleDecisionForSameSnapshotAndRuntimeContext() {
-        PolicySnapshot snapshot = snapshot(DecisionAction.ALLOW);
+        PolicySnapshot snapshot = snapshot(PolicyAction.ALLOW);
 
         var first = service.decide(
             context,
@@ -52,15 +53,15 @@ class RuntimeDecisionServiceTests {
         );
 
         assertThat(first.decisionId()).isEqualTo(second.decisionId());
-        assertThat(first.finalAction()).isEqualTo(DecisionAction.ALLOW);
+        assertThat(first.finalAction()).isEqualTo(FinalAction.ALLOW);
         assertThat(first.runtimeReasonCodes()).contains(ReasonCode.POLICY_ALLOW);
-        assertThat(first.evidenceRefs()).containsExactly("EV-1");
-        assertThat(first.requiredControls()).containsExactly("CONTROL-1");
+        assertThat(first.evidenceRefs()).containsExactly(ref("EV-1", "evidence", "v1"));
+        assertThat(first.requiredControls()).containsExactly(ref("CONTROL-1", "control", "v1"));
     }
 
     @Test
     void changesDecisionIdentityWhenRuntimeContextChanges() {
-        PolicySnapshot snapshot = snapshot(DecisionAction.ALLOW);
+        PolicySnapshot snapshot = snapshot(PolicyAction.ALLOW);
 
         var first = service.decide(
             context,
@@ -85,13 +86,13 @@ class RuntimeDecisionServiceTests {
         var decision = service.decide(
             context,
             runtimeContext,
-            snapshot(DecisionAction.ALLOW),
+            snapshot(PolicyAction.ALLOW),
             RuntimeAuthorizationResult.DENIED,
             ApplicabilityResult.APPLICABLE
         );
 
-        assertThat(decision.policyAction()).isEqualTo(DecisionAction.ALLOW);
-        assertThat(decision.finalAction()).isEqualTo(DecisionAction.BLOCK);
+        assertThat(decision.policyAction()).isEqualTo(PolicyAction.ALLOW);
+        assertThat(decision.finalAction()).isEqualTo(FinalAction.BLOCK);
         assertThat(decision.runtimeReasonCodes()).contains(ReasonCode.RUNTIME_AUTHORIZATION_DENIED);
     }
 
@@ -100,13 +101,13 @@ class RuntimeDecisionServiceTests {
         var decision = service.decide(
             context,
             runtimeContext,
-            snapshot(DecisionAction.TRANSFORM),
+            snapshot(PolicyAction.TRANSFORM),
             RuntimeAuthorizationResult.ALLOWED,
             ApplicabilityResult.APPLICABLE
         );
 
-        assertThat(decision.policyAction()).isEqualTo(DecisionAction.TRANSFORM);
-        assertThat(decision.finalAction()).isEqualTo(DecisionAction.TRANSFORM);
+        assertThat(decision.policyAction()).isEqualTo(PolicyAction.TRANSFORM);
+        assertThat(decision.finalAction()).isEqualTo(FinalAction.TRANSFORM);
     }
 
     @Test
@@ -114,13 +115,13 @@ class RuntimeDecisionServiceTests {
         var decision = service.decide(
             context,
             runtimeContext,
-            snapshot(DecisionAction.BLOCK),
+            snapshot(PolicyAction.BLOCK),
             RuntimeAuthorizationResult.ALLOWED,
             ApplicabilityResult.APPLICABLE
         );
 
-        assertThat(decision.policyAction()).isEqualTo(DecisionAction.BLOCK);
-        assertThat(decision.finalAction()).isEqualTo(DecisionAction.BLOCK);
+        assertThat(decision.policyAction()).isEqualTo(PolicyAction.BLOCK);
+        assertThat(decision.finalAction()).isEqualTo(FinalAction.BLOCK);
     }
 
     @Test
@@ -128,43 +129,40 @@ class RuntimeDecisionServiceTests {
         var decision = service.decide(
             context,
             runtimeContext,
-            snapshot(DecisionAction.ALLOW),
+            snapshot(PolicyAction.ALLOW),
             RuntimeAuthorizationResult.ALLOWED,
             ApplicabilityResult.INCOMPLETE
         );
 
-        assertThat(decision.finalAction()).isEqualTo(DecisionAction.REVIEW);
+        assertThat(decision.finalAction()).isEqualTo(FinalAction.REVIEW);
         assertThat(decision.runtimeReasonCodes()).contains(ReasonCode.POLICY_INCOMPLETE);
     }
 
     @Test
-    void rejectsSnapshotWhenEvaluationDigestDoesNotMatchSourceArtifact() {
-        PolicyArtifact artifact = new PolicyArtifact(
-            "PROJECT_PROVISIONAL",
-            "0.0.0",
-            PolicyLifecycleStage.PROJECT_PROVISIONAL,
-            "customer_summary",
-            List.of(),
-            "snapshot-digest"
-        );
+    void keepsSourceArtifactIdentitySeparateFromBeSnapshotIdentity() {
+        SourcePolicyEvaluationArtifactRef sourceArtifact = sourceArtifact();
         PolicyEvaluation evaluation = new PolicyEvaluation(
-            List.of("RULE-1"),
-            List.of("EV-1"),
-            DecisionAction.ALLOW,
-            List.of("CONTROL-1"),
-            artifact.artifactVersion(),
-            "different-digest"
+            List.of(ref("POL-1", "policy", "da-v1")),
+            List.of(ref("RULE-1", "rule", "da-v1")),
+            List.of(ref("REQ-1", "requirement", "da-v1")),
+            List.of(ref("EV-1", "evidence", "da-v1")),
+            PolicyAction.ALLOW,
+            List.of(ref("CONTROL-1", "control", "da-v1")),
+            List.of(ref("VA-1", "validation_artifact", "da-v1"))
         );
 
-        assertThatThrownBy(() -> new PolicySnapshot(
-            artifact.artifactVersion(),
-            artifact.digest(),
+        PolicySnapshot snapshot = new PolicySnapshot(
+            "be-runtime-policy/2026-08-28",
+            "be-snapshot-digest",
             OffsetDateTime.parse("2026-08-28T00:00:00Z"),
-            artifact.status(),
-            artifact,
+            PolicyLifecycleStage.PROJECT_PROVISIONAL,
+            sourceArtifact,
             evaluation
-        )).isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("digests must match");
+        );
+
+        assertThat(snapshot.policyVersion()).isEqualTo("be-runtime-policy/2026-08-28");
+        assertThat(snapshot.snapshotDigest()).isEqualTo("be-snapshot-digest");
+        assertThat(snapshot.sourcePolicyEvaluationArtifactRef()).isEqualTo(sourceArtifact);
     }
 
     private RuntimePolicyContext runtimeContext(String digest) {
@@ -175,36 +173,42 @@ class RuntimeDecisionServiceTests {
             "subject-digest",
             "canonical-digest",
             List.of(DataClass.CUSTOMER_IDENTIFIER),
-            "SUPPORT_LOOKUP",
+            List.of("SUPPORT_LOOKUP", "third_party_or_outsourcing"),
             "internal",
             digest
         );
     }
 
-    private PolicySnapshot snapshot(DecisionAction policyAction) {
-        PolicyArtifact artifact = new PolicyArtifact(
-            "PROJECT_PROVISIONAL",
-            "0.0.0",
-            PolicyLifecycleStage.PROJECT_PROVISIONAL,
-            "customer_summary",
-            List.of(),
-            "snapshot-digest"
-        );
+    private PolicySnapshot snapshot(PolicyAction policyAction) {
+        SourcePolicyEvaluationArtifactRef artifact = sourceArtifact();
         PolicyEvaluation evaluation = new PolicyEvaluation(
-            List.of("RULE-1"),
-            List.of("EV-1"),
+            List.of(ref("POL-1", "policy", "v1")),
+            List.of(ref("RULE-1", "rule", "v1")),
+            List.of(ref("REQ-1", "requirement", "v1")),
+            List.of(ref("EV-1", "evidence", "v1")),
             policyAction,
-            List.of("CONTROL-1"),
-            artifact.artifactVersion(),
-            artifact.digest()
+            List.of(ref("CONTROL-1", "control", "v1")),
+            List.of(ref("VA-1", "validation_artifact", "v1"))
         );
         return new PolicySnapshot(
-            artifact.artifactVersion(),
-            artifact.digest(),
+            "be-runtime-policy/0.0.0",
+            "be-snapshot-digest",
             OffsetDateTime.parse("2026-08-28T00:00:00Z"),
-            artifact.status(),
+            PolicyLifecycleStage.PROJECT_PROVISIONAL,
             artifact,
             evaluation
         );
+    }
+
+    private SourcePolicyEvaluationArtifactRef sourceArtifact() {
+        return new SourcePolicyEvaluationArtifactRef(
+            "POLICY_EVALUATION_ARTIFACT",
+            "da-artifact-v1",
+            new ArtifactDigest("sha256", "da-artifact-digest")
+        );
+    }
+
+    private ArtifactReference ref(String refId, String refType, String version) {
+        return new ArtifactReference(refId, refType, version);
     }
 }

@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.error.ReasonCode;
-import com.adp.gateway.decision.domain.DecisionAction;
+import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -31,8 +31,8 @@ public class RuntimeDecisionService {
         RuntimeAuthorizationResult authorizationResult,
         ApplicabilityResult applicabilityResult
     ) {
-        DecisionAction runtimeAction = runtimeAction(authorizationResult, applicabilityResult);
-        DecisionAction finalAction = decisionCombiner.combine(snapshot.evaluation().policyAction(), runtimeAction);
+        FinalAction runtimeAction = runtimeAction(authorizationResult, applicabilityResult);
+        FinalAction finalAction = decisionCombiner.combine(snapshot.evaluation().policyAction(), runtimeAction);
         List<ReasonCode> reasonCodes = reasonCodes(finalAction, authorizationResult, applicabilityResult);
         String decisionIdentity = String.join(
             ":",
@@ -51,31 +51,34 @@ public class RuntimeDecisionService {
             reasonCodes,
             authorizationResult,
             applicabilityResult,
-            snapshot.matchedRuleIds(),
+            snapshot.evaluation().matchedPolicyRefs(),
+            snapshot.matchedRuleRefs(),
+            snapshot.evaluation().requirementRefs(),
             snapshot.evaluation().evidenceRefs(),
             snapshot.evaluation().requiredControls(),
+            snapshot.evaluation().validationArtifactRefs(),
             snapshot.policyVersion(),
             snapshot.snapshotDigest(),
             runtimePolicyContext.runtimeContextDigest(),
-            snapshot.sourceArtifact().artifactId()
+            snapshot.sourcePolicyEvaluationArtifactRef().artifactId()
         );
     }
 
-    private DecisionAction runtimeAction(
+    private FinalAction runtimeAction(
         RuntimeAuthorizationResult authorizationResult,
         ApplicabilityResult applicabilityResult
     ) {
         if (authorizationResult == RuntimeAuthorizationResult.DENIED) {
-            return DecisionAction.BLOCK;
+            return FinalAction.BLOCK;
         }
         return switch (applicabilityResult) {
-            case APPLICABLE -> DecisionAction.ALLOW;
-            case NOT_EVALUATED, NOT_APPLICABLE, CONFLICT, INCOMPLETE -> DecisionAction.REVIEW;
+            case APPLICABLE -> FinalAction.ALLOW;
+            case NOT_EVALUATED, NOT_APPLICABLE, CONFLICT, INCOMPLETE -> FinalAction.REVIEW;
         };
     }
 
     private List<ReasonCode> reasonCodes(
-        DecisionAction finalAction,
+        FinalAction finalAction,
         RuntimeAuthorizationResult authorizationResult,
         ApplicabilityResult applicabilityResult
     ) {
@@ -83,7 +86,7 @@ public class RuntimeDecisionService {
         if (authorizationResult == RuntimeAuthorizationResult.DENIED) {
             reasonCodes.add(ReasonCode.RUNTIME_AUTHORIZATION_DENIED);
         }
-        if (finalAction == DecisionAction.ALLOW) {
+        if (finalAction == FinalAction.ALLOW) {
             reasonCodes.add(ReasonCode.POLICY_ALLOW);
         }
         switch (applicabilityResult) {

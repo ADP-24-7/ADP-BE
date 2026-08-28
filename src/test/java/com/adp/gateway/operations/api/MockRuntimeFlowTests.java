@@ -47,19 +47,19 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.requestId").value("req_be0_test"))
             .andExpect(jsonPath("$.traceId").value("trace_be0_test"))
             .andExpect(jsonPath("$.idempotencyKey").value("idem_be0_test"))
-            .andExpect(jsonPath("$.policyArtifactId").value("PROJECT_PROVISIONAL"))
+            .andExpect(jsonPath("$.policyArtifactId").value("PROJECT_PROVISIONAL_POLICY_EVALUATION"))
             .andExpect(jsonPath("$.policyArtifactStatus").value("PROJECT_PROVISIONAL"))
-            .andExpect(jsonPath("$.policyVersion").value("0.0.0"))
-            .andExpect(jsonPath("$.policyDigest").value("local-fixture"))
+            .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/0.0.0"))
+            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture"))
             .andExpect(jsonPath("$.decisionId").exists())
             .andExpect(jsonPath("$.policyAction").value("ALLOW"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
             .andExpect(jsonPath("$.applicabilityResult").value("INCOMPLETE"))
             .andExpect(jsonPath("$.runtimeContextDigest").exists())
-            .andExpect(jsonPath("$.matchedRuleIds").value("PROJECT_PROVISIONAL_RULE"))
+            .andExpect(jsonPath("$.matchedRuleIds").value("PROJECT_PROVISIONAL_RULE:rule:0.0.0"))
             .andExpect(jsonPath("$.evidenceRefs").value(""))
-            .andExpect(jsonPath("$.requiredControls").value("RUNTIME_AUTHORIZATION,SUBJECT_SCOPE"))
+            .andExpect(jsonPath("$.requiredControls").value("RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0"))
             .andExpect(jsonPath("$.outcome").value("REVIEW"))
             .andExpect(jsonPath("$.reasonCode").value("POLICY_INCOMPLETE"))
             .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"))
@@ -68,17 +68,17 @@ class MockRuntimeFlowTests {
         Integer auditCount = jdbcClient.sql("""
                 select count(*) from audit_event
                 where request_id = :requestId and trace_id = :traceId
-                  and policy_artifact_id = 'PROJECT_PROVISIONAL'
+                  and policy_artifact_id = 'PROJECT_PROVISIONAL_POLICY_EVALUATION'
                   and policy_action = 'ALLOW'
                   and final_action = 'REVIEW'
                   and authorization_result = 'ALLOWED'
                   and applicability_result = 'INCOMPLETE'
                   and runtime_context_digest is not null
-                  and matched_rule_ids = 'PROJECT_PROVISIONAL_RULE'
+                  and matched_rule_ids = 'PROJECT_PROVISIONAL_RULE:rule:0.0.0'
                   and evidence_refs = ''
-                  and required_controls = 'RUNTIME_AUTHORIZATION,SUBJECT_SCOPE'
-                  and policy_version = '0.0.0'
-                  and policy_digest = 'local-fixture'
+                  and required_controls = 'RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0'
+                  and policy_version = 'be-runtime-policy/0.0.0'
+                  and policy_digest = 'be-snapshot-local-fixture'
                   and connector_status = 'NOT_EXECUTED'
                 """)
             .param("requestId", "req_be0_test")

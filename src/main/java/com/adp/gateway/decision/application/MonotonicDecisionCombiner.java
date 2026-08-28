@@ -1,12 +1,14 @@
 package com.adp.gateway.decision.application;
 
-import com.adp.gateway.decision.domain.DecisionAction;
+import com.adp.gateway.decision.domain.FinalAction;
+import com.adp.gateway.policy.domain.PolicyAction;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MonotonicDecisionCombiner {
 
-    public DecisionAction combine(DecisionAction policyAction, DecisionAction runtimeAction) {
-        return policyAction.isAtLeastAsRestrictiveAs(runtimeAction) ? policyAction : runtimeAction;
+    public FinalAction combine(PolicyAction policyAction, FinalAction runtimeAction) {
+        FinalAction policyFinalAction = FinalAction.valueOf(policyAction.name());
+        return policyFinalAction.isAtLeastAsRestrictiveAs(runtimeAction) ? policyFinalAction : runtimeAction;
     }
 }

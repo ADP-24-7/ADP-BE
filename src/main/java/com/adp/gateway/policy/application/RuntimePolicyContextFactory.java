@@ -37,7 +37,7 @@ public class RuntimePolicyContextFactory {
             subjectDigest,
             null,
             List.of(),
-            null,
+            List.of(),
             null
         );
     }
@@ -54,7 +54,7 @@ public class RuntimePolicyContextFactory {
                 .distinct()
                 .sorted()
                 .toList(),
-            null,
+            List.of(),
             null
         );
     }
@@ -66,11 +66,14 @@ public class RuntimePolicyContextFactory {
         String subjectRefDigest,
         String canonicalContextDigest,
         List<DataClass> runtimeDataClasses,
-        String processingContext,
+        List<String> processingContexts,
         String provider
     ) {
         String runtimeDataClassValue = runtimeDataClasses.stream()
             .map(Enum::name)
+            .collect(Collectors.joining(","));
+        String processingContextValue = processingContexts.stream()
+            .sorted()
             .collect(Collectors.joining(","));
         String digest = canonicalValueHasher.hash(String.join(
             "|",
@@ -80,7 +83,7 @@ public class RuntimePolicyContextFactory {
             value(subjectRefDigest),
             value(canonicalContextDigest),
             runtimeDataClassValue,
-            value(processingContext),
+            processingContextValue,
             value(provider)
         ));
         return new RuntimePolicyContext(
@@ -90,7 +93,7 @@ public class RuntimePolicyContextFactory {
             subjectRefDigest,
             canonicalContextDigest,
             List.copyOf(runtimeDataClasses),
-            processingContext,
+            List.copyOf(processingContexts),
             provider,
             digest
         );

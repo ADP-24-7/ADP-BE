@@ -2,14 +2,22 @@ package com.adp.gateway.policy.domain;
 
 import java.util.List;
 
-import com.adp.gateway.decision.domain.DecisionAction;
-
 public record PolicyEvaluation(
-    List<String> matchedRuleIds,
-    List<String> evidenceRefs,
-    DecisionAction policyAction,
-    List<String> requiredControls,
-    String policyVersion,
-    String snapshotDigest
+    List<ArtifactReference> matchedPolicyRefs,
+    List<ArtifactReference> matchedRuleRefs,
+    List<ArtifactReference> requirementRefs,
+    List<ArtifactReference> evidenceRefs,
+    PolicyAction policyAction,
+    List<ArtifactReference> requiredControls,
+    List<ArtifactReference> validationArtifactRefs
 ) {
+
+    public PolicyEvaluation {
+        matchedPolicyRefs = List.copyOf(matchedPolicyRefs);
+        matchedRuleRefs = List.copyOf(matchedRuleRefs);
+        requirementRefs = List.copyOf(requirementRefs);
+        evidenceRefs = List.copyOf(evidenceRefs);
+        requiredControls = List.copyOf(requiredControls);
+        validationArtifactRefs = List.copyOf(validationArtifactRefs);
+    }
 }

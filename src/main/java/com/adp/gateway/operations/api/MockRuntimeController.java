@@ -1,5 +1,8 @@
 package com.adp.gateway.operations.api;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.auth.application.AuthorizationRequest;
@@ -17,6 +20,7 @@ import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
+import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
@@ -105,7 +109,7 @@ public class MockRuntimeController {
             context.requestId(),
             context.traceId(),
             context.idempotencyKey(),
-            snapshot.sourceArtifact().artifactId(),
+            snapshot.sourcePolicyEvaluationArtifactRef().artifactId(),
             snapshot.lifecycleStage().name(),
             snapshot.policyVersion(),
             snapshot.snapshotDigest(),
@@ -115,13 +119,19 @@ public class MockRuntimeController {
             decision.authorizationResult().name(),
             decision.applicabilityResult().name(),
             decision.runtimeContextDigest(),
-            String.join(",", decision.matchedRuleIds()),
-            String.join(",", decision.evidenceRefs()),
-            String.join(",", decision.requiredControls()),
+            auditValue(decision.matchedRuleRefs()),
+            auditValue(decision.evidenceRefs()),
+            auditValue(decision.requiredControls()),
             decision.finalAction().name(),
             decision.primaryReasonCode().name(),
             connector.status(),
             audit.auditId()
         ));
+    }
+
+    private String auditValue(List<ArtifactReference> references) {
+        return references.stream()
+            .map(ArtifactReference::auditValue)
+            .collect(Collectors.joining(","));
     }
 }

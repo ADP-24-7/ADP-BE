@@ -11,8 +11,13 @@ public record RuntimePolicyContext(
     String subjectRefDigest,
     String canonicalContextDigest,
     List<DataClass> runtimeDataClasses,
-    String processingContext,
+    List<String> processingContexts,
     String provider,
     String runtimeContextDigest
 ) {
+
+    public RuntimePolicyContext {
+        runtimeDataClasses = List.copyOf(runtimeDataClasses);
+        processingContexts = List.copyOf(processingContexts);
+    }
 }
