@@ -14,9 +14,12 @@ import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
+import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
+import com.adp.gateway.policy.domain.RuntimePolicyContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -39,6 +42,8 @@ public class MockRuntimeController {
     private final FakeConnector fakeConnector;
     private final AuditRecorder auditRecorder;
     private final AuthorizationService authorizationService;
+    private final RuntimePolicyContextFactory runtimePolicyContextFactory;
+    private final PolicyApplicabilityEvaluator policyApplicabilityEvaluator;
 
     public MockRuntimeController(
         RuntimeContextFactory runtimeContextFactory,
@@ -46,7 +51,9 @@ public class MockRuntimeController {
         RuntimeDecisionService runtimeDecisionService,
         FakeConnector fakeConnector,
         AuditRecorder auditRecorder,
-        AuthorizationService authorizationService
+        AuthorizationService authorizationService,
+        RuntimePolicyContextFactory runtimePolicyContextFactory,
+        PolicyApplicabilityEvaluator policyApplicabilityEvaluator
     ) {
         this.runtimeContextFactory = runtimeContextFactory;
         this.policySnapshotPort = policySnapshotPort;
@@ -54,6 +61,8 @@ public class MockRuntimeController {
         this.fakeConnector = fakeConnector;
         this.auditRecorder = auditRecorder;
         this.authorizationService = authorizationService;
+        this.runtimePolicyContextFactory = runtimePolicyContextFactory;
+        this.policyApplicabilityEvaluator = policyApplicabilityEvaluator;
     }
 
     @PostMapping("/mock")
@@ -80,11 +89,14 @@ public class MockRuntimeController {
             request.subject()
         );
         PolicySnapshot snapshot = policySnapshotPort.load(context.workloadId());
+        RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(context);
+        ApplicabilityResult applicabilityResult = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
         RuntimeDecision decision = runtimeDecisionService.decide(
             context,
+            runtimePolicyContext,
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,
-            ApplicabilityResult.APPLICABLE
+            applicabilityResult
         );
         ConnectorResult connector = fakeConnector.execute(context, decision);
         AuditContext audit = auditRecorder.record(context, decision, connector);
@@ -102,7 +114,10 @@ public class MockRuntimeController {
             decision.finalAction().name(),
             decision.authorizationResult().name(),
             decision.applicabilityResult().name(),
+            decision.runtimeContextDigest(),
             String.join(",", decision.matchedRuleIds()),
+            String.join(",", decision.evidenceRefs()),
+            String.join(",", decision.requiredControls()),
             decision.finalAction().name(),
             decision.primaryReasonCode().name(),
             connector.status(),

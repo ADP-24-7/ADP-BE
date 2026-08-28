@@ -97,12 +97,14 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] `RuntimeDecision` Contract 추가
 - [x] Policy Snapshot 모델 추가
 - [x] Request 시작 시 `policy_version + snapshot_digest + effective_at` 고정
-- [x] Applicability 평가 순서 고정
+- [x] `RuntimePolicyContext`와 Applicability Evaluator 경계 추가
+- [x] `snapshot_digest + runtime_context_digest` 기반 Decision Identity 고정
 - [x] DA 1차 `policy_action`과 BE 최종 `final_action` 분리
 - [x] 완화 금지 규칙 강제
 - [x] Rule 미매칭, 충돌, Unknown Data Class의 default allow 방지
 - [x] Decision Audit Metadata 확장
 - [x] 동일 Snapshot + 동일 Canonical Runtime Context 재현성 테스트
+- [ ] Runtime path에서 Canonical Context 조립 결과 연결
 - [ ] Versioned DataClass Crosswalk 추가
 - [ ] Runtime Binding Contract 추가
 - [ ] DA PolicyEvaluation Artifact Adapter/Normalizer 추가

@@ -3,6 +3,8 @@ package com.adp.gateway.common.error;
 public enum ReasonCode {
     PROJECT_PROVISIONAL,
     PROJECT_PROVISIONAL_ALLOW,
+    POLICY_ALLOW,
+    POLICY_NOT_EVALUATED,
     POLICY_APPLICABLE,
     POLICY_NOT_APPLICABLE,
     POLICY_CONFLICT,

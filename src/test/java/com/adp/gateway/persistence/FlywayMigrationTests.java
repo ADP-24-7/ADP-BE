@@ -54,13 +54,16 @@ class FlywayMigrationTests {
                     'final_action',
                     'authorization_result',
                     'applicability_result',
-                    'matched_rule_ids'
+                    'runtime_context_digest',
+                    'matched_rule_ids',
+                    'evidence_refs',
+                    'required_controls'
                   )
                 """)
             .query(Integer.class)
             .single();
 
-        assertThat(columnCount).isEqualTo(5);
+        assertThat(columnCount).isEqualTo(8);
     }
 
     @Test

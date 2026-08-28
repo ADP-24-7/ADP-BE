@@ -12,6 +12,7 @@ import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.PolicySnapshot;
+import com.adp.gateway.policy.domain.RuntimePolicyContext;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -25,6 +26,7 @@ public class RuntimeDecisionService {
 
     public RuntimeDecision decide(
         RuntimeRequestContext context,
+        RuntimePolicyContext runtimePolicyContext,
         PolicySnapshot snapshot,
         RuntimeAuthorizationResult authorizationResult,
         ApplicabilityResult applicabilityResult
@@ -34,10 +36,8 @@ public class RuntimeDecisionService {
         List<ReasonCode> reasonCodes = reasonCodes(finalAction, authorizationResult, applicabilityResult);
         String decisionIdentity = String.join(
             ":",
-            context.requestId(),
-            context.workloadId(),
-            snapshot.policyVersion(),
             snapshot.snapshotDigest(),
+            runtimePolicyContext.runtimeContextDigest(),
             snapshot.evaluation().policyAction().name(),
             authorizationResult.name(),
             applicabilityResult.name(),
@@ -52,8 +52,11 @@ public class RuntimeDecisionService {
             authorizationResult,
             applicabilityResult,
             snapshot.matchedRuleIds(),
+            snapshot.evaluation().evidenceRefs(),
+            snapshot.evaluation().requiredControls(),
             snapshot.policyVersion(),
             snapshot.snapshotDigest(),
+            runtimePolicyContext.runtimeContextDigest(),
             snapshot.sourceArtifact().artifactId()
         );
     }
@@ -67,7 +70,7 @@ public class RuntimeDecisionService {
         }
         return switch (applicabilityResult) {
             case APPLICABLE -> DecisionAction.ALLOW;
-            case NOT_APPLICABLE, CONFLICT, INCOMPLETE -> DecisionAction.REVIEW;
+            case NOT_EVALUATED, NOT_APPLICABLE, CONFLICT, INCOMPLETE -> DecisionAction.REVIEW;
         };
     }
 
@@ -81,9 +84,10 @@ public class RuntimeDecisionService {
             reasonCodes.add(ReasonCode.RUNTIME_AUTHORIZATION_DENIED);
         }
         if (finalAction == DecisionAction.ALLOW) {
-            reasonCodes.add(ReasonCode.PROJECT_PROVISIONAL_ALLOW);
+            reasonCodes.add(ReasonCode.POLICY_ALLOW);
         }
         switch (applicabilityResult) {
+            case NOT_EVALUATED -> reasonCodes.add(ReasonCode.POLICY_NOT_EVALUATED);
             case APPLICABLE -> reasonCodes.add(ReasonCode.POLICY_APPLICABLE);
             case NOT_APPLICABLE -> reasonCodes.add(ReasonCode.POLICY_NOT_APPLICABLE);
             case CONFLICT -> reasonCodes.add(ReasonCode.POLICY_CONFLICT);

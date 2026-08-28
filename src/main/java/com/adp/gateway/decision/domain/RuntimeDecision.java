@@ -13,8 +13,11 @@ public record RuntimeDecision(
     RuntimeAuthorizationResult authorizationResult,
     ApplicabilityResult applicabilityResult,
     List<String> matchedRuleIds,
+    List<String> evidenceRefs,
+    List<String> requiredControls,
     String policyVersion,
     String snapshotDigest,
+    String runtimeContextDigest,
     String sourceArtifactId
 ) {
 

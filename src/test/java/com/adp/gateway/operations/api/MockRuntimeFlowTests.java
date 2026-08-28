@@ -53,13 +53,16 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.policyDigest").value("local-fixture"))
             .andExpect(jsonPath("$.decisionId").exists())
             .andExpect(jsonPath("$.policyAction").value("ALLOW"))
-            .andExpect(jsonPath("$.finalAction").value("ALLOW"))
+            .andExpect(jsonPath("$.finalAction").value("REVIEW"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
-            .andExpect(jsonPath("$.applicabilityResult").value("APPLICABLE"))
+            .andExpect(jsonPath("$.applicabilityResult").value("INCOMPLETE"))
+            .andExpect(jsonPath("$.runtimeContextDigest").exists())
             .andExpect(jsonPath("$.matchedRuleIds").value("PROJECT_PROVISIONAL_RULE"))
-            .andExpect(jsonPath("$.outcome").value("ALLOW"))
-            .andExpect(jsonPath("$.reasonCode").value("PROJECT_PROVISIONAL_ALLOW"))
-            .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
+            .andExpect(jsonPath("$.evidenceRefs").value(""))
+            .andExpect(jsonPath("$.requiredControls").value("RUNTIME_AUTHORIZATION,SUBJECT_SCOPE"))
+            .andExpect(jsonPath("$.outcome").value("REVIEW"))
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_INCOMPLETE"))
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"))
             .andExpect(jsonPath("$.auditId").exists());
 
         Integer auditCount = jdbcClient.sql("""
@@ -67,12 +70,16 @@ class MockRuntimeFlowTests {
                 where request_id = :requestId and trace_id = :traceId
                   and policy_artifact_id = 'PROJECT_PROVISIONAL'
                   and policy_action = 'ALLOW'
-                  and final_action = 'ALLOW'
+                  and final_action = 'REVIEW'
                   and authorization_result = 'ALLOWED'
-                  and applicability_result = 'APPLICABLE'
+                  and applicability_result = 'INCOMPLETE'
+                  and runtime_context_digest is not null
                   and matched_rule_ids = 'PROJECT_PROVISIONAL_RULE'
+                  and evidence_refs = ''
+                  and required_controls = 'RUNTIME_AUTHORIZATION,SUBJECT_SCOPE'
                   and policy_version = '0.0.0'
                   and policy_digest = 'local-fixture'
+                  and connector_status = 'NOT_EXECUTED'
                 """)
             .param("requestId", "req_be0_test")
             .param("traceId", "trace_be0_test")

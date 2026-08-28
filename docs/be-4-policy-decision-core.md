@@ -39,8 +39,11 @@ BE 최종 결과를 표현한다.
 - `authorization_result`
 - `applicability_result`
 - `matched_rule_ids`
+- `evidence_refs`
+- `required_controls`
 - `policy_version`
 - `snapshot_digest`
+- `runtime_context_digest`
 
 ## Decision Monotonicity
 
@@ -61,12 +64,13 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 2. [x] `PolicyEvaluation`과 `RuntimeDecision` 타입을 추가한다.
 3. [x] `PROJECT_PROVISIONAL` Policy Snapshot 모델을 만든다.
 4. [x] Request 시작 시 `policy_version + snapshot_digest + effective_at`을 고정한다.
-5. [x] Canonical Runtime Context 기반 Applicability 결과를 만든다.
+5. [x] Runtime Policy Context와 Applicability Evaluator 경계를 만든다.
 6. [x] Monotonic Decision Combiner로 최종 Decision을 생성한다.
-7. [x] Audit에 DA 1차 결과와 BE 최종 결과를 함께 남긴다.
-8. [ ] Versioned DataClass Crosswalk를 추가한다.
-9. [ ] Runtime Binding Contract를 추가한다.
-10. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
+7. [x] Audit에 DA 1차 결과, BE 최종 결과, evidence/control/runtime context digest를 함께 남긴다.
+8. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
+9. [ ] Versioned DataClass Crosswalk를 추가한다.
+10. [ ] Runtime Binding Contract를 추가한다.
+11. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
 
 ## Tests
 
@@ -77,6 +81,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Runtime 권한 부족은 DA `ALLOW`여도 BE `BLOCK`이 된다.
 - Rule 미매칭, Rule 충돌, Unknown Data Class는 default allow가 되지 않는다.
 - Audit에서 `policy_action`과 `final_action`을 함께 조회할 수 있다.
+- Audit에서 `runtime_context_digest`, `evidence_refs`, `required_controls`를 함께 조회할 수 있다.
 
 ## Out of Scope
 

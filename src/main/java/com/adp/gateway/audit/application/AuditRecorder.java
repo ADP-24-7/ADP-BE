@@ -29,6 +29,8 @@ public class AuditRecorder {
         ConnectorResult connectorResult
     ) {
         String matchedRuleIds = String.join(",", decision.matchedRuleIds());
+        String evidenceRefs = String.join(",", decision.evidenceRefs());
+        String requiredControls = String.join(",", decision.requiredControls());
         AuditContext auditContext = new AuditContext(
             "aud_" + UUID.randomUUID(),
             context.requestId(),
@@ -41,7 +43,10 @@ public class AuditRecorder {
             decision.finalAction().name(),
             decision.authorizationResult().name(),
             decision.applicabilityResult().name(),
+            decision.runtimeContextDigest(),
             matchedRuleIds,
+            evidenceRefs,
+            requiredControls,
             decision.policyVersion(),
             decision.snapshotDigest(),
             decision.runtimeReasonCodes().stream()
@@ -55,13 +60,15 @@ public class AuditRecorder {
             insert into audit_event (
                 audit_id, request_id, trace_id, idempotency_key, workload_id,
                 decision_id, policy_artifact_id, policy_action, final_action,
-                authorization_result, applicability_result, matched_rule_ids,
+                authorization_result, applicability_result, runtime_context_digest,
+                matched_rule_ids, evidence_refs, required_controls,
                 policy_version, policy_digest, reason_code, connector_status, created_at
             )
             values (
                 :auditId, :requestId, :traceId, :idempotencyKey, :workloadId,
                 :decisionId, :policyArtifactId, :policyAction, :finalAction,
-                :authorizationResult, :applicabilityResult, :matchedRuleIds,
+                :authorizationResult, :applicabilityResult, :runtimeContextDigest,
+                :matchedRuleIds, :evidenceRefs, :requiredControls,
                 :policyVersion, :policyDigest, :reasonCode, :connectorStatus, :createdAt
             )
             """)
@@ -76,7 +83,10 @@ public class AuditRecorder {
             .param("finalAction", auditContext.finalAction())
             .param("authorizationResult", auditContext.authorizationResult())
             .param("applicabilityResult", auditContext.applicabilityResult())
+            .param("runtimeContextDigest", auditContext.runtimeContextDigest())
             .param("matchedRuleIds", auditContext.matchedRuleIds())
+            .param("evidenceRefs", auditContext.evidenceRefs())
+            .param("requiredControls", auditContext.requiredControls())
             .param("policyVersion", auditContext.policyVersion())
             .param("policyDigest", auditContext.policyDigest())
             .param("reasonCode", auditContext.reasonCode())
