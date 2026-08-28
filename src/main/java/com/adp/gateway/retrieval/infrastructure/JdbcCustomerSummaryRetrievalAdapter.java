@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.retrieval.application.PredefinedRetrievalAdapter;
+import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.retrieval.domain.RetrievalDatasetScope;
 import com.adp.gateway.retrieval.domain.RetrievalField;
 import com.adp.gateway.retrieval.domain.RetrievalProfile;
@@ -30,19 +31,24 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
     private static final String WORKLOAD_ID = "customer_summary";
     private static final Map<String, Map<String, FieldBinding>> FIELD_CATALOG = Map.of(
         "customer", Map.of(
-            "customer_id", stringField("customer_id"),
-            "segment", stringField("segment")
+            "customer_id", stringField("customer_id", DataClass.CUSTOMER_IDENTIFIER),
+            "phone_number", stringField("phone_number", DataClass.CUSTOMER_IDENTIFIER),
+            "email", stringField("email", DataClass.CUSTOMER_IDENTIFIER),
+            "resident_registration_number",
+            stringField("resident_registration_number", DataClass.CUSTOMER_IDENTIFIER),
+            "segment", stringField("segment", DataClass.BUSINESS_METADATA)
         ),
         "account", Map.of(
-            "account_id", stringField("account_id"),
-            "account_type", stringField("account_type"),
-            "balance", decimalField("balance")
+            "account_id", stringField("account_id", DataClass.ACCOUNT_IDENTIFIER),
+            "account_number", stringField("account_number", DataClass.ACCOUNT_IDENTIFIER),
+            "account_type", stringField("account_type", DataClass.FINANCIAL_METADATA),
+            "balance", decimalField("balance", DataClass.FINANCIAL_AMOUNT)
         ),
         "transaction", Map.of(
-            "transaction_id", stringField("t.transaction_id"),
-            "posted_at", dateField("t.posted_at"),
-            "merchant_category", stringField("t.merchant_category"),
-            "amount", decimalField("t.amount")
+            "transaction_id", stringField("t.transaction_id", DataClass.TRANSACTION_IDENTIFIER),
+            "posted_at", dateField("t.posted_at", DataClass.BUSINESS_METADATA),
+            "merchant_category", stringField("t.merchant_category", DataClass.BUSINESS_METADATA),
+            "amount", decimalField("t.amount", DataClass.FINANCIAL_AMOUNT)
         )
     );
 
@@ -62,8 +68,12 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
     @Override
     public void validateProfile(RetrievalProfile profile) {
         for (RetrievalField field : profile.fields()) {
-            if (!FIELD_CATALOG.getOrDefault(field.datasetName(), Map.of()).containsKey(field.fieldName())) {
+            FieldBinding binding = FIELD_CATALOG.getOrDefault(field.datasetName(), Map.of()).get(field.fieldName());
+            if (binding == null) {
                 throw new DataAccessDeniedException("Retrieval profile contains an unsupported field");
+            }
+            if (field.dataClass() != binding.runtimeDataClass()) {
+                throw new DataAccessDeniedException("Retrieval profile contains a runtime data class mismatch");
             }
         }
 
@@ -90,7 +100,7 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
             profile.profileId(),
             records.size(),
             profile.datasetScopes(),
-            profile.fields(),
+            catalogFields(profile.fields()),
             records
         );
     }
@@ -187,8 +197,18 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
         return values;
     }
 
-    private static FieldBinding stringField(String columnExpression) {
-        return new FieldBinding(columnExpression, (rs, field) -> {
+    private List<RetrievalField> catalogFields(List<RetrievalField> profileFields) {
+        return profileFields.stream()
+            .map(field -> new RetrievalField(
+                field.datasetName(),
+                field.fieldName(),
+                FIELD_CATALOG.get(field.datasetName()).get(field.fieldName()).runtimeDataClass()
+            ))
+            .toList();
+    }
+
+    private static FieldBinding stringField(String columnExpression, DataClass runtimeDataClass) {
+        return new FieldBinding(columnExpression, runtimeDataClass, (rs, field) -> {
             try {
                 return rs.getString(field);
             } catch (SQLException exception) {
@@ -197,8 +217,8 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
         });
     }
 
-    private static FieldBinding decimalField(String columnExpression) {
-        return new FieldBinding(columnExpression, (rs, field) -> {
+    private static FieldBinding decimalField(String columnExpression, DataClass runtimeDataClass) {
+        return new FieldBinding(columnExpression, runtimeDataClass, (rs, field) -> {
             try {
                 return rs.getBigDecimal(field);
             } catch (SQLException exception) {
@@ -207,8 +227,8 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
         });
     }
 
-    private static FieldBinding dateField(String columnExpression) {
-        return new FieldBinding(columnExpression, (rs, field) -> {
+    private static FieldBinding dateField(String columnExpression, DataClass runtimeDataClass) {
+        return new FieldBinding(columnExpression, runtimeDataClass, (rs, field) -> {
             try {
                 return rs.getDate(field).toLocalDate();
             } catch (SQLException exception) {
@@ -219,6 +239,7 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
 
     private record FieldBinding(
         String columnExpression,
+        DataClass runtimeDataClass,
         BiFunction<ResultSet, String, Object> reader
     ) {
     }

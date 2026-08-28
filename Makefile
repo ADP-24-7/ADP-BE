@@ -13,6 +13,7 @@ DOCKER_RUN_GRADLE_TEST := docker run --rm --network adp-local \
 	-e ADP_LOCAL_FIXTURES_ENABLED=true \
 	-e ADP_MOCK_RUNTIME_ENABLED=true \
 	-e ADP_DATA_ACCESS_PREVIEW_ENABLED=true \
+	-e ADP_CONTEXT_PREVIEW_ENABLED=true \
 	-v "$(CURDIR)":/workspace \
 	-v adp-be-gradle-cache:/home/gradle/.gradle \
 	-w /workspace \

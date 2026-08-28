@@ -296,7 +296,7 @@ class DataAccessPreviewControllerTests {
                 values (
                     'profile_unsupported_field',
                     'customer',
-                    'phone_number',
+                    'customer_name',
                     'CUSTOMER_IDENTIFIER'
                 )
                 on conflict (profile_id, dataset_name, field_name) do nothing
@@ -312,6 +312,42 @@ class DataAccessPreviewControllerTests {
                     {
                       "workloadId": "customer_summary",
                       "purpose": "CUSTOMER_SUPPORT_UNSUPPORTED_FIELD",
+                      "subject": "customer:customer-100"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("DATA_ACCESS_DENIED"));
+    }
+
+    @Test
+    void deniesProfileFieldWhenRuntimeDataClassDoesNotMatchServerCatalog() throws Exception {
+        insertProfile("profile_data_class_mismatch", "CUSTOMER_SUPPORT_DATA_CLASS_MISMATCH");
+        jdbcClient.sql("""
+                insert into retrieval_profile_dataset (profile_id, dataset_name, row_limit, time_window_days)
+                values ('profile_data_class_mismatch', 'account', 1, null)
+                on conflict (profile_id, dataset_name) do nothing
+                """).update();
+        jdbcClient.sql("""
+                insert into retrieval_profile_field (profile_id, dataset_name, field_name, data_class)
+                values (
+                    'profile_data_class_mismatch',
+                    'account',
+                    'balance',
+                    'BUSINESS_METADATA'
+                )
+                on conflict (profile_id, dataset_name, field_name) do nothing
+                """).update();
+        insertGrant("CUSTOMER_SUPPORT_DATA_CLASS_MISMATCH", "customer-100");
+
+        mockMvc.perform(post("/api/runtime/data-access/preview")
+                .header("X-Request-Id", "req_data_class_mismatch")
+                .header("X-Trace-Id", "trace_data_class_mismatch")
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purpose": "CUSTOMER_SUPPORT_DATA_CLASS_MISMATCH",
                       "subject": "customer:customer-100"
                     }
                     """))
