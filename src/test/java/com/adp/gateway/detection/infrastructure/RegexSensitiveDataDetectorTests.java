@@ -18,6 +18,7 @@ class RegexSensitiveDataDetectorTests {
     @Test
     void detectsSensitiveTypesWithLocationAndVersion() {
         CanonicalContext context = new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
             "ctx_test",
             "da_test",
             "customer_summary",
@@ -70,5 +71,33 @@ class RegexSensitiveDataDetectorTests {
                 assertThat(finding.evidenceDigest()).hasSize(64);
                 assertThat(finding.endOffset()).isGreaterThan(finding.startOffset());
             });
+    }
+
+    @Test
+    void treatsPhoneNumberAsPhoneWithoutAccountNumberCollision() {
+        CanonicalContext context = new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_test",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "digest",
+            List.of(new CanonicalContextField(
+                "$.records[0].customer.phone_number",
+                "customer",
+                "phone_number",
+                DataClass.CUSTOMER_IDENTIFIER,
+                "010-1111-2222",
+                "field_digest"
+            )),
+            "context_digest"
+        );
+
+        var result = detector.detect(context);
+
+        assertThat(result.findings())
+            .extracting("type")
+            .containsExactly(SensitiveDataType.PHONE_NUMBER);
     }
 }

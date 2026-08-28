@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.retrieval.domain.RetrievalField;
@@ -28,7 +29,7 @@ public class CanonicalContextBuilder {
         this.subjectRefHasher = subjectRefHasher;
     }
 
-    public com.adp.gateway.context.domain.CanonicalContext build(RetrievalResult result) {
+    public CanonicalContext build(RetrievalResult result) {
         Map<String, RetrievalField> selectedFields = result.selectedFields().stream()
             .collect(Collectors.toMap(RetrievalField::qualifiedName, Function.identity()));
         List<com.adp.gateway.context.domain.CanonicalContextField> fields = new ArrayList<>();
@@ -59,7 +60,8 @@ public class CanonicalContextBuilder {
             .map(field -> field.path() + ":" + field.dataClass().name() + ":" + field.valueDigest())
             .collect(Collectors.joining("|")));
 
-        return new com.adp.gateway.context.domain.CanonicalContext(
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
             "ctx_" + UUID.randomUUID(),
             result.dataAccessId(),
             result.workloadId(),

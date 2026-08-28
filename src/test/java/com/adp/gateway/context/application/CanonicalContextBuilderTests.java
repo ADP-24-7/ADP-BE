@@ -36,6 +36,7 @@ class CanonicalContextBuilderTests {
 
         var context = builder.build(result);
 
+        assertThat(context.schemaVersion()).isEqualTo("canonical-context/v1");
         assertThat(context.contextId()).startsWith("ctx_");
         assertThat(context.dataAccessId()).isEqualTo("da_test");
         assertThat(context.workloadId()).isEqualTo("customer_summary");
@@ -62,6 +63,20 @@ class CanonicalContextBuilderTests {
         assertThat(context.fields()).hasSize(1);
         assertThat(context.fields().getFirst().dataClass()).isEqualTo(DataClass.UNKNOWN);
         assertThat(context.fields().getFirst().hasUnknownDataClass()).isTrue();
+    }
+
+    @Test
+    void doesNotExposeRawFieldValueThroughToString() {
+        RetrievalResult result = retrievalResult(
+            List.of(new RetrievalField("customer", "email", DataClass.CUSTOMER_IDENTIFIER)),
+            List.of(new RetrievalRecord("customer", Map.of("email", "minji.kim@example.test")))
+        );
+
+        var context = builder.build(result);
+
+        assertThat(context.fields().getFirst().toString())
+            .contains("value=<redacted>")
+            .doesNotContain("minji.kim@example.test");
     }
 
     private RetrievalResult retrievalResult(

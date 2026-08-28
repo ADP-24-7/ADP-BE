@@ -20,7 +20,10 @@ public class RegexSensitiveDataDetector implements SensitiveDataDetector {
     private static final List<Rule> RULES = List.of(
         new Rule(SensitiveDataType.EMAIL, Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")),
         new Rule(SensitiveDataType.PHONE_NUMBER, Pattern.compile("\\b01[016789]-?\\d{3,4}-?\\d{4}\\b")),
-        new Rule(SensitiveDataType.ACCOUNT_NUMBER, Pattern.compile("\\b\\d{2,6}-\\d{2,6}-\\d{3,8}\\b")),
+        new Rule(
+            SensitiveDataType.ACCOUNT_NUMBER,
+            Pattern.compile("\\b(?!01[016789]-?\\d{3,4}-?\\d{4}\\b)\\d{2,6}-\\d{2,6}-\\d{3,8}\\b")
+        ),
         new Rule(SensitiveDataType.RESIDENT_REGISTRATION_NUMBER, Pattern.compile("\\b\\d{6}-[1-4]\\d{6}\\b")),
         new Rule(SensitiveDataType.PERSON_NAME, Pattern.compile("\\b[A-Z][a-z]+\\s[A-Z][a-z]+\\b"))
     );

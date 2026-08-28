@@ -6,6 +6,7 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.detection.domain.DetectionResult;
 
 public record ContextPreviewResponse(
+    String schemaVersion,
     String contextId,
     String dataAccessId,
     String workloadId,
@@ -19,6 +20,7 @@ public record ContextPreviewResponse(
 
     public static ContextPreviewResponse from(CanonicalContext context, DetectionResult detectionResult) {
         return new ContextPreviewResponse(
+            context.schemaVersion(),
             context.contextId(),
             context.dataAccessId(),
             context.workloadId(),
