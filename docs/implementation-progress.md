@@ -145,9 +145,11 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] DA final mapping 미확정 상태를 고려한 context-aware `TransformStrategyResolver` Port 추가
 - [x] 기본 환경 mapping 미구성 시 fail-closed resolver 적용
 - [x] `HMAC_PSEUDO`를 local-only stable versioned key provider 기반 HMAC-SHA256으로 수정
+- [x] Transform instruction invariant validation 추가
+- [x] Transform instruction digest에 TTL 포함
 - [x] `TransformEngine` baseline 추가
 - [x] `vault.token_mapping` baseline schema와 TTL/key/mapping version 반영
-- [x] Vault token 만료 시 과거 row를 덮어쓰지 않는 lifecycle status 반영
+- [x] Vault token 만료 시 과거 row를 덮어쓰지 않는 lifecycle status와 replacement lineage 반영
 - [x] `runtime.transform_execution` / `runtime.transform_field` persistence 추가
 - [x] Transform field에 strategy/key/mapping version과 instruction digest 저장
 - [x] Transform persistence transaction 경계 추가
@@ -159,8 +161,11 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] Local fixture에서 `TRANSFORM` final action 경로 검증
 - [x] Flyway migration test에 Transform/Vault schema 검증 추가
 - [x] Strategy unit test 추가
-- [x] Vault same-scope/different-scope/expired-token test 추가
+- [x] Vault same-scope/different-scope/expired-token/concurrent-token test 추가
+- [x] Vault failure 시 Runtime FAILED 및 Connector 미실행 test 추가
 - [x] Default/local fixture transform wiring test 추가
 - [ ] Privileged Re-map API
 - [ ] Vault 장애 fallback 정책
 - [ ] DA 실제 transform policy artifact loader 연동
+- [ ] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
+- [ ] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현

@@ -67,6 +67,7 @@ public class TransformEngine {
             List<TransformFieldResult> fields = new ArrayList<>();
             for (CanonicalContextField field : context.fields()) {
                 TransformInstruction instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
+                validateInstruction(instruction);
                 Object transformedValue = transformedValue(decision, field, instruction);
                 String instructionDigest = instructionDigest(instruction);
                 String transformedDigest = transformedValue == null
@@ -143,6 +144,39 @@ public class TransformEngine {
         };
     }
 
+    private void validateInstruction(TransformInstruction instruction) {
+        requireText(instruction.strategyVersion(), "strategyVersion");
+        requireText(instruction.keyVersion(), "keyVersion");
+        requireText(instruction.mappingVersion(), "mappingVersion");
+        switch (instruction.strategy()) {
+            case MASK -> {
+                int visibleSuffix = intParameter(instruction.parameters(), "visibleSuffix", 4);
+                if (visibleSuffix < 0) {
+                    throw new TransformResolutionException("MASK visibleSuffix must be greater than or equal to 0");
+                }
+            }
+            case GENERALIZE -> {
+                int bucketSize = intParameter(instruction.parameters(), "bucketSize", 1000);
+                if (bucketSize <= 0) {
+                    throw new TransformResolutionException("GENERALIZE bucketSize must be greater than 0");
+                }
+            }
+            case VAULT_TOKEN -> {
+                if (instruction.tokenTtl() == null || instruction.tokenTtl().isZero() || instruction.tokenTtl().isNegative()) {
+                    throw new TransformResolutionException("VAULT_TOKEN tokenTtl must be greater than 0");
+                }
+            }
+            case HMAC_PSEUDO, REMOVE, KEEP, FIELD_SEPARATION -> {
+            }
+        }
+    }
+
+    private void requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new TransformResolutionException(name + " must not be blank");
+        }
+    }
+
     private String mask(Object value, TransformInstruction instruction) {
         String raw = String.valueOf(value);
         int visibleSuffix = intParameter(instruction.parameters(), "visibleSuffix", 4);
@@ -167,12 +201,12 @@ public class TransformEngine {
     }
 
     private Object generalize(Object value, TransformInstruction instruction) {
+        int bucketSize = intParameter(instruction.parameters(), "bucketSize", 1000);
         try {
-            int bucketSize = intParameter(instruction.parameters(), "bucketSize", 1000);
             BigDecimal amount = new BigDecimal(String.valueOf(value));
             BigDecimal bucket = amount.divideToIntegralValue(BigDecimal.valueOf(bucketSize)).multiply(BigDecimal.valueOf(bucketSize));
             return bucket.toPlainString() + "+";
-        } catch (NumberFormatException | ArithmeticException exception) {
+        } catch (NumberFormatException exception) {
             return "<generalized>";
         }
     }
@@ -191,6 +225,7 @@ public class TransformEngine {
             value(instruction.strategyVersion()),
             value(instruction.keyVersion()),
             value(instruction.mappingVersion()),
+            instruction.tokenTtl() == null ? "<none>" : String.valueOf(instruction.tokenTtl().toSeconds()),
             canonicalParameters(instruction.parameters())
         ));
     }
@@ -207,7 +242,11 @@ public class TransformEngine {
         if (value == null) {
             return defaultValue;
         }
-        return Integer.parseInt(value);
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            throw new TransformResolutionException(name + " must be an integer");
+        }
     }
 
     private void recordExecutionMetric(String result) {

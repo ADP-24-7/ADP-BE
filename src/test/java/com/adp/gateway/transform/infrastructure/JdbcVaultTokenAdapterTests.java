@@ -4,7 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.transform.application.VaultTokenRequest;
@@ -72,6 +77,18 @@ class JdbcVaultTokenAdapterTests {
         String token = adapter.tokenFor(request(scope, sourceDigest));
 
         assertThat(token).isNotEqualTo("vault_tok_expired_" + suffix);
+        String replacementRef = jdbcClient.sql("""
+                select replaced_by_token_ref
+                from vault.token_mapping
+                where mapping_scope = :mappingScope
+                  and source_value_digest = :sourceValueDigest
+                  and status = 'EXPIRED'
+                """)
+            .param("mappingScope", scope)
+            .param("sourceValueDigest", sourceDigest)
+            .query(String.class)
+            .single();
+        assertThat(replacementRef).isEqualTo(token);
         Integer expiredCount = jdbcClient.sql("""
                 select count(*)
                 from vault.token_mapping
@@ -84,6 +101,47 @@ class JdbcVaultTokenAdapterTests {
             .query(Integer.class)
             .single();
         assertThat(expiredCount).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentSameScopeAndDigestConvergesToOneActiveToken() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String scope = "scope_concurrent_" + suffix;
+        String sourceDigest = "digest_concurrent_" + suffix;
+        VaultTokenRequest request = request(scope, sourceDigest);
+        var executor = Executors.newFixedThreadPool(20);
+        CountDownLatch ready = new CountDownLatch(20);
+        CountDownLatch start = new CountDownLatch(1);
+        List<java.util.concurrent.Future<String>> futures = java.util.stream.IntStream.range(0, 20)
+            .mapToObj(index -> executor.submit(() -> {
+                ready.countDown();
+                start.await(5, TimeUnit.SECONDS);
+                return adapter.tokenFor(request);
+            }))
+            .toList();
+
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        HashSet<String> tokens = new HashSet<>();
+        for (java.util.concurrent.Future<String> future : futures) {
+            tokens.add(future.get(5, TimeUnit.SECONDS));
+        }
+        executor.shutdown();
+        assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+
+        Integer activeCount = jdbcClient.sql("""
+                select count(*)
+                from vault.token_mapping
+                where mapping_scope = :mappingScope
+                  and source_value_digest = :sourceValueDigest
+                  and status = 'ACTIVE'
+                """)
+            .param("mappingScope", scope)
+            .param("sourceValueDigest", sourceDigest)
+            .query(Integer.class)
+            .single();
+        assertThat(tokens).hasSize(1);
+        assertThat(activeCount).isEqualTo(1);
     }
 
     private VaultTokenRequest request(String scope, String sourceDigest) {

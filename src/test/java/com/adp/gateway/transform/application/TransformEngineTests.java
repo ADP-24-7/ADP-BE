@@ -1,6 +1,7 @@
 package com.adp.gateway.transform.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
@@ -77,6 +78,70 @@ class TransformEngineTests {
             .isNotEqualTo(field(first, "fields.generalized").instructionDigest());
     }
 
+    @Test
+    void tokenTtlAffectsInstructionDigest() {
+        TransformEngine oneHourTtlEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.GENERALIZE,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of("bucketSize", "1000")
+        ));
+        TransformEngine thirtyDayTtlEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.GENERALIZE,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofDays(30),
+            Map.of("bucketSize", "1000")
+        ));
+
+        var first = oneHourTtlEngine.transform("exec_test", generalizeContext(), policyContext(), decision());
+        var second = thirtyDayTtlEngine.transform("exec_test", generalizeContext(), policyContext(), decision());
+
+        assertThat(field(second, "fields.generalized").instructionDigest())
+            .isNotEqualTo(field(first, "fields.generalized").instructionDigest());
+    }
+
+    @Test
+    void invalidInstructionParametersFailClosed() {
+        TransformEngine invalidGeneralize = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.GENERALIZE,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of("bucketSize", "0")
+        ));
+        TransformEngine invalidMask = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.MASK,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of("visibleSuffix", "-1")
+        ));
+        TransformEngine invalidVault = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.VAULT_TOKEN,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ZERO,
+            Map.of()
+        ));
+
+        assertThatThrownBy(() -> invalidGeneralize.transform("exec_test", generalizeContext(), policyContext(), decision()))
+            .isInstanceOf(TransformResolutionException.class)
+            .hasMessageContaining("bucketSize");
+        assertThatThrownBy(() -> invalidMask.transform("exec_test", maskContext(), policyContext(), decision()))
+            .isInstanceOf(TransformResolutionException.class)
+            .hasMessageContaining("visibleSuffix");
+        assertThatThrownBy(() -> invalidVault.transform("exec_test", vaultContext(), policyContext(), decision()))
+            .isInstanceOf(TransformResolutionException.class)
+            .hasMessageContaining("tokenTtl");
+    }
+
     private TransformStrategy strategyFor(String path) {
         return switch (path) {
             case "fields.masked" -> TransformStrategy.MASK;
@@ -102,15 +167,19 @@ class TransformEngineTests {
     }
 
     private TransformEngine engineWithGeneralizeBucket(String bucketSize) {
+        return engineWithInstruction(new TransformInstruction(
+            TransformStrategy.GENERALIZE,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of("bucketSize", bucketSize)
+        ));
+    }
+
+    private TransformEngine engineWithInstruction(TransformInstruction instruction) {
         return new TransformEngine(
-            context -> new TransformInstruction(
-                TransformStrategy.GENERALIZE,
-                "test-strategy-v1",
-                "test-key-v1",
-                "test-mapping-v1",
-                Duration.ofHours(1),
-                Map.of("bucketSize", bucketSize)
-            ),
+            context -> instruction,
             request -> "vault_tok_test",
             keyVersion -> new PseudonymizationKey(
                 keyVersion,
@@ -164,6 +233,34 @@ class TransformEngineTests {
             "customer",
             "subject_digest",
             List.of(field("fields.generalized", "12580.90", DataClass.FINANCIAL_AMOUNT)),
+            "canonical_digest"
+        );
+    }
+
+    private CanonicalContext maskContext() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_mask",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(field("fields.masked", "01012345678", DataClass.CUSTOMER_IDENTIFIER)),
+            "canonical_digest"
+        );
+    }
+
+    private CanonicalContext vaultContext() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_vault",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(field("fields.vault", "customer-1", DataClass.CUSTOMER_IDENTIFIER)),
             "canonical_digest"
         );
     }

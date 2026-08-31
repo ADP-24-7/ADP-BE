@@ -69,8 +69,8 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
     }
 
     private String create(VaultTokenRequest request) {
-        expireStaleMappings(request);
         String tokenRef = "vault_tok_" + UUID.randomUUID();
+        expireStaleMappings(request, tokenRef);
         try {
             jdbcClient.sql("""
                     insert into vault.token_mapping (
@@ -97,17 +97,18 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
             meterRegistry.counter("vault.token.create.total", "result", "DUPLICATE").increment();
             return find(request)
                 .or(() -> {
-                    expireStaleMappings(request);
+                    expireStaleMappings(request, tokenRef);
                     return find(request);
                 })
                 .orElseThrow(() -> exception);
         }
     }
 
-    private void expireStaleMappings(VaultTokenRequest request) {
+    private void expireStaleMappings(VaultTokenRequest request, String replacementTokenRef) {
         jdbcClient.sql("""
                 update vault.token_mapping
-                set status = 'EXPIRED'
+                set status = 'EXPIRED',
+                    replaced_by_token_ref = :replacementTokenRef
                 where mapping_scope = :mappingScope
                   and data_class = :dataClass
                   and source_value_digest = :sourceValueDigest
@@ -116,6 +117,7 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
                   and status = 'ACTIVE'
                   and expires_at <= :now
                 """)
+            .param("replacementTokenRef", replacementTokenRef)
             .param("mappingScope", request.mappingScope())
             .param("dataClass", request.dataClass().name())
             .param("sourceValueDigest", request.sourceValueDigest())
