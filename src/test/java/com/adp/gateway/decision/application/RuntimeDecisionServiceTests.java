@@ -49,6 +49,7 @@ class RuntimeDecisionServiceTests {
         assertThat(first.runtimeReasonCodes()).contains(ReasonCode.POLICY_ALLOW);
         assertThat(first.evidenceRefs()).containsExactly(ref("EV-1", "evidence", "v1"));
         assertThat(first.requiredControls()).containsExactly(ref("CONTROL-1", "control", "v1"));
+        assertThat(first.sourcePolicyEvaluationArtifactRef()).isEqualTo(sourceArtifact());
     }
 
     @Test

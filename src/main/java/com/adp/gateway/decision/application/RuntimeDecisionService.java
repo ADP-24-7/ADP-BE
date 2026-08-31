@@ -58,7 +58,7 @@ public class RuntimeDecisionService {
             snapshot.policyVersion(),
             snapshot.snapshotDigest(),
             runtimePolicyContext.runtimeContextDigest(),
-            snapshot.sourcePolicyEvaluationArtifactRef().artifactId()
+            snapshot.sourcePolicyEvaluationArtifactRef()
         );
     }
 

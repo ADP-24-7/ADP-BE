@@ -51,6 +51,9 @@ class FlywayMigrationTests {
                   and table_name = 'audit_event'
                   and column_name in (
                     'policy_action',
+                    'policy_artifact_version',
+                    'policy_artifact_digest_algorithm',
+                    'policy_artifact_digest_value',
                     'final_action',
                     'authorization_result',
                     'applicability_result',
@@ -63,7 +66,7 @@ class FlywayMigrationTests {
             .query(Integer.class)
             .single();
 
-        assertThat(columnCount).isEqualTo(8);
+        assertThat(columnCount).isEqualTo(11);
     }
 
     @Test

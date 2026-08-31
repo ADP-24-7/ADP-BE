@@ -1,5 +1,8 @@
 alter table audit_event
     add column policy_action varchar(40) not null default 'UNKNOWN',
+    add column policy_artifact_version varchar(120) not null default 'legacy-not-evaluated',
+    add column policy_artifact_digest_algorithm varchar(40) not null default 'legacy',
+    add column policy_artifact_digest_value varchar(200) not null default 'legacy-not-evaluated',
     add column final_action varchar(40) not null default 'UNKNOWN',
     add column authorization_result varchar(40) not null default 'NOT_EVALUATED',
     add column applicability_result varchar(40) not null default 'NOT_EVALUATED',
@@ -10,6 +13,9 @@ alter table audit_event
 
 alter table audit_event
     alter column policy_action drop default,
+    alter column policy_artifact_version drop default,
+    alter column policy_artifact_digest_algorithm drop default,
+    alter column policy_artifact_digest_value drop default,
     alter column final_action drop default,
     alter column authorization_result drop default,
     alter column applicability_result drop default,

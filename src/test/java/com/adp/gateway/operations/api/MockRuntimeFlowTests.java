@@ -48,6 +48,9 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.traceId").value("trace_be0_test"))
             .andExpect(jsonPath("$.idempotencyKey").value("idem_be0_test"))
             .andExpect(jsonPath("$.policyArtifactId").value("PROJECT_PROVISIONAL_POLICY_EVALUATION"))
+            .andExpect(jsonPath("$.policyArtifactVersion").value("0.0.0"))
+            .andExpect(jsonPath("$.policyArtifactDigestAlgorithm").value("sha256"))
+            .andExpect(jsonPath("$.policyArtifactDigestValue").value("local-fixture-policy-evaluation"))
             .andExpect(jsonPath("$.policyArtifactStatus").value("PROJECT_PROVISIONAL"))
             .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/0.0.0"))
             .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture"))
@@ -69,6 +72,9 @@ class MockRuntimeFlowTests {
                 select count(*) from audit_event
                 where request_id = :requestId and trace_id = :traceId
                   and policy_artifact_id = 'PROJECT_PROVISIONAL_POLICY_EVALUATION'
+                  and policy_artifact_version = '0.0.0'
+                  and policy_artifact_digest_algorithm = 'sha256'
+                  and policy_artifact_digest_value = 'local-fixture-policy-evaluation'
                   and policy_action = 'ALLOW'
                   and final_action = 'REVIEW'
                   and authorization_result = 'ALLOWED'

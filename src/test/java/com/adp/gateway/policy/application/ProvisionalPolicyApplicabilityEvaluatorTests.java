@@ -51,6 +51,10 @@ class ProvisionalPolicyApplicabilityEvaluatorTests {
         assertThat(evaluator.evaluate(snapshot("mapped", "customer_summary", "CUSTOMER_SUPPORT", "CUSTOMER_IDENTIFIER"),
             incompleteContext()))
             .isEqualTo(ApplicabilityResult.INCOMPLETE);
+
+        assertThat(evaluator.evaluate(snapshot("mapped", "customer_summary", "CUSTOMER_SUPPORT", "CUSTOMER_IDENTIFIER"),
+            context("customer_summary", "CUSTOMER_SUPPORT", List.of(), List.of(DataClass.CUSTOMER_IDENTIFIER))))
+            .isEqualTo(ApplicabilityResult.INCOMPLETE);
     }
 
     @Test

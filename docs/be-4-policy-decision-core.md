@@ -68,6 +68,11 @@ BE 최종 결과를 표현한다.
 - `policy_version`
 - `snapshot_digest`
 - `runtime_context_digest`
+- `source_policy_evaluation_artifact_ref`
+  - `artifact_id`
+  - `artifact_version`
+  - `artifact_digest.algorithm`
+  - `artifact_digest.value`
 
 `policy_action`과 `final_action`은 이름이 같더라도 서로 다른 타입이다. `PolicyAction`은 BE가 정규화한 1차 정책 판단이고, `FinalAction`은 runtime authorization/applicability guard까지 반영한 최종 집행 판단이다.
 
@@ -99,10 +104,12 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 11. [x] Runtime processing context를 복수형으로 모델링한다.
 12. [x] Policy-side `analysis_status`, `applicability`, `processing_contexts`, `regulatory_data_categories`, `runtime_binding`을 normalized model에 보존한다.
 13. [x] Applicability Evaluator에서 workload, purpose, processing context, runtime data class binding을 비교한다.
-14. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
-15. [ ] Versioned DataClass Crosswalk를 추가한다.
-16. [ ] Runtime Binding Contract adapter를 추가한다.
-17. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
+14. [x] Runtime processing context가 필요한데 비어 있으면 `NOT_APPLICABLE`이 아니라 `INCOMPLETE`로 판정한다.
+15. [x] RuntimeDecision/Audit에 DA source artifact version/digest를 보존한다.
+16. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
+17. [ ] Versioned DataClass Crosswalk를 추가한다.
+18. [ ] Runtime Binding Contract adapter를 추가한다.
+19. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
 
 ## Tests
 
@@ -116,6 +123,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Audit에서 `runtime_context_digest`, `evidence_refs`, `required_controls`를 함께 조회할 수 있다.
 - DA source artifact version/digest와 BE snapshot version/digest가 달라도 snapshot 생성이 가능하다.
 - Applicability Evaluator는 workload, purpose, processing context, runtime data class가 일치하지 않으면 `APPLICABLE`을 반환하지 않는다.
+- Runtime processing context가 아직 결정되지 않은 경우 `INCOMPLETE`로 audit된다.
 
 ## Out of Scope
 

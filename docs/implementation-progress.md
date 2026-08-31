@@ -105,6 +105,8 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] `processing_contexts[]` 복수 모델 반영
 - [x] DA handoff `applicability`, `analysis_status`, `runtime_binding`, `regulatory_data_categories` 보존
 - [x] Applicability Evaluator에서 workload/purpose/processing/runtime data class binding 비교
+- [x] Runtime processing context 미입력 시 `INCOMPLETE` 판정
+- [x] RuntimeDecision/Audit에 DA source artifact version/digest 보존
 - [x] 완화 금지 규칙 강제
 - [x] Rule 미매칭, 충돌, Unknown Data Class의 default allow 방지
 - [x] Decision Audit Metadata 확장

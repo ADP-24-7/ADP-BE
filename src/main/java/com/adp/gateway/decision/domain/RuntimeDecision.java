@@ -6,6 +6,7 @@ import com.adp.gateway.common.error.ReasonCode;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicyAction;
+import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 
 public record RuntimeDecision(
     String decisionId,
@@ -23,7 +24,7 @@ public record RuntimeDecision(
     String policyVersion,
     String snapshotDigest,
     String runtimeContextDigest,
-    String sourceArtifactId
+    SourcePolicyEvaluationArtifactRef sourcePolicyEvaluationArtifactRef
 ) {
 
     public RuntimeDecision {

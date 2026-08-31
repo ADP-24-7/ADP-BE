@@ -45,6 +45,9 @@ public class ProvisionalPolicyApplicabilityEvaluator implements PolicyApplicabil
         if (context.runtimeDataClasses().contains(DataClass.UNKNOWN)) {
             return ApplicabilityResult.INCOMPLETE;
         }
+        if (!spec.processingContexts().isEmpty() && context.processingContexts().isEmpty()) {
+            return ApplicabilityResult.INCOMPLETE;
+        }
         if (!hasProcessingContextMatch(spec, context)) {
             return ApplicabilityResult.NOT_APPLICABLE;
         }
