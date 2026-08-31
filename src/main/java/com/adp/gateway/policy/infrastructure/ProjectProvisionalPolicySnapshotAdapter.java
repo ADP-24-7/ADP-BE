@@ -32,14 +32,16 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     @Override
     public PolicySnapshot load(PolicySelectionContext context) {
         if (matchesRuntimeFixture(context)) {
-            return allowSnapshot(
+            return fixtureSnapshot(
+                PolicyAction.TRANSFORM,
                 FIXTURE_WORKLOAD_ID,
                 FIXTURE_PURPOSE,
                 "be-snapshot-local-fixture:customer-summary:customer-support:internal-provider"
             );
         }
         if (matchesLegacyFixture(context)) {
-            return allowSnapshot(
+            return fixtureSnapshot(
+                PolicyAction.ALLOW,
                 LEGACY_FIXTURE_WORKLOAD_ID,
                 LEGACY_FIXTURE_PURPOSE,
                 "be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider"
@@ -60,7 +62,12 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
             && context.providerProfileId() == null;
     }
 
-    private PolicySnapshot allowSnapshot(String workloadId, String purpose, String snapshotDigest) {
+    private PolicySnapshot fixtureSnapshot(
+        PolicyAction policyAction,
+        String workloadId,
+        String purpose,
+        String snapshotDigest
+    ) {
         SourcePolicyEvaluationArtifactRef sourceArtifact = new SourcePolicyEvaluationArtifactRef(
             "PROJECT_PROVISIONAL_POLICY_EVALUATION",
             "0.0.0",
@@ -71,7 +78,7 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
             List.of(new ArtifactReference("PROJECT_PROVISIONAL_RULE", "rule", "0.0.0")),
             List.of(new ArtifactReference("PROJECT_PROVISIONAL_REQUIREMENT", "requirement", "0.0.0")),
             List.of(),
-            PolicyAction.ALLOW,
+            policyAction,
             List.of(
                 new ArtifactReference("RUNTIME_AUTHORIZATION", "control", "0.0.0"),
                 new ArtifactReference("SUBJECT_SCOPE", "control", "0.0.0")

@@ -35,6 +35,8 @@ import com.adp.gateway.retrieval.application.RetrievalService;
 import com.adp.gateway.retrieval.domain.RetrievalResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.transform.application.TransformEngine;
+import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
@@ -53,6 +55,7 @@ public class RuntimeExecutionService {
     private final RuntimeExecutionPersistence persistence;
     private final SubjectRefHasher subjectRefHasher;
     private final RuntimeInputHasher runtimeInputHasher;
+    private final TransformEngine transformEngine;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -68,6 +71,7 @@ public class RuntimeExecutionService {
         RuntimeExecutionPersistence persistence,
         SubjectRefHasher subjectRefHasher,
         RuntimeInputHasher runtimeInputHasher,
+        TransformEngine transformEngine,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -82,6 +86,7 @@ public class RuntimeExecutionService {
         this.persistence = persistence;
         this.subjectRefHasher = subjectRefHasher;
         this.runtimeInputHasher = runtimeInputHasher;
+        this.transformEngine = transformEngine;
         this.clock = clock;
     }
 
@@ -106,6 +111,9 @@ public class RuntimeExecutionService {
             subject == null ? null : subjectRefHasher.hash(subject),
             providerProfileId,
             inputDigest,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -166,10 +174,12 @@ public class RuntimeExecutionService {
             persistence.recordRuntimeDecision(executionId, decision);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction());
             persistence.updateStatus(executionId, finalStatus);
-            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision);
+            TransformResult transformResult = transformEngine.transform(executionId, canonicalContext, decision);
+            persistence.recordTransform(executionId, decision, transformResult);
+            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, transformResult);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
-            return new RuntimeExecutionResult(executionId, finalStatus, decision, connectorResult, auditContext);
+            return new RuntimeExecutionResult(executionId, finalStatus, decision, transformResult, connectorResult, auditContext);
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (RuntimeException exception) {

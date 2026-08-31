@@ -14,6 +14,8 @@ import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.transform.domain.TransformFieldResult;
+import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -178,6 +180,69 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void recordTransform(String executionId, RuntimeDecision decision, TransformResult transformResult) {
+        jdbcClient.sql("""
+            insert into runtime.transform_execution (
+                transform_execution_id, execution_id, decision_id, status,
+                output_digest, field_count, created_at
+            )
+            values (
+                :transformExecutionId, :executionId, :decisionId, :status,
+                :outputDigest, :fieldCount, :createdAt
+            )
+            """)
+            .param("transformExecutionId", transformResult.transformExecutionId())
+            .param("executionId", executionId)
+            .param("decisionId", decision.decisionId())
+            .param("status", transformResult.status())
+            .param("outputDigest", transformResult.outputDigest())
+            .param("fieldCount", transformResult.fields().size())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        for (TransformFieldResult field : transformResult.fields()) {
+            recordTransformField(transformResult.transformExecutionId(), field);
+        }
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set transform_execution_id = :transformExecutionId,
+                transform_status = :transformStatus,
+                transform_output_digest = :transformOutputDigest,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("transformExecutionId", transformResult.transformExecutionId())
+            .param("transformStatus", transformResult.status())
+            .param("transformOutputDigest", transformResult.outputDigest())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    private void recordTransformField(String transformExecutionId, TransformFieldResult field) {
+        jdbcClient.sql("""
+            insert into runtime.transform_field (
+                transform_execution_id, field_path, dataset_name, field_name, data_class,
+                strategy, source_value_digest, transformed_value_digest, token_ref, created_at
+            )
+            values (
+                :transformExecutionId, :fieldPath, :datasetName, :fieldName, :dataClass,
+                :strategy, :sourceValueDigest, :transformedValueDigest, :tokenRef, :createdAt
+            )
+            """)
+            .param("transformExecutionId", transformExecutionId)
+            .param("fieldPath", field.path())
+            .param("datasetName", field.datasetName())
+            .param("fieldName", field.fieldName())
+            .param("dataClass", field.dataClass().name())
+            .param("strategy", field.strategy().name())
+            .param("sourceValueDigest", field.sourceValueDigest())
+            .param("transformedValueDigest", field.transformedValueDigest())
+            .param("tokenRef", field.tokenRef())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
     public void recordRetrieved(String executionId, CanonicalContext context) {
         jdbcClient.sql("""
             update runtime.runtime_execution
@@ -212,6 +277,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                    purpose_code, subject_ref_digest, provider_profile_id, input_digest,
                    canonical_context_digest, runtime_context_digest,
                    policy_version, snapshot_digest, decision_id, final_action,
+                   transform_execution_id, transform_status, transform_output_digest,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

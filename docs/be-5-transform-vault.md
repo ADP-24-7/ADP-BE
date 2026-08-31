@@ -1,0 +1,46 @@
+# BE-5 Transform Engine & Vault
+
+## Scope
+
+BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 privacy-safe payload를 생성하는 단계다. Runtime API는 FE/Business App에 단일 `POST /v1/runtime/executions` 진입점을 유지하고, detection/decision/transform/connector 세부 오케스트레이션은 BE 내부에서 수행한다.
+
+## Upstream Check
+
+- ADP-DA 최신 `main`에서는 Raw/Mask/HMAC/Vault Token 처리기법 비교와 handoff 방향은 문서화되어 있으나, workload별 최종 transform mapping artifact는 아직 코드 계약으로 고정되어 있지 않다.
+- 따라서 BE는 strategy enum과 resolver port를 먼저 고정하고, 현재 mapping은 `ProjectProvisionalTransformStrategyResolver`에 둔다.
+- ADP-FE 최신 `main`은 Runtime Execution API와 trace stage 표시를 사용한다. BE는 기존 응답 필드를 유지하면서 `privacySafeOutput`을 추가 필드로 확장한다.
+
+## Runtime Flow
+
+1. Runtime request 수신
+2. Retrieval Profile 기반 data access
+3. Canonical Context 조립
+4. Policy Snapshot selection
+5. Runtime Decision 생성
+6. Transform Engine 실행
+7. Connector 실행
+8. Audit 기록
+
+## Strategy Baseline
+
+- `MASK`: 식별 가능한 문자열 일부 마스킹
+- `HMAC_PSEUDO`: 원문 digest 기반 pseudonym digest 생성
+- `VAULT_TOKEN`: `vault.token_mapping` token reference 생성/재사용
+- `REMOVE`: payload에서 값 제거
+- `KEEP`: 허용된 값만 runtime memory에서 유지
+- `GENERALIZE`: 금액 등 연속값을 bucket으로 일반화
+- `FIELD_SEPARATION`: 분리 저장/전달 대상 digest 생성
+
+## Persistence
+
+- `runtime.transform_execution`: execution/decision 단위 transform 실행 기록
+- `runtime.transform_field`: field 단위 strategy와 digest/token metadata 기록
+- `vault.token_mapping`: mapping scope, data class, source digest, token ref, key version, mapping version 저장
+- raw value는 DB와 API 응답에 저장하거나 노출하지 않는다.
+
+## Remaining Work
+
+- Privileged Re-map API
+- TTL 만료 정책
+- Vault 장애 정책
+- DA 실제 transform mapping artifact loader

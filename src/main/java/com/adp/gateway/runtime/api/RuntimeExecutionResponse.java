@@ -17,6 +17,7 @@ public record RuntimeExecutionResponse(
     String sourceArtifactVersion,
     String sourceArtifactDigestAlgorithm,
     String sourceArtifactDigestValue,
+    PrivacySafeOutputResponse privacySafeOutput,
     String connectorStatus,
     String auditId
 ) {
@@ -39,6 +40,7 @@ public record RuntimeExecutionResponse(
             source.artifactVersion(),
             source.artifactDigest().algorithm(),
             source.artifactDigest().value(),
+            PrivacySafeOutputResponse.from(result.transformResult()),
             result.connectorResult().status(),
             result.auditContext().auditId()
         );

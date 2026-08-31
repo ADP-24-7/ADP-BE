@@ -18,6 +18,9 @@ public record RuntimeExecutionTrace(
     String snapshotDigest,
     String decisionId,
     String finalAction,
+    String transformExecutionId,
+    String transformStatus,
+    String transformOutputDigest,
     String status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt

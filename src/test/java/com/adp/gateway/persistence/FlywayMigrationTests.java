@@ -88,6 +88,42 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesTransformAndVaultTables() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where (table_schema, table_name) in (
+                  ('runtime', 'transform_execution'),
+                  ('runtime', 'transform_field'),
+                  ('vault', 'token_mapping')
+                )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(3);
+    }
+
+    @Test
+    void migrationCreatesRuntimeExecutionTransformColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'transform_execution_id',
+                    'transform_status',
+                    'transform_output_digest'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(3);
+    }
+
+    @Test
     void migrationCreatesRuntimeExecutionIdempotencyConstraint() {
         Integer indexCount = jdbcClient.sql("""
                 select count(*)

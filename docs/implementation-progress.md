@@ -10,7 +10,8 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-1 | Completed | Authentication & Authorization |
 | BE-2 | Completed | Internal Data Access Core |
 | BE-3 | Completed | Context Builder & Sensitive Detection |
-| BE-4 | In Progress | Policy & Decision Core |
+| BE-4 | Completed | Policy & Decision Core |
+| BE-5 | In Progress | Transform Engine & Vault |
 
 ## BE-0 Completion Criteria
 
@@ -132,3 +133,25 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [ ] DA Crosswalk Contract 파일 loader 추가
 - [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
 - [ ] Request ingress 시점 policy catalog revision pinning은 Policy Lifecycle 단계에서 구현
+
+## BE-5 Tracking
+
+BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vault.md)에서 관리한다.
+
+- [x] BE-5 개발 브랜치 `feature/be-5-transform-vault` 분리
+- [x] ADP-DA 최신 `main` 코드와 handoff 문서 확인
+- [x] ADP-FE 최신 `main` Runtime Execution 연동 경계 확인
+- [x] `MASK`, `HMAC-PSEUDO`, `VAULT-TOKEN`, `REMOVE`, `KEEP`, `GENERALIZE`, `FIELD-SEPARATION` strategy 타입 추가
+- [x] DA final mapping 미확정 상태를 고려한 `TransformStrategyResolver` Port 추가
+- [x] `TransformEngine` baseline 추가
+- [x] `vault.token_mapping` baseline schema 추가
+- [x] `runtime.transform_execution` / `runtime.transform_field` persistence 추가
+- [x] Runtime Execution 응답에 raw value 없는 `privacySafeOutput` 추가
+- [x] Runtime trace에 Transform stage 반영
+- [x] Connector 실행 전 Transform 결과 전달
+- [x] Local fixture에서 `TRANSFORM` final action 경로 검증
+- [x] Flyway migration test에 Transform/Vault schema 검증 추가
+- [ ] Privileged Re-map API
+- [ ] TTL 만료 remap 차단/재발급 정책
+- [ ] Vault 장애 fallback 정책
+- [ ] DA 실제 transform policy artifact loader 연동
