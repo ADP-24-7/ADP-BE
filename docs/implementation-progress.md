@@ -107,12 +107,17 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] Applicability Evaluator에서 workload/purpose/processing/runtime data class binding 비교
 - [x] Runtime processing context 미입력 시 `INCOMPLETE` 판정
 - [x] RuntimeDecision/Audit에 DA source artifact version/digest 보존
+- [x] `PolicySelectionContext` 기반 scope-aware snapshot selection 경계 추가
+- [x] `/v1/runtime/executions` Runtime Execution API 추가
+- [x] Runtime Execution -> Retrieval -> Canonical Context -> RuntimeDecision 경로 연결
+- [x] Runtime Execution / Policy Evaluation / Runtime Decision 최소 persistence 추가
+- [x] DA Handoff Disposition과 BE `PolicyAction` 분리 Normalizer 경계 추가
+- [x] Versioned RuntimeDataClass Crosswalk Port와 provisional adapter 추가
 - [x] 완화 금지 규칙 강제
 - [x] Rule 미매칭, 충돌, Unknown Data Class의 default allow 방지
 - [x] Decision Audit Metadata 확장
 - [x] 동일 Snapshot + 동일 Canonical Runtime Context 재현성 테스트
-- [ ] Runtime path에서 Canonical Context 조립 결과 연결
-- [ ] Versioned DataClass Crosswalk 추가
-- [ ] Runtime Binding Contract Adapter 추가
-- [ ] DA PolicyEvaluation Artifact Adapter/Normalizer 추가
+- [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
+- [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
+- [ ] DA Crosswalk Contract 파일 loader 추가
 - [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증

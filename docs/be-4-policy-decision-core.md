@@ -1,27 +1,27 @@
 # BE-4 Policy & Decision Core
 
-BE-4는 DA의 1차 Policy Decision과 BE의 최종 Runtime Decision을 분리하고, 동일 Snapshot과 동일 Runtime Context에서 재현 가능한 최종 결정을 만드는 단계다.
+BE-4는 DA Handoff Artifact와 BE Runtime Policy를 분리하고, 동일 Snapshot과 동일 Runtime Context에서 재현 가능한 최종 결정을 만드는 단계다.
 
 ## Goal
 
-- DA에서 생성된 Evidence-backed 1차 Policy Decision을 BE Runtime에 직접 집행하지 않는다.
+- DA에서 생성된 Evidence-backed Handoff Artifact를 BE Runtime에 직접 집행하지 않는다.
 - BE는 현재 Caller, Workload, Action, Purpose, Subject Scope, Provider, Runtime DataClass, Canonical Context를 기준으로 2차 Applicability와 Runtime Guard를 수행한다.
-- BE 최종 Decision은 DA 1차 판정보다 느슨해질 수 없다.
+- BE 최종 Decision은 BE-normalized `PolicyAction`보다 느슨해질 수 없다.
 - DA `PolicyEvaluation Artifact`의 artifact identity와 BE `PolicySnapshot` identity는 서로 다르며, BE는 source artifact를 reference로만 보존한다.
 
 ## Fixed Boundaries
 
 | Owner | Scope |
 | --- | --- |
-| ADP-DA | Evidence, Requirement, Control, Test, RegulatoryDataCategory, 1차 `policy_action` |
-| ADP-BE | Workload, Purpose, Subject Scope, Provider, RuntimeDataClass, Canonical Context, 최종 `RuntimeDecision` |
+| ADP-DA | Evidence, Requirement, Control, Test, RegulatoryDataCategory, Handoff Disposition |
+| ADP-BE | Workload, Purpose, Subject Scope, Provider, RuntimeDataClass, Canonical Context, BE-normalized `PolicyAction`, 최종 `RuntimeDecision` |
 | Shared Contract | PolicyEvaluation Artifact, Runtime Binding, DataClass Crosswalk, Processing Context Vocabulary |
 
 ## Required Contracts
 
 ### PolicyEvaluation
 
-DA 1차 결과를 표현한다.
+BE가 DA Handoff Artifact를 정규화한 runtime policy evaluation을 표현한다.
 
 - `matched_policy_refs`
 - `matched_rule_refs`
@@ -106,10 +106,15 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 13. [x] Applicability Evaluator에서 workload, purpose, processing context, runtime data class binding을 비교한다.
 14. [x] Runtime processing context가 필요한데 비어 있으면 `NOT_APPLICABLE`이 아니라 `INCOMPLETE`로 판정한다.
 15. [x] RuntimeDecision/Audit에 DA source artifact version/digest를 보존한다.
-16. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
-17. [ ] Versioned DataClass Crosswalk를 추가한다.
-18. [ ] Runtime Binding Contract adapter를 추가한다.
-19. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
+16. [x] `PolicySelectionContext`로 workload/purpose/provider/processing/data class 기반 Snapshot 선택 경계를 만든다.
+17. [x] `/v1/runtime/executions`에서 Controlled Retrieval -> Canonical Context -> RuntimePolicyContext -> Decision 경로를 연결한다.
+18. [x] Runtime Execution, Policy Evaluation, Runtime Decision 최소 persistence를 추가한다.
+19. [x] DA Handoff Disposition과 BE `PolicyAction`을 분리하는 Adapter/Normalizer 경계를 추가한다.
+20. [x] Versioned RuntimeDataClass Crosswalk Port와 provisional adapter를 추가한다.
+21. [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
+22. [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
+23. [ ] DA Crosswalk Contract 파일 loader 추가
+24. [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
 
 ## Tests
 
@@ -124,10 +129,12 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - DA source artifact version/digest와 BE snapshot version/digest가 달라도 snapshot 생성이 가능하다.
 - Applicability Evaluator는 workload, purpose, processing context, runtime data class가 일치하지 않으면 `APPLICABLE`을 반환하지 않는다.
 - Runtime processing context가 아직 결정되지 않은 경우 `INCOMPLETE`로 audit된다.
+- `/v1/runtime/executions`는 Retrieval과 Canonical Context 조립 후 RuntimeDecision을 생성한다.
+- Runtime execution, policy evaluation, runtime decision을 audit event와 별도 테이블에 저장한다.
 
 ## Out of Scope
 
 - Transform 세부 전략 구현은 BE-5에서 다룬다.
 - Connector outbound guard는 BE-6에서 다룬다.
-- Validated DA Artifact 정식 ingest와 Policy Lifecycle 승격은 BE-10에서 다룬다.
+- Validated DA Artifact 정식 승격과 Policy Lifecycle 운영은 BE-10에서 다룬다.
 - DA repo 내부 `policy_candidates.json`을 Runtime 입력으로 직접 소비하지 않는다.

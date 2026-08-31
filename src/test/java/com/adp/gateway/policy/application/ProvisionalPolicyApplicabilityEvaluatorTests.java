@@ -9,6 +9,7 @@ import com.adp.gateway.policy.domain.AnalysisStatus;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
+import com.adp.gateway.policy.domain.CrosswalkMapping;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
@@ -22,7 +23,21 @@ import org.junit.jupiter.api.Test;
 
 class ProvisionalPolicyApplicabilityEvaluatorTests {
 
-    private final ProvisionalPolicyApplicabilityEvaluator evaluator = new ProvisionalPolicyApplicabilityEvaluator();
+    private final ProvisionalPolicyApplicabilityEvaluator evaluator = new ProvisionalPolicyApplicabilityEvaluator(
+        regulatoryDataCategory -> {
+            if (regulatoryDataCategory.equals("PERSONAL_INFORMATION")) {
+                return java.util.Optional.of(new CrosswalkMapping(
+                    "test-crosswalk/v1",
+                    regulatoryDataCategory,
+                    "CUSTOMER_IDENTIFIER",
+                    "mapped",
+                    "test",
+                    "v1"
+                ));
+            }
+            return java.util.Optional.empty();
+        }
+    );
 
     @Test
     void returnsApplicableWhenRuntimeBindingMatchesContext() {
@@ -68,11 +83,35 @@ class ProvisionalPolicyApplicabilityEvaluatorTests {
             .isEqualTo(ApplicabilityResult.NOT_APPLICABLE);
     }
 
+    @Test
+    void returnsIncompleteWhenCrosswalkMappingIsUnknown() {
+        assertThat(evaluator.evaluate(
+            snapshot(
+                "mapped",
+                "customer_summary",
+                "CUSTOMER_SUPPORT",
+                "CUSTOMER_IDENTIFIER",
+                List.of("UNSUPPORTED_REGULATORY_CATEGORY")
+            ),
+            context("customer_summary", "CUSTOMER_SUPPORT", List.of("AI_USE"), List.of(DataClass.CUSTOMER_IDENTIFIER))
+        )).isEqualTo(ApplicabilityResult.INCOMPLETE);
+    }
+
     private PolicySnapshot snapshot(
         String mappingStatus,
         String workloadId,
         String purpose,
         String runtimeDataClass
+    ) {
+        return snapshot(mappingStatus, workloadId, purpose, runtimeDataClass, List.of("PERSONAL_INFORMATION"));
+    }
+
+    private PolicySnapshot snapshot(
+        String mappingStatus,
+        String workloadId,
+        String purpose,
+        String runtimeDataClass,
+        List<String> regulatoryDataCategories
     ) {
         SourcePolicyEvaluationArtifactRef source = new SourcePolicyEvaluationArtifactRef(
             "PEA-1",
@@ -93,7 +132,7 @@ class ProvisionalPolicyApplicabilityEvaluatorTests {
                 "runtime-bound support policy",
                 List.of(),
                 List.of("AI_USE"),
-                List.of("PERSONAL_INFORMATION"),
+                regulatoryDataCategories,
                 new RuntimeBinding(mappingStatus, runtimeDataClass, workloadId, purpose, "BINDING-1")
             )
         );

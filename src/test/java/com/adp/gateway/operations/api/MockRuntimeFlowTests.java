@@ -53,7 +53,7 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.policyArtifactDigestValue").value("local-fixture-policy-evaluation"))
             .andExpect(jsonPath("$.policyArtifactStatus").value("PROJECT_PROVISIONAL"))
             .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/0.0.0"))
-            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture"))
+            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture:workload_be0:BE-0 local E2E:null"))
             .andExpect(jsonPath("$.decisionId").exists())
             .andExpect(jsonPath("$.policyAction").value("ALLOW"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
@@ -84,7 +84,7 @@ class MockRuntimeFlowTests {
                   and evidence_refs = ''
                   and required_controls = 'RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0'
                   and policy_version = 'be-runtime-policy/0.0.0'
-                  and policy_digest = 'be-snapshot-local-fixture'
+                  and policy_digest = 'be-snapshot-local-fixture:workload_be0:BE-0 local E2E:null'
                   and connector_status = 'NOT_EXECUTED'
                 """)
             .param("requestId", "req_be0_test")
@@ -104,6 +104,7 @@ class MockRuntimeFlowTests {
                 .contentType("application/json")
                 .content("{"))
             .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.reasonCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.message").value("Malformed request"))
             .andExpect(jsonPath("$.requestId").value("req_bad_json"))
@@ -126,6 +127,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.reasonCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.message").value("Malformed request"))
             .andExpect(jsonPath("$.requestId").doesNotExist())
@@ -148,6 +150,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.message").value("Authorization denied"))
             .andExpect(jsonPath("$.requestId").value("req_forbidden_subject"))
@@ -169,6 +172,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.message").value("Authorization denied"))
             .andExpect(jsonPath("$.requestId").value("req_forbidden_purpose"))

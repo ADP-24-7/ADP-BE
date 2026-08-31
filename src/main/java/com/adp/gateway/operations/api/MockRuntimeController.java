@@ -21,6 +21,7 @@ import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.ArtifactReference;
+import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
@@ -92,8 +93,14 @@ public class MockRuntimeController {
             request.purpose(),
             request.subject()
         );
-        PolicySnapshot snapshot = policySnapshotPort.load(context.workloadId());
         RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(context);
+        PolicySnapshot snapshot = policySnapshotPort.load(new PolicySelectionContext(
+            runtimePolicyContext.workloadId(),
+            runtimePolicyContext.purpose(),
+            runtimePolicyContext.provider(),
+            runtimePolicyContext.processingContexts(),
+            runtimePolicyContext.runtimeDataClasses()
+        ));
         ApplicabilityResult applicabilityResult = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
         RuntimeDecision decision = runtimeDecisionService.decide(
             runtimePolicyContext,

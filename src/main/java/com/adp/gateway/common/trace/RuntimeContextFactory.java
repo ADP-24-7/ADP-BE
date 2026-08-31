@@ -19,7 +19,17 @@ public class RuntimeContextFactory {
         String purpose,
         String subject
     ) {
-        String idempotencyKey = valueOrNew(httpRequest.getHeader(TraceHeaders.IDEMPOTENCY_KEY));
+        return create(httpRequest, workloadId, purpose, subject, httpRequest.getHeader(TraceHeaders.IDEMPOTENCY_KEY));
+    }
+
+    public RuntimeRequestContext create(
+        HttpServletRequest httpRequest,
+        String workloadId,
+        String purpose,
+        String subject,
+        String idempotencyKeyValue
+    ) {
+        String idempotencyKey = valueOrNew(idempotencyKeyValue);
         if (!SAFE_IDEMPOTENCY_VALUE.matcher(idempotencyKey).matches()) {
             throw new InvalidRuntimeHeaderException(TraceHeaders.IDEMPOTENCY_KEY);
         }

@@ -43,6 +43,14 @@ public class RuntimePolicyContextFactory {
     }
 
     public RuntimePolicyContext from(CanonicalContext canonicalContext) {
+        return from(canonicalContext, List.of(), null);
+    }
+
+    public RuntimePolicyContext from(
+        CanonicalContext canonicalContext,
+        List<String> processingContexts,
+        String provider
+    ) {
         return from(
             canonicalContext.workloadId(),
             canonicalContext.purpose(),
@@ -54,8 +62,8 @@ public class RuntimePolicyContextFactory {
                 .distinct()
                 .sorted()
                 .toList(),
-            List.of(),
-            null
+            processingContexts,
+            provider
         );
     }
 

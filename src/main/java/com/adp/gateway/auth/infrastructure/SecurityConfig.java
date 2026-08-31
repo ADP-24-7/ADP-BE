@@ -46,6 +46,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/api/internal/info").permitAll()
                 .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
+                .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
                 .requestMatchers("/api/admin/**").hasRole("OPERATOR")
                 .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
                 .anyRequest().authenticated()

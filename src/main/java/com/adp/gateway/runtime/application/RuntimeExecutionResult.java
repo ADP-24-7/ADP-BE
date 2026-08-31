@@ -1,0 +1,15 @@
+package com.adp.gateway.runtime.application;
+
+import com.adp.gateway.audit.domain.AuditContext;
+import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
+
+public record RuntimeExecutionResult(
+    String executionId,
+    RuntimeExecutionStatus status,
+    RuntimeDecision decision,
+    ConnectorResult connectorResult,
+    AuditContext auditContext
+) {
+}

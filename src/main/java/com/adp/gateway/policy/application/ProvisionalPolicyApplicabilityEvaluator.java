@@ -4,15 +4,23 @@ import java.util.Locale;
 
 import com.adp.gateway.policy.domain.AnalysisStatus;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
+import com.adp.gateway.policy.domain.CrosswalkMapping;
 import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.RuntimeBinding;
+import com.adp.gateway.policy.domain.RuntimeDataClassCrosswalkPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ProvisionalPolicyApplicabilityEvaluator implements PolicyApplicabilityEvaluator {
+
+    private final RuntimeDataClassCrosswalkPort crosswalkPort;
+
+    public ProvisionalPolicyApplicabilityEvaluator(RuntimeDataClassCrosswalkPort crosswalkPort) {
+        this.crosswalkPort = crosswalkPort;
+    }
 
     @Override
     public ApplicabilityResult evaluate(PolicySnapshot snapshot, RuntimePolicyContext context) {
@@ -43,6 +51,9 @@ public class ProvisionalPolicyApplicabilityEvaluator implements PolicyApplicabil
             return ApplicabilityResult.INCOMPLETE;
         }
         if (context.runtimeDataClasses().contains(DataClass.UNKNOWN)) {
+            return ApplicabilityResult.INCOMPLETE;
+        }
+        if (!hasCrosswalkMatch(spec, context)) {
             return ApplicabilityResult.INCOMPLETE;
         }
         if (!spec.processingContexts().isEmpty() && context.processingContexts().isEmpty()) {
@@ -82,5 +93,23 @@ public class ProvisionalPolicyApplicabilityEvaluator implements PolicyApplicabil
         return context.runtimeDataClasses().stream()
             .map(DataClass::name)
             .anyMatch(runtimeDataClass -> runtimeDataClass.equals(binding.runtimeDataClass()));
+    }
+
+    private boolean hasCrosswalkMatch(PolicyApplicabilitySpec spec, RuntimePolicyContext context) {
+        if (spec.regulatoryDataCategories().isEmpty()) {
+            return true;
+        }
+        return spec.regulatoryDataCategories().stream()
+            .map(crosswalkPort::resolve)
+            .allMatch(mapping -> mapping
+                .filter(this::isMapped)
+                .filter(candidate -> context.runtimeDataClasses().stream()
+                    .map(DataClass::name)
+                    .anyMatch(runtimeDataClass -> runtimeDataClass.equals(candidate.runtimeDataClass())))
+                .isPresent());
+    }
+
+    private boolean isMapped(CrosswalkMapping mapping) {
+        return mapping.mappingStatus().equalsIgnoreCase("mapped");
     }
 }

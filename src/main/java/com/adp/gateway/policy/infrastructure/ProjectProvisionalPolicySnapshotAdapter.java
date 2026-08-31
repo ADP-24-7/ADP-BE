@@ -11,6 +11,7 @@ import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
+import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimeBinding;
@@ -29,7 +30,7 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     }
 
     @Override
-    public PolicySnapshot load(String workloadId) {
+    public PolicySnapshot load(PolicySelectionContext context) {
         SourcePolicyEvaluationArtifactRef sourceArtifact = new SourcePolicyEvaluationArtifactRef(
             "PROJECT_PROVISIONAL_POLICY_EVALUATION",
             "0.0.0",
@@ -56,8 +57,8 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
                 new RuntimeBinding(
                     "mapped",
                     "CUSTOMER_IDENTIFIER",
-                    workloadId,
-                    "BE-0 local E2E",
+                    context.workloadId(),
+                    context.purposeCode(),
                     "PROJECT_PROVISIONAL_BINDING"
                 )
             )
@@ -65,7 +66,7 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
 
         return new PolicySnapshot(
             "be-runtime-policy/0.0.0",
-            "be-snapshot-local-fixture",
+            "be-snapshot-local-fixture:" + context.workloadId() + ":" + context.purposeCode() + ":" + context.providerProfileId(),
             OffsetDateTime.now(clock),
             PolicyLifecycleStage.PROJECT_PROVISIONAL,
             sourceArtifact,
