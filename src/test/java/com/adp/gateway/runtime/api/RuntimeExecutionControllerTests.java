@@ -197,6 +197,43 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
     }
 
+    @Test
+    void returnsNotFoundForUnknownExecutionId() throws Exception {
+        mockMvc.perform(get("/v1/runtime/executions/exec_not_exists")
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.errorCode").value("RUNTIME_EXECUTION_NOT_FOUND"))
+            .andExpect(jsonPath("$.reasonCode").value("RUNTIME_EXECUTION_NOT_FOUND"));
+
+        mockMvc.perform(get("/v1/runtime/executions/exec_not_exists/trace")
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.errorCode").value("RUNTIME_EXECUTION_NOT_FOUND"))
+            .andExpect(jsonPath("$.reasonCode").value("RUNTIME_EXECUTION_NOT_FOUND"));
+    }
+
+    @Test
+    void rejectsInvalidProcessingContextElements() throws Exception {
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_pc_" + token())
+                .header("X-Trace-Id", "trace_pc_" + token())
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purposeCode": "CUSTOMER_SUPPORT",
+                      "subjectScope": "customer:customer-100",
+                      "providerProfileId": "internal-provider",
+                      "idempotencyKey": "idem-pc",
+                      "processingContexts": ["AI_USE", null],
+                      "input": {}
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+    }
+
     private String postRuntimeExecution(
         String requestId,
         String traceId,

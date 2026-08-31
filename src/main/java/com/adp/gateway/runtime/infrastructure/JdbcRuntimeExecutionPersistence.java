@@ -10,6 +10,7 @@ import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
+import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
@@ -217,7 +218,8 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             """)
             .param("executionId", executionId)
             .query(RuntimeExecutionTrace.class)
-            .single();
+            .optional()
+            .orElseThrow(() -> new RuntimeExecutionNotFoundException(executionId));
     }
 
     private String auditValue(List<ArtifactReference> references) {

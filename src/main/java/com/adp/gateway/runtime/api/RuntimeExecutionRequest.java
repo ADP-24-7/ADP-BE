@@ -12,7 +12,7 @@ public record RuntimeExecutionRequest(
     @NotBlank @Size(max = 240) String subjectScope,
     @NotBlank @Size(max = 120) String providerProfileId,
     @NotBlank @Size(max = 120) String idempotencyKey,
-    List<String> processingContexts,
+    @Size(max = 10) List<@NotBlank @Size(max = 80) String> processingContexts,
     Map<String, Object> input
 ) {
 }
