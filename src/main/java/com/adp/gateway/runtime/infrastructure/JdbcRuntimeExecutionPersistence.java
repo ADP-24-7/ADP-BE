@@ -224,11 +224,13 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         jdbcClient.sql("""
             insert into runtime.transform_field (
                 transform_execution_id, field_path, dataset_name, field_name, data_class,
-                strategy, source_value_digest, transformed_value_digest, token_ref, created_at
+                strategy, strategy_version, key_version, mapping_version, instruction_digest,
+                source_value_digest, transformed_value_digest, token_ref, created_at
             )
             values (
                 :transformExecutionId, :fieldPath, :datasetName, :fieldName, :dataClass,
-                :strategy, :sourceValueDigest, :transformedValueDigest, :tokenRef, :createdAt
+                :strategy, :strategyVersion, :keyVersion, :mappingVersion, :instructionDigest,
+                :sourceValueDigest, :transformedValueDigest, :tokenRef, :createdAt
             )
             """)
             .param("transformExecutionId", transformExecutionId)
@@ -237,6 +239,10 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("fieldName", field.fieldName())
             .param("dataClass", field.dataClass().name())
             .param("strategy", field.strategy().name())
+            .param("strategyVersion", field.strategyVersion())
+            .param("keyVersion", field.keyVersion())
+            .param("mappingVersion", field.mappingVersion())
+            .param("instructionDigest", field.instructionDigest())
             .param("sourceValueDigest", field.sourceValueDigest())
             .param("transformedValueDigest", field.transformedValueDigest())
             .param("tokenRef", field.tokenRef())

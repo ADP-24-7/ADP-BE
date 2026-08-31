@@ -56,8 +56,25 @@ class TransformEngineTests {
         assertThat(strategy(result, "fields.generalized")).isEqualTo(TransformStrategy.GENERALIZE);
         assertThat(strategy(result, "fields.separated")).isEqualTo(TransformStrategy.FIELD_SEPARATION);
         assertThat(field(result, "fields.vault").tokenRef()).isEqualTo("vault_tok_test");
+        assertThat(field(result, "fields.hmac").keyVersion()).isEqualTo("test-key-v1");
+        assertThat(field(result, "fields.hmac").strategyVersion()).isEqualTo("test-strategy-v1");
+        assertThat(field(result, "fields.hmac").mappingVersion()).isEqualTo("test-mapping-v1");
+        assertThat(field(result, "fields.hmac").instructionDigest()).hasSize(64);
         assertThat(field(result, "fields.hmac").transformedValueDigest())
             .isNotEqualTo(hasher.hash("HMAC_PSEUDO:" + field(result, "fields.hmac").sourceValueDigest()));
+    }
+
+    @Test
+    void instructionParametersAffectTransformDigest() {
+        TransformEngine bucket1000Engine = engineWithGeneralizeBucket("1000");
+        TransformEngine bucket10000Engine = engineWithGeneralizeBucket("10000");
+
+        var first = bucket1000Engine.transform("exec_test", generalizeContext(), policyContext(), decision());
+        var second = bucket10000Engine.transform("exec_test", generalizeContext(), policyContext(), decision());
+
+        assertThat(second.outputDigest()).isNotEqualTo(first.outputDigest());
+        assertThat(field(second, "fields.generalized").instructionDigest())
+            .isNotEqualTo(field(first, "fields.generalized").instructionDigest());
     }
 
     private TransformStrategy strategyFor(String path) {
@@ -81,6 +98,26 @@ class TransformEngineTests {
             "test-mapping-v1",
             Duration.ofHours(1),
             Map.of()
+        );
+    }
+
+    private TransformEngine engineWithGeneralizeBucket(String bucketSize) {
+        return new TransformEngine(
+            context -> new TransformInstruction(
+                TransformStrategy.GENERALIZE,
+                "test-strategy-v1",
+                "test-key-v1",
+                "test-mapping-v1",
+                Duration.ofHours(1),
+                Map.of("bucketSize", bucketSize)
+            ),
+            request -> "vault_tok_test",
+            keyVersion -> new PseudonymizationKey(
+                keyVersion,
+                new SecretKeySpec("test-hmac-key-material-32-bytes".getBytes(), "HmacSHA256")
+            ),
+            hasher,
+            new SimpleMeterRegistry()
         );
     }
 
@@ -113,6 +150,20 @@ class TransformEngineTests {
                 field("fields.generalized", "12580.90", DataClass.FINANCIAL_AMOUNT),
                 field("fields.separated", "account-1", DataClass.ACCOUNT_IDENTIFIER)
             ),
+            "canonical_digest"
+        );
+    }
+
+    private CanonicalContext generalizeContext() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_generalize",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(field("fields.generalized", "12580.90", DataClass.FINANCIAL_AMOUNT)),
             "canonical_digest"
         );
     }

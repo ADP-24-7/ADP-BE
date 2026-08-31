@@ -77,6 +77,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.privacySafeOutput.outputDigest").exists())
             .andExpect(jsonPath("$.privacySafeOutput.fieldCount").value(13))
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].strategy").isArray())
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
             .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
             .andReturn()
@@ -132,6 +133,10 @@ class RuntimeExecutionControllerTests {
                   and te.output_digest is not null
                   and tf.source_value_digest is not null
                   and tf.transformed_value_digest is not null
+                  and tf.strategy_version is not null
+                  and tf.key_version is not null
+                  and tf.mapping_version is not null
+                  and tf.instruction_digest is not null
                   and tf.strategy in ('VAULT_TOKEN', 'GENERALIZE', 'KEEP')
                 """)
             .param("executionId", executionId)
@@ -144,6 +149,7 @@ class RuntimeExecutionControllerTests {
                 from vault.token_mapping
                 where mapping_scope = 'be-snapshot-local-fixture:customer-summary:customer-support:internal-provider:CUSTOMER_IDENTIFIER'
                   and data_class = 'CUSTOMER_IDENTIFIER'
+                  and status = 'ACTIVE'
                   and source_value_digest is not null
                   and token_ref is not null
                 """)

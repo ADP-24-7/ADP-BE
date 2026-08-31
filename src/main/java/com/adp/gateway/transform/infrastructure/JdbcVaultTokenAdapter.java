@@ -50,6 +50,7 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
                   and source_value_digest = :sourceValueDigest
                   and key_version = :keyVersion
                   and mapping_version = :mappingVersion
+                  and status = 'ACTIVE'
                   and (expires_at is null or expires_at > :now)
                 """)
             .param("mappingScope", request.mappingScope())
@@ -68,16 +69,17 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
     }
 
     private String create(VaultTokenRequest request) {
+        expireStaleMappings(request);
         String tokenRef = "vault_tok_" + UUID.randomUUID();
         try {
             jdbcClient.sql("""
                     insert into vault.token_mapping (
                         token_ref, mapping_scope, data_class, source_value_digest, key_version,
-                        mapping_version, expires_at, created_at
+                        mapping_version, status, expires_at, created_at
                     )
                     values (
                         :tokenRef, :mappingScope, :dataClass, :sourceValueDigest, :keyVersion,
-                        :mappingVersion, :expiresAt, :createdAt
+                        :mappingVersion, 'ACTIVE', :expiresAt, :createdAt
                     )
                     """)
                 .param("tokenRef", tokenRef)
@@ -94,27 +96,26 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
         } catch (DuplicateKeyException exception) {
             meterRegistry.counter("vault.token.create.total", "result", "DUPLICATE").increment();
             return find(request)
-                .or(() -> replaceExpiredToken(request, tokenRef))
+                .or(() -> {
+                    expireStaleMappings(request);
+                    return find(request);
+                })
                 .orElseThrow(() -> exception);
         }
     }
 
-    private java.util.Optional<String> replaceExpiredToken(VaultTokenRequest request, String tokenRef) {
-        int updated = jdbcClient.sql("""
+    private void expireStaleMappings(VaultTokenRequest request) {
+        jdbcClient.sql("""
                 update vault.token_mapping
-                set token_ref = :tokenRef,
-                    expires_at = :expiresAt,
-                    created_at = :createdAt
+                set status = 'EXPIRED'
                 where mapping_scope = :mappingScope
                   and data_class = :dataClass
                   and source_value_digest = :sourceValueDigest
                   and key_version = :keyVersion
                   and mapping_version = :mappingVersion
+                  and status = 'ACTIVE'
                   and expires_at <= :now
                 """)
-            .param("tokenRef", tokenRef)
-            .param("expiresAt", expiresAt(request))
-            .param("createdAt", OffsetDateTime.now(clock))
             .param("mappingScope", request.mappingScope())
             .param("dataClass", request.dataClass().name())
             .param("sourceValueDigest", request.sourceValueDigest())
@@ -122,11 +123,6 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
             .param("mappingVersion", request.mappingVersion())
             .param("now", OffsetDateTime.now(clock))
             .update();
-        if (updated == 0) {
-            return java.util.Optional.empty();
-        }
-        meterRegistry.counter("vault.token.create.total", "result", "REPLACED_EXPIRED").increment();
-        return java.util.Optional.of(tokenRef);
     }
 
     private OffsetDateTime expiresAt(VaultTokenRequest request) {

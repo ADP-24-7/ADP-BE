@@ -124,6 +124,44 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesTransformInstructionMetadataColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'transform_field'
+                  and column_name in (
+                    'strategy_version',
+                    'key_version',
+                    'mapping_version',
+                    'instruction_digest'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(4);
+    }
+
+    @Test
+    void migrationCreatesVaultLifecycleColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'vault'
+                  and table_name = 'token_mapping'
+                  and column_name in (
+                    'status',
+                    'replaced_by_token_ref'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(2);
+    }
+
+    @Test
     void migrationCreatesRuntimeExecutionIdempotencyConstraint() {
         Integer indexCount = jdbcClient.sql("""
                 select count(*)

@@ -52,11 +52,11 @@ class JdbcVaultTokenAdapterTests {
         jdbcClient.sql("""
                 insert into vault.token_mapping (
                     token_ref, mapping_scope, data_class, source_value_digest, key_version,
-                    mapping_version, expires_at, created_at
+                    mapping_version, status, expires_at, created_at
                 )
                 values (
                     :tokenRef, :mappingScope, :dataClass, :sourceValueDigest, :keyVersion,
-                    :mappingVersion, :expiresAt, :createdAt
+                    :mappingVersion, 'ACTIVE', :expiresAt, :createdAt
                 )
                 """)
             .param("tokenRef", "vault_tok_expired_" + suffix)
@@ -72,6 +72,18 @@ class JdbcVaultTokenAdapterTests {
         String token = adapter.tokenFor(request(scope, sourceDigest));
 
         assertThat(token).isNotEqualTo("vault_tok_expired_" + suffix);
+        Integer expiredCount = jdbcClient.sql("""
+                select count(*)
+                from vault.token_mapping
+                where mapping_scope = :mappingScope
+                  and source_value_digest = :sourceValueDigest
+                  and status = 'EXPIRED'
+                """)
+            .param("mappingScope", scope)
+            .param("sourceValueDigest", sourceDigest)
+            .query(Integer.class)
+            .single();
+        assertThat(expiredCount).isEqualTo(1);
     }
 
     private VaultTokenRequest request(String scope, String sourceDigest) {

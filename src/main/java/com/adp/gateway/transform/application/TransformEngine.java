@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -67,6 +68,7 @@ public class TransformEngine {
             for (CanonicalContextField field : context.fields()) {
                 TransformInstruction instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
                 Object transformedValue = transformedValue(decision, field, instruction);
+                String instructionDigest = instructionDigest(instruction);
                 String transformedDigest = transformedValue == null
                     ? null
                     : hasher.hash(field.path() + ":" + instruction.strategy().name() + ":" + transformedValue);
@@ -76,6 +78,10 @@ public class TransformEngine {
                     field.fieldName(),
                     field.dataClass(),
                     instruction.strategy(),
+                    instruction.strategyVersion(),
+                    instruction.keyVersion(),
+                    instruction.mappingVersion(),
+                    instructionDigest,
                     field.valueDigest(),
                     transformedDigest,
                     instruction.strategy() == TransformStrategy.VAULT_TOKEN ? String.valueOf(transformedValue) : null,
@@ -120,7 +126,7 @@ public class TransformEngine {
     private Object transformedValue(RuntimeDecision decision, CanonicalContextField field, TransformInstruction instruction) {
         Object value = field.value();
         return switch (instruction.strategy()) {
-            case MASK -> mask(value);
+            case MASK -> mask(value, instruction);
             case HMAC_PSEUDO -> hmacPseudo(field.valueDigest(), instruction.keyVersion());
             case VAULT_TOKEN -> vaultTokenPort.tokenFor(new VaultTokenRequest(
                 scope(decision, field.dataClass()),
@@ -132,17 +138,21 @@ public class TransformEngine {
             ));
             case REMOVE -> null;
             case KEEP -> value;
-            case GENERALIZE -> generalize(value);
+            case GENERALIZE -> generalize(value, instruction);
             case FIELD_SEPARATION -> hasher.hash("FIELD_SEPARATION:" + field.valueDigest());
         };
     }
 
-    private String mask(Object value) {
+    private String mask(Object value, TransformInstruction instruction) {
         String raw = String.valueOf(value);
-        if (raw.length() <= 4) {
+        int visibleSuffix = intParameter(instruction.parameters(), "visibleSuffix", 4);
+        if (visibleSuffix <= 0) {
             return "*".repeat(raw.length());
         }
-        return "*".repeat(raw.length() - 4) + raw.substring(raw.length() - 4);
+        if (raw.length() <= visibleSuffix) {
+            return "*".repeat(raw.length());
+        }
+        return "*".repeat(raw.length() - visibleSuffix) + raw.substring(raw.length() - visibleSuffix);
     }
 
     private String hmacPseudo(String valueDigest, String keyVersion) {
@@ -156,12 +166,13 @@ public class TransformEngine {
         }
     }
 
-    private Object generalize(Object value) {
+    private Object generalize(Object value, TransformInstruction instruction) {
         try {
+            int bucketSize = intParameter(instruction.parameters(), "bucketSize", 1000);
             BigDecimal amount = new BigDecimal(String.valueOf(value));
-            BigDecimal bucket = amount.divideToIntegralValue(BigDecimal.valueOf(1000)).multiply(BigDecimal.valueOf(1000));
+            BigDecimal bucket = amount.divideToIntegralValue(BigDecimal.valueOf(bucketSize)).multiply(BigDecimal.valueOf(bucketSize));
             return bucket.toPlainString() + "+";
-        } catch (NumberFormatException exception) {
+        } catch (NumberFormatException | ArithmeticException exception) {
             return "<generalized>";
         }
     }
@@ -172,6 +183,31 @@ public class TransformEngine {
 
     private String value(String value) {
         return value == null ? "<removed>" : value;
+    }
+
+    private String instructionDigest(TransformInstruction instruction) {
+        return hasher.hash(String.join("|",
+            instruction.strategy().name(),
+            value(instruction.strategyVersion()),
+            value(instruction.keyVersion()),
+            value(instruction.mappingVersion()),
+            canonicalParameters(instruction.parameters())
+        ));
+    }
+
+    private String canonicalParameters(Map<String, String> parameters) {
+        return parameters.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> entry.getKey() + "=" + entry.getValue())
+            .collect(Collectors.joining("&"));
+    }
+
+    private int intParameter(Map<String, String> parameters, String name, int defaultValue) {
+        String value = parameters.get(name);
+        if (value == null) {
+            return defaultValue;
+        }
+        return Integer.parseInt(value);
     }
 
     private void recordExecutionMetric(String result) {

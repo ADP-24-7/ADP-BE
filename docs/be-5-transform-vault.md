@@ -23,21 +23,22 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 
 ## Strategy Baseline
 
-- `MASK`: 식별 가능한 문자열 일부 마스킹
+- `MASK`: `visibleSuffix` parameter 기반 문자열 마스킹
 - `HMAC_PSEUDO`: key provider port에서 받은 key material로 HMAC-SHA256 pseudonym 생성
 - `VAULT_TOKEN`: `vault.token_mapping` token reference 생성/재사용
 - `REMOVE`: payload에서 값 제거
 - `KEEP`: 허용된 값만 runtime memory에서 유지
-- `GENERALIZE`: 금액 등 연속값을 bucket으로 일반화
+- `GENERALIZE`: `bucketSize` parameter 기반 금액 등 연속값 일반화
 - `FIELD_SEPARATION`: 분리 저장/전달 대상 digest 생성
 
 ## Persistence
 
 - `runtime.transform_execution`: execution/decision 단위 transform 실행 기록
-- `runtime.transform_field`: field 단위 strategy와 digest/token metadata 기록
-- `vault.token_mapping`: mapping scope, data class, source digest, token ref, key version, mapping version 저장
+- `runtime.transform_field`: field 단위 strategy, strategy version, key version, mapping version, instruction digest, source/transformed digest, token metadata 기록
+- `vault.token_mapping`: mapping scope, data class, source digest, token ref, key version, mapping version, lifecycle status 저장
 - raw value는 DB와 API 응답에 저장하거나 노출하지 않는다.
-- 만료된 token은 재사용하지 않고 동일 mapping row의 token ref를 교체한다.
+- `privacySafeOutput`은 source digest를 외부 응답으로 내리지 않는다.
+- 만료된 token은 재사용하지 않고 기존 row를 `EXPIRED`로 보존한 뒤 새 `ACTIVE` row를 발급한다.
 - 기본 환경에서 transform mapping이 구성되지 않으면 fail closed 처리한다.
 
 ## Remaining Work

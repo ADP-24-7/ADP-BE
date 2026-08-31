@@ -19,6 +19,10 @@ create table runtime.transform_field (
     field_name varchar(120) not null,
     data_class varchar(80) not null,
     strategy varchar(80) not null,
+    strategy_version varchar(120) not null,
+    key_version varchar(120) not null,
+    mapping_version varchar(120) not null,
+    instruction_digest varchar(64) not null,
     source_value_digest varchar(64) not null,
     transformed_value_digest varchar(64),
     token_ref varchar(120),
@@ -33,9 +37,11 @@ create table vault.token_mapping (
     source_value_digest varchar(64) not null,
     key_version varchar(120) not null,
     mapping_version varchar(120) not null,
+    status varchar(40) not null,
     expires_at timestamptz,
+    replaced_by_token_ref varchar(120),
     created_at timestamptz not null,
-    unique (mapping_scope, data_class, source_value_digest, key_version, mapping_version)
+    check (status in ('ACTIVE', 'EXPIRED'))
 );
 
 alter table runtime.runtime_execution
@@ -46,3 +52,6 @@ alter table runtime.runtime_execution
 create index idx_transform_execution_execution_id on runtime.transform_execution (execution_id);
 create index idx_transform_field_execution_id on runtime.transform_field (transform_execution_id);
 create index idx_vault_token_mapping_scope on vault.token_mapping (mapping_scope, data_class);
+create unique index uq_vault_token_mapping_active
+    on vault.token_mapping (mapping_scope, data_class, source_value_digest, key_version, mapping_version)
+    where status = 'ACTIVE';

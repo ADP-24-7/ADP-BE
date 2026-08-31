@@ -4,11 +4,11 @@ import com.adp.gateway.transform.application.TransformInstruction;
 import com.adp.gateway.transform.application.TransformResolutionContext;
 import com.adp.gateway.transform.application.TransformResolutionException;
 import com.adp.gateway.transform.application.TransformStrategyResolver;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnMissingBean(TransformStrategyResolver.class)
+@ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "false", matchIfMissing = true)
 public class UnconfiguredTransformStrategyResolver implements TransformStrategyResolver {
 
     @Override
