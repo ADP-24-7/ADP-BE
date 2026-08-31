@@ -97,7 +97,7 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] `RuntimeDecision` Contract 추가
 - [x] Policy Snapshot 모델 추가
 - [x] DA Source PolicyEvaluation Artifact identity와 BE PolicySnapshot identity 분리
-- [x] Request 시작 시 `policy_version + snapshot_digest + effective_at` 고정
+- [x] Policy evaluation 시점에 선택된 `policy_version + snapshot_digest + effective_at`을 Decision 동안 고정
 - [x] `RuntimePolicyContext`와 Applicability Evaluator 경계 추가
 - [x] `snapshot_digest + runtime_context_digest` 기반 Decision Identity 고정
 - [x] `PolicyAction`과 `FinalAction` 코드 타입 분리
@@ -117,6 +117,9 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] Provisional Policy Snapshot fixture scope lookup과 고정 `effective_at` 적용
 - [x] Runtime Execution `FAILED` 상태 추가
 - [x] `/trace` stage event 응답 분리
+- [x] Runtime Execution GET/trace workload object-level authorization 적용
+- [x] `(workload_id, idempotency_key)` unique constraint로 중복 실행 차단
+- [x] Runtime request validation size를 DB varchar contract와 정렬
 - [x] DA Handoff Disposition과 BE `PolicyAction` 분리 Normalizer 경계 추가
 - [x] DA Handoff Validator 추가
 - [x] Versioned RuntimeDataClass Crosswalk Port와 provisional adapter 추가
@@ -128,3 +131,4 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
 - [ ] DA Crosswalk Contract 파일 loader 추가
 - [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
+- [ ] Request ingress 시점 policy catalog revision pinning은 Policy Lifecycle 단계에서 구현

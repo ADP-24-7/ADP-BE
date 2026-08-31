@@ -1,6 +1,6 @@
 # BE-4 Policy & Decision Core
 
-BE-4는 DA Handoff Artifact와 BE Runtime Policy를 분리하고, 동일 Snapshot과 동일 Runtime Context에서 재현 가능한 최종 결정을 만드는 단계다.
+BE-4는 DA Handoff Artifact와 BE Runtime Policy를 분리하고, policy evaluation 시점에 선택된 Snapshot과 동일 Runtime Context에서 재현 가능한 최종 결정을 만드는 단계다.
 
 ## Goal
 
@@ -94,7 +94,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 1. [x] Policy action enum과 runtime final action enum을 분리한다.
 2. [x] `PolicyEvaluation`과 `RuntimeDecision` 타입을 추가한다.
 3. [x] `PROJECT_PROVISIONAL` Policy Snapshot 모델을 만든다.
-4. [x] Request 시작 시 `policy_version + snapshot_digest + effective_at`을 고정한다.
+4. [x] Policy evaluation 시점에 선택된 `policy_version + snapshot_digest + effective_at`을 해당 Decision 동안 불변으로 유지한다.
 5. [x] Runtime Policy Context와 Applicability Evaluator 경계를 만든다.
 6. [x] Monotonic Decision Combiner로 최종 Decision을 생성한다.
 7. [x] Audit에 DA 1차 결과, BE 최종 결과, evidence/control/runtime context digest를 함께 남긴다.
@@ -118,15 +118,19 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 25. [x] `/trace`는 flat metadata 중복이 아니라 BE-4 stage event 형태로 반환한다.
 26. [x] Runtime/Policy 최소 persistence를 `runtime` / `governance` schema로 분리한다.
 27. [x] DA Handoff Normalizer 앞단에 schema/status/reference/digest field validator를 추가한다.
-28. [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
-29. [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
-30. [ ] DA Crosswalk Contract 파일 loader 추가
-31. [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
+28. [x] Runtime Execution GET/trace 조회에 workload object-level authorization을 적용한다.
+29. [x] `(workload_id, idempotency_key)` unique constraint로 duplicate runtime execution을 차단한다.
+30. [x] Runtime request validation size를 DB varchar contract와 맞춘다.
+31. [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
+32. [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
+33. [ ] DA Crosswalk Contract 파일 loader 추가
+34. [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
+35. [ ] Request ingress 시점 policy catalog revision pinning은 Policy Lifecycle 단계에서 구현한다.
 
 ## Tests
 
 - 같은 Input + 같은 Snapshot은 같은 `RuntimeDecision`을 반환한다.
-- Policy Version 변경 중 진행 Request는 시작 시점 Snapshot을 유지한다.
+- Policy evaluation 시점에 선택된 Snapshot은 해당 Decision 동안 유지된다.
 - DA `BLOCK`은 BE에서 `ALLOW`로 완화되지 않는다.
 - DA `TRANSFORM`은 BE에서 `ALLOW`로 완화되지 않는다.
 - Runtime 권한 부족은 DA `ALLOW`여도 BE `BLOCK`이 된다.
@@ -141,6 +145,8 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Runtime request input이 다르면 `input_digest`와 `runtime_context_digest`가 달라진다.
 - `adp.mock-runtime.enabled=false`에서도 `/v1/runtime/executions` API는 존재하며, unconfigured policy/provider adapter는 fail-safe REVIEW/NOT_EXECUTED로 동작한다.
 - `/v1/runtime/executions/{id}/trace`는 RECEIVED, AUTHORIZATION, RETRIEVAL, CANONICAL_CONTEXT, DECISION stage를 반환한다.
+- Runtime Execution GET/trace는 principal workload scope가 맞지 않으면 403을 반환한다.
+- 동일 workload에서 같은 idempotency key를 재사용하면 409를 반환한다.
 
 ## Out of Scope
 

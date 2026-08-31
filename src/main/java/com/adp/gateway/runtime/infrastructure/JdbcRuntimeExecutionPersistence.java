@@ -9,9 +9,11 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
+import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -28,31 +30,35 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     @Override
     public void recordReceived(RuntimeExecutionTrace trace) {
-        jdbcClient.sql("""
-            insert into runtime.runtime_execution (
-                execution_id, request_id, trace_id, idempotency_key, workload_id,
-                purpose_code, subject_ref_digest, provider_profile_id, input_digest, status,
-                created_at, updated_at
-            )
-            values (
-                :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
-                :purposeCode, :subjectRefDigest, :providerProfileId, :inputDigest, :status,
-                :createdAt, :updatedAt
-            )
-            """)
-            .param("executionId", trace.executionId())
-            .param("requestId", trace.requestId())
-            .param("traceId", trace.traceId())
-            .param("idempotencyKey", trace.idempotencyKey())
-            .param("workloadId", trace.workloadId())
-            .param("purposeCode", trace.purposeCode())
-            .param("subjectRefDigest", trace.subjectRefDigest())
-            .param("providerProfileId", trace.providerProfileId())
-            .param("inputDigest", trace.inputDigest())
-            .param("status", trace.status())
-            .param("createdAt", trace.createdAt())
-            .param("updatedAt", trace.updatedAt())
-            .update();
+        try {
+            jdbcClient.sql("""
+                insert into runtime.runtime_execution (
+                    execution_id, request_id, trace_id, idempotency_key, workload_id,
+                    purpose_code, subject_ref_digest, provider_profile_id, input_digest, status,
+                    created_at, updated_at
+                )
+                values (
+                    :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
+                    :purposeCode, :subjectRefDigest, :providerProfileId, :inputDigest, :status,
+                    :createdAt, :updatedAt
+                )
+                """)
+                .param("executionId", trace.executionId())
+                .param("requestId", trace.requestId())
+                .param("traceId", trace.traceId())
+                .param("idempotencyKey", trace.idempotencyKey())
+                .param("workloadId", trace.workloadId())
+                .param("purposeCode", trace.purposeCode())
+                .param("subjectRefDigest", trace.subjectRefDigest())
+                .param("providerProfileId", trace.providerProfileId())
+                .param("inputDigest", trace.inputDigest())
+                .param("status", trace.status())
+                .param("createdAt", trace.createdAt())
+                .param("updatedAt", trace.updatedAt())
+                .update();
+        } catch (DuplicateKeyException exception) {
+            throw new DuplicateRuntimeExecutionException("Idempotency key already used for workload");
+        }
     }
 
     @Override

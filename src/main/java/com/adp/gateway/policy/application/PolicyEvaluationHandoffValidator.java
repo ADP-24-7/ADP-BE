@@ -34,12 +34,23 @@ public class PolicyEvaluationHandoffValidator {
         requireRefs(artifact.matchedPolicyRefs(), "matched_policy_refs");
         requireRefs(artifact.matchedRuleRefs(), "matched_rule_refs");
         requireRefs(artifact.requirementRefs(), "requirement_refs");
+        requireRefs(artifact.evidenceRefs(), "evidence_refs");
+        requireRefs(artifact.requiredControls(), "required_controls");
+        requireRefs(artifact.validationArtifactRefs(), "validation_artifact_refs");
         require(artifact.digest() != null, "digest is required");
         require("sha256".equals(artifact.digest().algorithm()), "unsupported digest algorithm");
         require(hasText(artifact.digest().value()), "digest value is required");
         require(artifact.applicability() != null, "applicability is required");
         requireStatus(artifact.applicability().status(), "applicability.status");
         require(artifact.runtimeBinding() != null, "runtime_binding is required");
+        require(
+            artifact.processingContexts() != null && !artifact.processingContexts().isEmpty(),
+            "processing_contexts is required"
+        );
+        require(
+            artifact.regulatoryDataCategories() != null && !artifact.regulatoryDataCategories().isEmpty(),
+            "regulatory_data_categories is required"
+        );
         require(
             SUPPORTED_MAPPING_STATUSES.contains(artifact.runtimeBinding().mappingStatus()),
             "unsupported runtime_binding.mapping_status"
@@ -53,7 +64,7 @@ public class PolicyEvaluationHandoffValidator {
     }
 
     private void requireRefs(List<HandoffReference> refs, String fieldName) {
-        require(refs != null && !refs.isEmpty(), fieldName + " is required");
+        require(refs != null, fieldName + " is required");
         refs.forEach(ref -> {
             require(hasText(ref.refId()), fieldName + ".ref_id is required");
             require(hasText(ref.refType()), fieldName + ".ref_type is required");

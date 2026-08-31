@@ -88,6 +88,21 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesRuntimeExecutionIdempotencyConstraint() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'uq_runtime_execution_workload_idempotency'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(1);
+    }
+
+    @Test
     void migrationCreatesAuthBaselineTables() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)

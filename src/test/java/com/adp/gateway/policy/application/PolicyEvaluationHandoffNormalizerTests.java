@@ -61,6 +61,56 @@ class PolicyEvaluationHandoffNormalizerTests {
             .hasMessage("digest mismatch");
     }
 
+    @Test
+    void validatorAllowsEmptyReferenceArraysFromDaSchema() {
+        PolicyEvaluationHandoffArtifact validWithNoRefs = new PolicyEvaluationHandoffArtifact(
+            "v1",
+            "PEA-NO-ACTION",
+            "1.0.0",
+            "validated",
+            "no_runtime_action",
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            new HandoffApplicability("validated", "runtime-bound", List.of()),
+            List.of("AI_USE"),
+            List.of("PERSONAL_INFORMATION"),
+            new HandoffRuntimeBinding("mapped", "CUSTOMER_IDENTIFIER", "customer_summary", "CUSTOMER_SUPPORT", "BINDING-1"),
+            new HandoffDigest("sha256", "digest-1")
+        );
+
+        normalizer.normalize(validWithNoRefs);
+    }
+
+    @Test
+    void validatorRejectsMissingProcessingContextsRequiredByDaSchema() {
+        PolicyEvaluationHandoffArtifact missingProcessingContext = new PolicyEvaluationHandoffArtifact(
+            "v1",
+            "PEA-1",
+            "1.0.0",
+            "validated",
+            "candidate_handoff",
+            List.of(ref("POL-1", "policy")),
+            List.of(ref("RULE-1", "rule")),
+            List.of(ref("REQ-1", "requirement")),
+            List.of(ref("EV-1", "evidence")),
+            List.of(ref("CTRL-1", "control")),
+            List.of(ref("VA-1", "validation_artifact")),
+            new HandoffApplicability("validated", "runtime-bound", List.of()),
+            List.of(),
+            List.of("PERSONAL_INFORMATION"),
+            new HandoffRuntimeBinding("mapped", "CUSTOMER_IDENTIFIER", "customer_summary", "CUSTOMER_SUPPORT", "BINDING-1"),
+            new HandoffDigest("sha256", "digest-1")
+        );
+
+        assertThatThrownBy(() -> normalizer.normalize(missingProcessingContext))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("processing_contexts is required");
+    }
+
     private PolicyEvaluationHandoffArtifact artifact() {
         return new PolicyEvaluationHandoffArtifact(
             "v1",

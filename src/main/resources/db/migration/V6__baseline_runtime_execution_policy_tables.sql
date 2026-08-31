@@ -75,5 +75,7 @@ create table runtime.runtime_decision (
 create index idx_runtime_execution_request_id on runtime.runtime_execution (request_id);
 create index idx_runtime_execution_trace_id on runtime.runtime_execution (trace_id);
 create index idx_runtime_execution_scope on runtime.runtime_execution (workload_id, purpose_code, provider_profile_id);
+create unique index uq_runtime_execution_workload_idempotency
+    on runtime.runtime_execution (workload_id, idempotency_key);
 create index idx_policy_snapshot_source_artifact on governance.policy_snapshot (source_artifact_id, source_artifact_version);
 create index idx_runtime_decision_decision_id on runtime.runtime_decision (decision_id);

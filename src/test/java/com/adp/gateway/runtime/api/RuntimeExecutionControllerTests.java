@@ -7,6 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
+
+import com.adp.gateway.auth.application.ApiKeyHasher;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,11 +30,18 @@ class RuntimeExecutionControllerTests {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private ApiKeyHasher apiKeyHasher;
+
     @Test
     void createsRuntimeExecutionThroughCanonicalContextAndDecision() throws Exception {
+        String suffix = token();
+        String requestId = "req_v1_" + suffix;
+        String traceId = "trace_v1_" + suffix;
+        String idempotencyKey = "idem_v1_" + suffix;
         String response = mockMvc.perform(post("/v1/runtime/executions")
-                .header("X-Request-Id", "req_v1_runtime")
-                .header("X-Trace-Id", "trace_v1_runtime")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", traceId)
                 .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("""
@@ -40,16 +50,16 @@ class RuntimeExecutionControllerTests {
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
                       "providerProfileId": "internal-provider",
-                      "idempotencyKey": "idem_v1_runtime",
+                      "idempotencyKey": "%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
                         "ticketId": "ticket-100"
                       }
                     }
-                    """))
+                    """.formatted(idempotencyKey)))
             .andExpect(status().isOk())
-            .andExpect(header().string("X-Request-Id", "req_v1_runtime"))
-            .andExpect(header().string("X-Trace-Id", "trace_v1_runtime"))
+            .andExpect(header().string("X-Request-Id", requestId))
+            .andExpect(header().string("X-Trace-Id", traceId))
             .andExpect(jsonPath("$.executionId").exists())
             .andExpect(jsonPath("$.status").value("DECIDED"))
             .andExpect(jsonPath("$.policyAction").value("ALLOW"))
@@ -110,38 +120,150 @@ class RuntimeExecutionControllerTests {
 
     @Test
     void differentInputProducesDifferentInputAndRuntimeContextDigest() throws Exception {
-        postRuntimeExecution("req_input_a", "trace_input_a", "ticket-100");
-        postRuntimeExecution("req_input_b", "trace_input_b", "ticket-999");
+        String suffix = token();
+        String requestA = "req_in_a_" + suffix;
+        String requestB = "req_in_b_" + suffix;
+        postRuntimeExecution(requestA, "trace_in_a_" + suffix, "idem_in_a_" + suffix, "ticket-100");
+        postRuntimeExecution(requestB, "trace_in_b_" + suffix, "idem_in_b_" + suffix, "ticket-999");
 
-        String inputDigestA = digest("input_digest", "req_input_a");
-        String inputDigestB = digest("input_digest", "req_input_b");
-        String runtimeDigestA = digest("runtime_context_digest", "req_input_a");
-        String runtimeDigestB = digest("runtime_context_digest", "req_input_b");
+        String inputDigestA = digest("input_digest", requestA);
+        String inputDigestB = digest("input_digest", requestB);
+        String runtimeDigestA = digest("runtime_context_digest", requestA);
+        String runtimeDigestB = digest("runtime_context_digest", requestB);
 
         assertThat(inputDigestA).isNotEqualTo(inputDigestB);
         assertThat(runtimeDigestA).isNotEqualTo(runtimeDigestB);
     }
 
-    private void postRuntimeExecution(String requestId, String traceId, String ticketId) throws Exception {
+    @Test
+    void duplicateIdempotencyKeyForSameWorkloadIsRejected() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_dup_" + suffix;
+        postRuntimeExecution("req_dup_a_" + suffix, "trace_dup_a_" + suffix, idempotencyKey, "ticket-100");
+
         mockMvc.perform(post("/v1/runtime/executions")
-                .header("X-Request-Id", requestId)
-                .header("X-Trace-Id", traceId)
+                .header("X-Request-Id", "req_dup_b_" + suffix)
+                .header("X-Trace-Id", "trace_dup_b_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content(runtimeRequest(idempotencyKey, "ticket-999")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"))
+            .andExpect(jsonPath("$.reasonCode").value("IDEMPOTENCY_KEY_REUSED"));
+    }
+
+    @Test
+    void rejectsExecutionReadWhenPrincipalCannotAccessWorkload() throws Exception {
+        String suffix = token();
+        String response = postRuntimeExecution(
+            "req_bola_" + suffix,
+            "trace_bola_" + suffix,
+            "idem_bola_" + suffix,
+            "ticket-100"
+        );
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        insertFraudOnlyPrincipal("fraud-only-key-" + suffix);
+
+        mockMvc.perform(get("/v1/runtime/executions/{executionId}", executionId)
+                .header("X-ADP-API-Key", "fraud-only-key-" + suffix))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"));
+
+        mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
+                .header("X-ADP-API-Key", "fraud-only-key-" + suffix))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"));
+    }
+
+    @Test
+    void rejectsRequestFieldsLongerThanDatabaseContract() throws Exception {
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_size_" + token())
+                .header("X-Trace-Id", "trace_size_" + token())
                 .header("X-ADP-API-Key", "local-dev-api-key")
                 .contentType("application/json")
                 .content("""
                     {
-                      "workloadId": "customer_summary",
+                      "workloadId": "%s",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
                       "providerProfileId": "internal-provider",
-                      "idempotencyKey": "idem_%s",
+                      "idempotencyKey": "idem-size",
                       "processingContexts": ["AI_USE"],
-                      "input": {
-                        "ticketId": "%s"
-                      }
+                      "input": {}
                     }
-                    """.formatted(requestId, ticketId)))
-            .andExpect(status().isOk());
+                    """.formatted("x".repeat(121))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+    }
+
+    private String postRuntimeExecution(
+        String requestId,
+        String traceId,
+        String idempotencyKey,
+        String ticketId
+    ) throws Exception {
+        return mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", traceId)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content(runtimeRequest(idempotencyKey, ticketId)))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    }
+
+    private String runtimeRequest(String idempotencyKey, String ticketId) {
+        return """
+            {
+              "workloadId": "customer_summary",
+              "purposeCode": "CUSTOMER_SUPPORT",
+              "subjectScope": "customer:customer-100",
+              "providerProfileId": "internal-provider",
+              "idempotencyKey": "%s",
+              "processingContexts": ["AI_USE"],
+              "input": {
+                "ticketId": "%s"
+              }
+            }
+            """.formatted(idempotencyKey, ticketId);
+    }
+
+    private void insertFraudOnlyPrincipal(String apiKey) {
+        jdbcClient.sql("""
+                insert into auth_principal (
+                    principal_id, principal_type, display_name, subject_authorization_required, enabled
+                )
+                values ('svc_fraud_runtime', 'SERVICE', 'Fraud Runtime', false, true)
+                on conflict (principal_id) do nothing
+                """)
+            .update();
+        jdbcClient.sql("""
+                insert into auth_principal_role (principal_id, role_name)
+                values ('svc_fraud_runtime', 'RUNTIME_EXECUTOR')
+                on conflict (principal_id, role_name) do nothing
+                """)
+            .update();
+        jdbcClient.sql("""
+                insert into auth_principal_workload (principal_id, workload_id)
+                values ('svc_fraud_runtime', 'fraud_analysis')
+                on conflict (principal_id, workload_id) do nothing
+                """)
+            .update();
+        jdbcClient.sql("""
+                insert into auth_api_key (key_id, principal_id, key_hash, enabled)
+                values (:keyId, 'svc_fraud_runtime', :keyHash, true)
+                on conflict (key_id) do nothing
+                """)
+            .param("keyId", "key_fraud_runtime_" + token())
+            .param("keyHash", apiKeyHasher.hash(apiKey))
+            .update();
+    }
+
+    private String token() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 
     private String digest(String column, String requestId) {
