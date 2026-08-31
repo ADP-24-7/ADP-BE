@@ -96,7 +96,6 @@ public class MockRuntimeController {
         RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(context);
         ApplicabilityResult applicabilityResult = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
         RuntimeDecision decision = runtimeDecisionService.decide(
-            context,
             runtimePolicyContext,
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,

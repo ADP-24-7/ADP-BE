@@ -30,6 +30,12 @@ DA 1차 결과를 표현한다.
 - `policy_action`: BE runtime policy action enum인 `ALLOW`, `TRANSFORM`, `REVIEW`, `BLOCK`
 - `required_controls`
 - `validation_artifact_refs`
+- `applicability_spec`
+  - `analysis_status`
+  - `applicability_status`
+  - `processing_contexts`
+  - `regulatory_data_categories`
+  - `runtime_binding`
 
 DA handoff schema의 현재 `policy_action` 값이 `candidate_handoff`, `requires_evaluation`, `hold`, `reject`, `no_runtime_action`이면 BE의 runtime `PolicyAction`으로 직접 소비하지 않는다. 해당 값은 handoff/analysis disposition으로 해석하고, BE runtime `PolicyAction`은 별도 normalizer에서 확정해야 한다.
 
@@ -91,10 +97,12 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 9. [x] DA source artifact identity와 BE snapshot identity를 분리한다.
 10. [x] DA reference를 `ref_id/ref_type/version` typed reference로 보존한다.
 11. [x] Runtime processing context를 복수형으로 모델링한다.
-12. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
-13. [ ] Versioned DataClass Crosswalk를 추가한다.
-14. [ ] Runtime Binding Contract를 추가한다.
-15. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
+12. [x] Policy-side `analysis_status`, `applicability`, `processing_contexts`, `regulatory_data_categories`, `runtime_binding`을 normalized model에 보존한다.
+13. [x] Applicability Evaluator에서 workload, purpose, processing context, runtime data class binding을 비교한다.
+14. [ ] Runtime path에서 Canonical Context 조립 결과를 Applicability 입력으로 연결한다.
+15. [ ] Versioned DataClass Crosswalk를 추가한다.
+16. [ ] Runtime Binding Contract adapter를 추가한다.
+17. [ ] DA PolicyEvaluation Artifact Adapter/Normalizer를 추가한다.
 
 ## Tests
 
@@ -107,6 +115,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Audit에서 `policy_action`과 `final_action`을 함께 조회할 수 있다.
 - Audit에서 `runtime_context_digest`, `evidence_refs`, `required_controls`를 함께 조회할 수 있다.
 - DA source artifact version/digest와 BE snapshot version/digest가 달라도 snapshot 생성이 가능하다.
+- Applicability Evaluator는 workload, purpose, processing context, runtime data class가 일치하지 않으면 `APPLICABLE`을 반환하지 않는다.
 
 ## Out of Scope
 

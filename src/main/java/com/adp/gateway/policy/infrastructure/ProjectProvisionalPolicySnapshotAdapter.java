@@ -6,11 +6,14 @@ import java.util.List;
 
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
+import com.adp.gateway.policy.domain.AnalysisStatus;
+import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
+import com.adp.gateway.policy.domain.RuntimeBinding;
 import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -42,7 +45,22 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
                 new ArtifactReference("RUNTIME_AUTHORIZATION", "control", "0.0.0"),
                 new ArtifactReference("SUBJECT_SCOPE", "control", "0.0.0")
             ),
-            List.of()
+            List.of(),
+            new PolicyApplicabilitySpec(
+                AnalysisStatus.VALIDATED,
+                AnalysisStatus.VALIDATED,
+                "PROJECT_PROVISIONAL local runtime fixture",
+                List.of("Not approved for production policy enforcement."),
+                List.of("AI_USE"),
+                List.of("PERSONAL_INFORMATION"),
+                new RuntimeBinding(
+                    "mapped",
+                    "CUSTOMER_IDENTIFIER",
+                    workloadId,
+                    "BE-0 local E2E",
+                    "PROJECT_PROVISIONAL_BINDING"
+                )
+            )
         );
 
         return new PolicySnapshot(

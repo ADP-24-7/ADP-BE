@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.error.ReasonCode;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
@@ -25,7 +24,6 @@ public class RuntimeDecisionService {
     }
 
     public RuntimeDecision decide(
-        RuntimeRequestContext context,
         RuntimePolicyContext runtimePolicyContext,
         PolicySnapshot snapshot,
         RuntimeAuthorizationResult authorizationResult,

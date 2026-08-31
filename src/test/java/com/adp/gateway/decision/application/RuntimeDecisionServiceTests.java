@@ -4,18 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.error.ReasonCode;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
+import com.adp.gateway.policy.domain.AnalysisStatus;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
+import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
+import com.adp.gateway.policy.domain.RuntimeBinding;
 import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.junit.jupiter.api.Test;
@@ -23,14 +25,6 @@ import org.junit.jupiter.api.Test;
 class RuntimeDecisionServiceTests {
 
     private final RuntimeDecisionService service = new RuntimeDecisionService(new MonotonicDecisionCombiner());
-    private final RuntimeRequestContext context = new RuntimeRequestContext(
-        "req_decision",
-        "trace_decision",
-        "idem_decision",
-        "customer_summary",
-        "CUSTOMER_SUPPORT",
-        "customer:customer-100"
-    );
     private final RuntimePolicyContext runtimeContext = runtimeContext("runtime-digest-1");
 
     @Test
@@ -38,14 +32,12 @@ class RuntimeDecisionServiceTests {
         PolicySnapshot snapshot = snapshot(PolicyAction.ALLOW);
 
         var first = service.decide(
-            context,
             runtimeContext,
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,
             ApplicabilityResult.APPLICABLE
         );
         var second = service.decide(
-            context,
             runtimeContext,
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,
@@ -64,14 +56,12 @@ class RuntimeDecisionServiceTests {
         PolicySnapshot snapshot = snapshot(PolicyAction.ALLOW);
 
         var first = service.decide(
-            context,
             runtimeContext("runtime-digest-1"),
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,
             ApplicabilityResult.APPLICABLE
         );
         var second = service.decide(
-            context,
             runtimeContext("runtime-digest-2"),
             snapshot,
             RuntimeAuthorizationResult.ALLOWED,
@@ -84,7 +74,6 @@ class RuntimeDecisionServiceTests {
     @Test
     void blocksWhenRuntimeAuthorizationIsDeniedEvenIfPolicyAllows() {
         var decision = service.decide(
-            context,
             runtimeContext,
             snapshot(PolicyAction.ALLOW),
             RuntimeAuthorizationResult.DENIED,
@@ -99,7 +88,6 @@ class RuntimeDecisionServiceTests {
     @Test
     void doesNotRelaxTransformPolicyActionToAllow() {
         var decision = service.decide(
-            context,
             runtimeContext,
             snapshot(PolicyAction.TRANSFORM),
             RuntimeAuthorizationResult.ALLOWED,
@@ -113,7 +101,6 @@ class RuntimeDecisionServiceTests {
     @Test
     void doesNotRelaxBlockPolicyActionToAllow() {
         var decision = service.decide(
-            context,
             runtimeContext,
             snapshot(PolicyAction.BLOCK),
             RuntimeAuthorizationResult.ALLOWED,
@@ -127,7 +114,6 @@ class RuntimeDecisionServiceTests {
     @Test
     void routesIncompleteApplicabilityToReviewWithoutDefaultAllow() {
         var decision = service.decide(
-            context,
             runtimeContext,
             snapshot(PolicyAction.ALLOW),
             RuntimeAuthorizationResult.ALLOWED,
@@ -148,7 +134,8 @@ class RuntimeDecisionServiceTests {
             List.of(ref("EV-1", "evidence", "da-v1")),
             PolicyAction.ALLOW,
             List.of(ref("CONTROL-1", "control", "da-v1")),
-            List.of(ref("VA-1", "validation_artifact", "da-v1"))
+            List.of(ref("VA-1", "validation_artifact", "da-v1")),
+            applicabilitySpec()
         );
 
         PolicySnapshot snapshot = new PolicySnapshot(
@@ -188,7 +175,8 @@ class RuntimeDecisionServiceTests {
             List.of(ref("EV-1", "evidence", "v1")),
             policyAction,
             List.of(ref("CONTROL-1", "control", "v1")),
-            List.of(ref("VA-1", "validation_artifact", "v1"))
+            List.of(ref("VA-1", "validation_artifact", "v1")),
+            applicabilitySpec()
         );
         return new PolicySnapshot(
             "be-runtime-policy/0.0.0",
@@ -210,5 +198,23 @@ class RuntimeDecisionServiceTests {
 
     private ArtifactReference ref(String refId, String refType, String version) {
         return new ArtifactReference(refId, refType, version);
+    }
+
+    private PolicyApplicabilitySpec applicabilitySpec() {
+        return new PolicyApplicabilitySpec(
+            AnalysisStatus.VALIDATED,
+            AnalysisStatus.VALIDATED,
+            "customer support lookup",
+            List.of(),
+            List.of("SUPPORT_LOOKUP"),
+            List.of("PERSONAL_INFORMATION"),
+            new RuntimeBinding(
+                "mapped",
+                "CUSTOMER_IDENTIFIER",
+                "customer_summary",
+                "CUSTOMER_SUPPORT",
+                "BINDING-1"
+            )
+        );
     }
 }
