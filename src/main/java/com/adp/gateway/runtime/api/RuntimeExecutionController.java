@@ -8,7 +8,6 @@ import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.runtime.application.RuntimeExecutionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/v1/runtime/executions")
-@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "true")
 public class RuntimeExecutionController {
 
     private final RuntimeContextFactory runtimeContextFactory;
@@ -51,7 +49,8 @@ public class RuntimeExecutionController {
             context,
             (AuthPrincipal) authentication.getPrincipal(),
             request.providerProfileId(),
-            request.processingContexts() == null ? List.of() : request.processingContexts()
+            request.processingContexts() == null ? List.of() : request.processingContexts(),
+            request.input()
         );
         return ResponseEntity.ok(RuntimeExecutionResponse.from(result));
     }
@@ -62,7 +61,7 @@ public class RuntimeExecutionController {
     }
 
     @GetMapping("/{executionId}/trace")
-    public ResponseEntity<RuntimeExecutionTraceResponse> trace(@PathVariable String executionId) {
-        return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(runtimeExecutionService.load(executionId)));
+    public ResponseEntity<RuntimeExecutionTraceEventsResponse> trace(@PathVariable String executionId) {
+        return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(runtimeExecutionService.load(executionId)));
     }
 }

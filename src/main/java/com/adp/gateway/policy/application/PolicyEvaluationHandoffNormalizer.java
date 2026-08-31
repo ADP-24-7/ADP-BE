@@ -16,16 +16,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class PolicyEvaluationHandoffNormalizer {
 
-    public NormalizedPolicyEvaluation normalize(
-        PolicyEvaluationHandoffArtifact artifact,
-        PolicyAction runtimePolicyAction
-    ) {
+    private final PolicyEvaluationHandoffValidator validator;
+
+    public PolicyEvaluationHandoffNormalizer(PolicyEvaluationHandoffValidator validator) {
+        this.validator = validator;
+    }
+
+    public NormalizedPolicyEvaluation normalize(PolicyEvaluationHandoffArtifact artifact) {
+        validator.validate(artifact);
         PolicyEvaluation evaluation = new PolicyEvaluation(
             refs(artifact.matchedPolicyRefs()),
             refs(artifact.matchedRuleRefs()),
             refs(artifact.requirementRefs()),
             refs(artifact.evidenceRefs()),
-            runtimePolicyAction,
+            runtimePolicyAction(artifact.policyAction()),
             refs(artifact.requiredControls()),
             refs(artifact.validationArtifactRefs()),
             new PolicyApplicabilitySpec(
@@ -60,5 +64,13 @@ public class PolicyEvaluationHandoffNormalizer {
 
     private AnalysisStatus status(String status) {
         return AnalysisStatus.valueOf(status.toUpperCase(Locale.ROOT));
+    }
+
+    private PolicyAction runtimePolicyAction(String handoffDisposition) {
+        return switch (handoffDisposition) {
+            case "hold", "reject" -> PolicyAction.BLOCK;
+            case "candidate_handoff", "requires_evaluation", "no_runtime_action" -> PolicyAction.REVIEW;
+            default -> throw new IllegalArgumentException("unsupported policy_action");
+        };
     }
 }

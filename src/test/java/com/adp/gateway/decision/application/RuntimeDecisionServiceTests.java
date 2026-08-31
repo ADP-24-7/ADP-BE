@@ -163,6 +163,7 @@ class RuntimeDecisionServiceTests {
             List.of(DataClass.CUSTOMER_IDENTIFIER),
             List.of("SUPPORT_LOOKUP", "third_party_or_outsourcing"),
             "internal",
+            "input-digest",
             digest
         );
     }

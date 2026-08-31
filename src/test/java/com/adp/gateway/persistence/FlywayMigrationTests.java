@@ -74,13 +74,12 @@ class FlywayMigrationTests {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)
                 from information_schema.tables
-                where table_schema = 'public'
-                  and table_name in (
-                    'runtime_execution',
-                    'policy_snapshot',
-                    'runtime_policy_evaluation',
-                    'runtime_decision'
-                  )
+                where (table_schema, table_name) in (
+                  ('runtime', 'runtime_execution'),
+                  ('governance', 'policy_snapshot'),
+                  ('runtime', 'policy_evaluation'),
+                  ('runtime', 'runtime_decision')
+                )
                 """)
             .query(Integer.class)
             .single();

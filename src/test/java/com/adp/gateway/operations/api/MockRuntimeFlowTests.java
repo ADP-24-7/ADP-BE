@@ -53,7 +53,7 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.policyArtifactDigestValue").value("local-fixture-policy-evaluation"))
             .andExpect(jsonPath("$.policyArtifactStatus").value("PROJECT_PROVISIONAL"))
             .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/0.0.0"))
-            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture:workload_be0:BE-0 local E2E:null"))
+            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider"))
             .andExpect(jsonPath("$.decisionId").exists())
             .andExpect(jsonPath("$.policyAction").value("ALLOW"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
@@ -84,7 +84,7 @@ class MockRuntimeFlowTests {
                   and evidence_refs = ''
                   and required_controls = 'RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0'
                   and policy_version = 'be-runtime-policy/0.0.0'
-                  and policy_digest = 'be-snapshot-local-fixture:workload_be0:BE-0 local E2E:null'
+                  and policy_digest = 'be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider'
                   and connector_status = 'NOT_EXECUTED'
                 """)
             .param("requestId", "req_be0_test")

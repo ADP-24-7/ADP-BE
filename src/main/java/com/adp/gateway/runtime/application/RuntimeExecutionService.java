@@ -2,6 +2,8 @@ package com.adp.gateway.runtime.application;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.adp.gateway.audit.application.AuditRecorder;
@@ -12,7 +14,7 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.RuntimeAction;
 import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
-import com.adp.gateway.connector.application.FakeConnector;
+import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.domain.CanonicalContext;
@@ -33,12 +35,10 @@ import com.adp.gateway.retrieval.application.RetrievalService;
 import com.adp.gateway.retrieval.domain.RetrievalResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "true")
 public class RuntimeExecutionService {
 
     private final AuthorizationService authorizationService;
@@ -48,10 +48,11 @@ public class RuntimeExecutionService {
     private final PolicySnapshotPort policySnapshotPort;
     private final PolicyApplicabilityEvaluator policyApplicabilityEvaluator;
     private final RuntimeDecisionService decisionService;
-    private final FakeConnector fakeConnector;
+    private final RuntimeConnectorPort runtimeConnector;
     private final AuditRecorder auditRecorder;
     private final RuntimeExecutionPersistence persistence;
     private final SubjectRefHasher subjectRefHasher;
+    private final RuntimeInputHasher runtimeInputHasher;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -62,10 +63,11 @@ public class RuntimeExecutionService {
         PolicySnapshotPort policySnapshotPort,
         PolicyApplicabilityEvaluator policyApplicabilityEvaluator,
         RuntimeDecisionService decisionService,
-        FakeConnector fakeConnector,
+        RuntimeConnectorPort runtimeConnector,
         AuditRecorder auditRecorder,
         RuntimeExecutionPersistence persistence,
         SubjectRefHasher subjectRefHasher,
+        RuntimeInputHasher runtimeInputHasher,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -75,10 +77,11 @@ public class RuntimeExecutionService {
         this.policySnapshotPort = policySnapshotPort;
         this.policyApplicabilityEvaluator = policyApplicabilityEvaluator;
         this.decisionService = decisionService;
-        this.fakeConnector = fakeConnector;
+        this.runtimeConnector = runtimeConnector;
         this.auditRecorder = auditRecorder;
         this.persistence = persistence;
         this.subjectRefHasher = subjectRefHasher;
+        this.runtimeInputHasher = runtimeInputHasher;
         this.clock = clock;
     }
 
@@ -86,11 +89,13 @@ public class RuntimeExecutionService {
         RuntimeRequestContext requestContext,
         AuthPrincipal principal,
         String providerProfileId,
-        java.util.List<String> processingContexts
+        List<String> processingContexts,
+        Map<String, Object> input
     ) {
         SubjectRef subject = SubjectRef.from(requestContext.subject());
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
+        String inputDigest = runtimeInputHasher.hash(input);
         persistence.recordReceived(new RuntimeExecutionTrace(
             executionId,
             requestContext.requestId(),
@@ -100,6 +105,7 @@ public class RuntimeExecutionService {
             requestContext.purpose(),
             subject == null ? null : subjectRefHasher.hash(subject),
             providerProfileId,
+            inputDigest,
             null,
             null,
             null,
@@ -111,57 +117,65 @@ public class RuntimeExecutionService {
             now
         ));
 
-        if (!authorizationService.authorize(new AuthorizationRequest(
-            principal,
-            requestContext.workloadId(),
-            RuntimeAction.RUNTIME_EXECUTE,
-            requestContext.purpose(),
-            subject
-        )).allowed()) {
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
-            throw new AccessDeniedException("Runtime execution is not allowed");
+        try {
+            if (!authorizationService.authorize(new AuthorizationRequest(
+                principal,
+                requestContext.workloadId(),
+                RuntimeAction.RUNTIME_EXECUTE,
+                requestContext.purpose(),
+                subject
+            )).allowed()) {
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+                throw new AccessDeniedException("Runtime execution is not allowed");
+            }
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+
+            RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
+                requestContext.requestId(),
+                requestContext.traceId(),
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                subject
+            ));
+            CanonicalContext canonicalContext = contextBuilder.build(retrieval);
+            persistence.recordRetrieved(executionId, canonicalContext);
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
+
+            RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
+                canonicalContext,
+                processingContexts,
+                providerProfileId,
+                inputDigest
+            );
+            PolicySnapshot snapshot = policySnapshotPort.load(new PolicySelectionContext(
+                runtimePolicyContext.workloadId(),
+                runtimePolicyContext.purpose(),
+                runtimePolicyContext.provider(),
+                runtimePolicyContext.processingContexts(),
+                runtimePolicyContext.runtimeDataClasses()
+            ));
+            persistence.recordPolicyEvaluation(executionId, snapshot);
+
+            ApplicabilityResult applicability = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
+            RuntimeDecision decision = decisionService.decide(
+                runtimePolicyContext,
+                snapshot,
+                RuntimeAuthorizationResult.ALLOWED,
+                applicability
+            );
+            persistence.recordRuntimeDecision(executionId, decision);
+            RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction());
+            persistence.updateStatus(executionId, finalStatus);
+            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision);
+            AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+
+            return new RuntimeExecutionResult(executionId, finalStatus, decision, connectorResult, auditContext);
+        } catch (AccessDeniedException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
+            throw exception;
         }
-        persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
-
-        RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
-            requestContext.requestId(),
-            requestContext.traceId(),
-            requestContext.workloadId(),
-            requestContext.purpose(),
-            subject
-        ));
-        CanonicalContext canonicalContext = contextBuilder.build(retrieval);
-        persistence.recordRetrieved(executionId, canonicalContext);
-        persistence.updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
-
-        RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
-            canonicalContext,
-            processingContexts,
-            providerProfileId
-        );
-        PolicySnapshot snapshot = policySnapshotPort.load(new PolicySelectionContext(
-            runtimePolicyContext.workloadId(),
-            runtimePolicyContext.purpose(),
-            runtimePolicyContext.provider(),
-            runtimePolicyContext.processingContexts(),
-            runtimePolicyContext.runtimeDataClasses()
-        ));
-        persistence.recordPolicyEvaluation(executionId, snapshot);
-
-        ApplicabilityResult applicability = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
-        RuntimeDecision decision = decisionService.decide(
-            runtimePolicyContext,
-            snapshot,
-            RuntimeAuthorizationResult.ALLOWED,
-            applicability
-        );
-        persistence.recordRuntimeDecision(executionId, decision);
-        RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction());
-        persistence.updateStatus(executionId, finalStatus);
-        ConnectorResult connectorResult = fakeConnector.execute(requestContext, decision);
-        AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
-
-        return new RuntimeExecutionResult(executionId, finalStatus, decision, connectorResult, auditContext);
     }
 
     public RuntimeExecutionTrace load(String executionId) {

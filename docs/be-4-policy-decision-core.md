@@ -5,7 +5,7 @@ BE-4는 DA Handoff Artifact와 BE Runtime Policy를 분리하고, 동일 Snapsho
 ## Goal
 
 - DA에서 생성된 Evidence-backed Handoff Artifact를 BE Runtime에 직접 집행하지 않는다.
-- BE는 현재 Caller, Workload, Action, Purpose, Subject Scope, Provider, Runtime DataClass, Canonical Context를 기준으로 2차 Applicability와 Runtime Guard를 수행한다.
+- BE는 현재 Caller, Workload, Action, Purpose, Subject Scope, Provider, Runtime DataClass, Canonical Context, Runtime Input Digest를 기준으로 2차 Applicability와 Runtime Guard를 수행한다.
 - BE 최종 Decision은 BE-normalized `PolicyAction`보다 느슨해질 수 없다.
 - DA `PolicyEvaluation Artifact`의 artifact identity와 BE `PolicySnapshot` identity는 서로 다르며, BE는 source artifact를 reference로만 보존한다.
 
@@ -14,7 +14,7 @@ BE-4는 DA Handoff Artifact와 BE Runtime Policy를 분리하고, 동일 Snapsho
 | Owner | Scope |
 | --- | --- |
 | ADP-DA | Evidence, Requirement, Control, Test, RegulatoryDataCategory, Handoff Disposition |
-| ADP-BE | Workload, Purpose, Subject Scope, Provider, RuntimeDataClass, Canonical Context, BE-normalized `PolicyAction`, 최종 `RuntimeDecision` |
+| ADP-BE | Workload, Purpose, Subject Scope, Provider, RuntimeDataClass, Canonical Context, Runtime Input Digest, BE-normalized `PolicyAction`, 최종 `RuntimeDecision` |
 | Shared Contract | PolicyEvaluation Artifact, Runtime Binding, DataClass Crosswalk, Processing Context Vocabulary |
 
 ## Required Contracts
@@ -111,10 +111,17 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 18. [x] Runtime Execution, Policy Evaluation, Runtime Decision 최소 persistence를 추가한다.
 19. [x] DA Handoff Disposition과 BE `PolicyAction`을 분리하는 Adapter/Normalizer 경계를 추가한다.
 20. [x] Versioned RuntimeDataClass Crosswalk Port와 provisional adapter를 추가한다.
-21. [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
-22. [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
-23. [ ] DA Crosswalk Contract 파일 loader 추가
-24. [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
+21. [x] `/v1/runtime/executions` Controller/Service는 mock flag와 분리하고 provider/policy fixture adapter만 환경 조건으로 분리한다.
+22. [x] Runtime request `input`은 raw 저장 없이 canonical SHA-256 `input_digest`로 저장하고 `runtime_context_digest`에 포함한다.
+23. [x] Provisional Policy Snapshot fixture는 고정 scope lookup으로 선택하고 `effective_at`을 고정한다.
+24. [x] Runtime Execution 실패 시 `FAILED` 상태로 전환한다.
+25. [x] `/trace`는 flat metadata 중복이 아니라 BE-4 stage event 형태로 반환한다.
+26. [x] Runtime/Policy 최소 persistence를 `runtime` / `governance` schema로 분리한다.
+27. [x] DA Handoff Normalizer 앞단에 schema/status/reference/digest field validator를 추가한다.
+28. [ ] DA 실제 PolicyEvaluation Artifact 파일 ingest endpoint/loader 추가
+29. [ ] DA Workload/Purpose Binding Contract 파일 loader 추가
+30. [ ] DA Crosswalk Contract 파일 loader 추가
+31. [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
 
 ## Tests
 
@@ -131,6 +138,9 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - Runtime processing context가 아직 결정되지 않은 경우 `INCOMPLETE`로 audit된다.
 - `/v1/runtime/executions`는 Retrieval과 Canonical Context 조립 후 RuntimeDecision을 생성한다.
 - Runtime execution, policy evaluation, runtime decision을 audit event와 별도 테이블에 저장한다.
+- Runtime request input이 다르면 `input_digest`와 `runtime_context_digest`가 달라진다.
+- `adp.mock-runtime.enabled=false`에서도 `/v1/runtime/executions` API는 존재하며, unconfigured policy/provider adapter는 fail-safe REVIEW/NOT_EXECUTED로 동작한다.
+- `/v1/runtime/executions/{id}/trace`는 RECEIVED, AUTHORIZATION, RETRIEVAL, CANONICAL_CONTEXT, DECISION stage를 반환한다.
 
 ## Out of Scope
 

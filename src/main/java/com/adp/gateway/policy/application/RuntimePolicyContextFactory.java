@@ -38,18 +38,28 @@ public class RuntimePolicyContextFactory {
             null,
             List.of(),
             List.of(),
-            null
+            null,
+            "<none>"
         );
     }
 
     public RuntimePolicyContext from(CanonicalContext canonicalContext) {
-        return from(canonicalContext, List.of(), null);
+        return from(canonicalContext, List.of(), null, "<none>");
     }
 
     public RuntimePolicyContext from(
         CanonicalContext canonicalContext,
         List<String> processingContexts,
         String provider
+    ) {
+        return from(canonicalContext, processingContexts, provider, "<none>");
+    }
+
+    public RuntimePolicyContext from(
+        CanonicalContext canonicalContext,
+        List<String> processingContexts,
+        String provider,
+        String inputDigest
     ) {
         return from(
             canonicalContext.workloadId(),
@@ -63,7 +73,8 @@ public class RuntimePolicyContextFactory {
                 .sorted()
                 .toList(),
             processingContexts,
-            provider
+            provider,
+            inputDigest
         );
     }
 
@@ -75,7 +86,8 @@ public class RuntimePolicyContextFactory {
         String canonicalContextDigest,
         List<DataClass> runtimeDataClasses,
         List<String> processingContexts,
-        String provider
+        String provider,
+        String inputDigest
     ) {
         String runtimeDataClassValue = runtimeDataClasses.stream()
             .map(Enum::name)
@@ -92,7 +104,8 @@ public class RuntimePolicyContextFactory {
             value(canonicalContextDigest),
             runtimeDataClassValue,
             processingContextValue,
-            value(provider)
+            value(provider),
+            value(inputDigest)
         ));
         return new RuntimePolicyContext(
             workloadId,
@@ -103,6 +116,7 @@ public class RuntimePolicyContextFactory {
             List.copyOf(runtimeDataClasses),
             List.copyOf(processingContexts),
             provider,
+            inputDigest,
             digest
         );
     }

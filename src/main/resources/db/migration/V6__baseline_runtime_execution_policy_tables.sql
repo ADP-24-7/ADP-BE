@@ -1,4 +1,7 @@
-create table runtime_execution (
+create schema if not exists governance;
+create schema if not exists runtime;
+
+create table runtime.runtime_execution (
     id bigserial primary key,
     execution_id varchar(80) not null unique,
     request_id varchar(80) not null,
@@ -8,6 +11,7 @@ create table runtime_execution (
     purpose_code varchar(160) not null,
     subject_ref_digest varchar(64),
     provider_profile_id varchar(120) not null,
+    input_digest varchar(64) not null,
     canonical_context_digest varchar(64),
     runtime_context_digest varchar(64),
     policy_version varchar(120),
@@ -19,7 +23,7 @@ create table runtime_execution (
     updated_at timestamptz not null
 );
 
-create table policy_snapshot (
+create table governance.policy_snapshot (
     id bigserial primary key,
     policy_version varchar(120) not null,
     snapshot_digest varchar(200) not null unique,
@@ -39,9 +43,9 @@ create table policy_snapshot (
     created_at timestamptz not null
 );
 
-create table runtime_policy_evaluation (
+create table runtime.policy_evaluation (
     id bigserial primary key,
-    execution_id varchar(80) not null references runtime_execution (execution_id),
+    execution_id varchar(80) not null references runtime.runtime_execution (execution_id),
     policy_version varchar(120) not null,
     snapshot_digest varchar(200) not null,
     source_artifact_id varchar(120) not null,
@@ -55,9 +59,9 @@ create table runtime_policy_evaluation (
     created_at timestamptz not null
 );
 
-create table runtime_decision (
+create table runtime.runtime_decision (
     id bigserial primary key,
-    execution_id varchar(80) not null references runtime_execution (execution_id),
+    execution_id varchar(80) not null references runtime.runtime_execution (execution_id),
     decision_id varchar(120) not null,
     policy_action varchar(40) not null,
     final_action varchar(40) not null,
@@ -68,8 +72,8 @@ create table runtime_decision (
     created_at timestamptz not null
 );
 
-create index idx_runtime_execution_request_id on runtime_execution (request_id);
-create index idx_runtime_execution_trace_id on runtime_execution (trace_id);
-create index idx_runtime_execution_scope on runtime_execution (workload_id, purpose_code, provider_profile_id);
-create index idx_policy_snapshot_source_artifact on policy_snapshot (source_artifact_id, source_artifact_version);
-create index idx_runtime_decision_decision_id on runtime_decision (decision_id);
+create index idx_runtime_execution_request_id on runtime.runtime_execution (request_id);
+create index idx_runtime_execution_trace_id on runtime.runtime_execution (trace_id);
+create index idx_runtime_execution_scope on runtime.runtime_execution (workload_id, purpose_code, provider_profile_id);
+create index idx_policy_snapshot_source_artifact on governance.policy_snapshot (source_artifact_id, source_artifact_version);
+create index idx_runtime_decision_decision_id on runtime.runtime_decision (decision_id);

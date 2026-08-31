@@ -161,6 +161,7 @@ class ProvisionalPolicyApplicabilityEvaluatorTests {
             runtimeDataClasses,
             processingContexts,
             "internal",
+            "input-digest",
             "runtime-context-digest"
         );
     }
@@ -175,6 +176,7 @@ class ProvisionalPolicyApplicabilityEvaluatorTests {
             List.of(),
             List.of(),
             "internal",
+            "input-digest",
             "runtime-context-digest"
         );
     }

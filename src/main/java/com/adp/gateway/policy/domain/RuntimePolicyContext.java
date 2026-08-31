@@ -14,12 +14,14 @@ public record RuntimePolicyContext(
     List<DataClass> runtimeDataClasses,
     List<String> processingContexts,
     String provider,
+    String inputDigest,
     String runtimeContextDigest
 ) {
 
     public RuntimePolicyContext {
         Objects.requireNonNull(workloadId, "workloadId must not be null");
         Objects.requireNonNull(purpose, "purpose must not be null");
+        Objects.requireNonNull(inputDigest, "inputDigest must not be null");
         Objects.requireNonNull(runtimeContextDigest, "runtimeContextDigest must not be null");
         runtimeDataClasses = List.copyOf(runtimeDataClasses);
         processingContexts = List.copyOf(processingContexts);

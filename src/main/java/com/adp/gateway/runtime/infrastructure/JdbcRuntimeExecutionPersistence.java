@@ -29,14 +29,14 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     @Override
     public void recordReceived(RuntimeExecutionTrace trace) {
         jdbcClient.sql("""
-            insert into runtime_execution (
+            insert into runtime.runtime_execution (
                 execution_id, request_id, trace_id, idempotency_key, workload_id,
-                purpose_code, subject_ref_digest, provider_profile_id, status,
+                purpose_code, subject_ref_digest, provider_profile_id, input_digest, status,
                 created_at, updated_at
             )
             values (
                 :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
-                :purposeCode, :subjectRefDigest, :providerProfileId, :status,
+                :purposeCode, :subjectRefDigest, :providerProfileId, :inputDigest, :status,
                 :createdAt, :updatedAt
             )
             """)
@@ -48,6 +48,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("purposeCode", trace.purposeCode())
             .param("subjectRefDigest", trace.subjectRefDigest())
             .param("providerProfileId", trace.providerProfileId())
+            .param("inputDigest", trace.inputDigest())
             .param("status", trace.status())
             .param("createdAt", trace.createdAt())
             .param("updatedAt", trace.updatedAt())
@@ -58,7 +59,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     public void recordPolicyEvaluation(String executionId, PolicySnapshot snapshot) {
         recordPolicySnapshot(snapshot);
         jdbcClient.sql("""
-            insert into runtime_policy_evaluation (
+            insert into runtime.policy_evaluation (
                 execution_id, policy_version, snapshot_digest,
                 source_artifact_id, source_artifact_version,
                 source_artifact_digest_algorithm, source_artifact_digest_value,
@@ -90,7 +91,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     private void recordPolicySnapshot(PolicySnapshot snapshot) {
         jdbcClient.sql("""
-            insert into policy_snapshot (
+            insert into governance.policy_snapshot (
                 policy_version, snapshot_digest, lifecycle_stage, effective_at,
                 source_artifact_id, source_artifact_version,
                 source_artifact_digest_algorithm, source_artifact_digest_value,
@@ -128,7 +129,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     @Override
     public void recordRuntimeDecision(String executionId, RuntimeDecision decision) {
         jdbcClient.sql("""
-            insert into runtime_decision (
+            insert into runtime.runtime_decision (
                 execution_id, decision_id, policy_action, final_action,
                 authorization_result, applicability_result, runtime_context_digest,
                 reason_codes, created_at
@@ -150,7 +151,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("createdAt", OffsetDateTime.now(clock))
             .update();
         jdbcClient.sql("""
-            update runtime_execution
+            update runtime.runtime_execution
             set runtime_context_digest = :runtimeContextDigest,
                 policy_version = :policyVersion,
                 snapshot_digest = :snapshotDigest,
@@ -172,7 +173,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     @Override
     public void recordRetrieved(String executionId, CanonicalContext context) {
         jdbcClient.sql("""
-            update runtime_execution
+            update runtime.runtime_execution
             set canonical_context_digest = :canonicalContextDigest,
                 updated_at = :updatedAt
             where execution_id = :executionId
@@ -186,7 +187,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     @Override
     public void updateStatus(String executionId, RuntimeExecutionStatus status) {
         jdbcClient.sql("""
-            update runtime_execution
+            update runtime.runtime_execution
             set status = :status,
                 updated_at = :updatedAt
             where execution_id = :executionId
@@ -201,11 +202,11 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     public RuntimeExecutionTrace load(String executionId) {
         return jdbcClient.sql("""
             select execution_id, request_id, trace_id, idempotency_key, workload_id,
-                   purpose_code, subject_ref_digest, provider_profile_id,
+                   purpose_code, subject_ref_digest, provider_profile_id, input_digest,
                    canonical_context_digest, runtime_context_digest,
                    policy_version, snapshot_digest, decision_id, final_action,
                    status, created_at, updated_at
-            from runtime_execution
+            from runtime.runtime_execution
             where execution_id = :executionId
             """)
             .param("executionId", executionId)

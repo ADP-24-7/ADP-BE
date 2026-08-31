@@ -111,7 +111,14 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [x] `/v1/runtime/executions` Runtime Execution API 추가
 - [x] Runtime Execution -> Retrieval -> Canonical Context -> RuntimeDecision 경로 연결
 - [x] Runtime Execution / Policy Evaluation / Runtime Decision 최소 persistence 추가
+- [x] Runtime / Governance schema 분리 persistence 적용
+- [x] `/v1/runtime/executions` Controller/Service mock flag 의존 제거
+- [x] Runtime request input canonical SHA-256 `input_digest` 저장 및 runtime context digest 반영
+- [x] Provisional Policy Snapshot fixture scope lookup과 고정 `effective_at` 적용
+- [x] Runtime Execution `FAILED` 상태 추가
+- [x] `/trace` stage event 응답 분리
 - [x] DA Handoff Disposition과 BE `PolicyAction` 분리 Normalizer 경계 추가
+- [x] DA Handoff Validator 추가
 - [x] Versioned RuntimeDataClass Crosswalk Port와 provisional adapter 추가
 - [x] 완화 금지 규칙 강제
 - [x] Rule 미매칭, 충돌, Unknown Data Class의 default allow 방지

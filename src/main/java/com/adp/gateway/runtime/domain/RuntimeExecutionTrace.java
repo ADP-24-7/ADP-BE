@@ -11,6 +11,7 @@ public record RuntimeExecutionTrace(
     String purposeCode,
     String subjectRefDigest,
     String providerProfileId,
+    String inputDigest,
     String canonicalContextDigest,
     String runtimeContextDigest,
     String policyVersion,
