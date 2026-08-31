@@ -35,7 +35,7 @@ create table vault.token_mapping (
     mapping_version varchar(120) not null,
     expires_at timestamptz,
     created_at timestamptz not null,
-    unique (mapping_scope, data_class, source_value_digest)
+    unique (mapping_scope, data_class, source_value_digest, key_version, mapping_version)
 );
 
 alter table runtime.runtime_execution

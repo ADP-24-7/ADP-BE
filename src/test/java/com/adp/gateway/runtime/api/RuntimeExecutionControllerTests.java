@@ -61,7 +61,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(header().string("X-Request-Id", requestId))
             .andExpect(header().string("X-Trace-Id", traceId))
             .andExpect(jsonPath("$.executionId").exists())
-            .andExpect(jsonPath("$.status").value("DECIDED"))
+            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
             .andExpect(jsonPath("$.policyAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.finalAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
@@ -88,7 +88,7 @@ class RuntimeExecutionControllerTests {
         Integer executionCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_execution
                 where execution_id = :executionId
-                  and status = 'DECIDED'
+                  and status = 'TRANSFORMED'
                   and provider_profile_id = 'internal-provider'
                   and input_digest is not null
                   and canonical_context_digest is not null
@@ -115,7 +115,7 @@ class RuntimeExecutionControllerTests {
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.executionId").value(executionId))
-            .andExpect(jsonPath("$.status").value("DECIDED"))
+            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
             .andExpect(jsonPath("$.stages[0].stage").value("RECEIVED"))
             .andExpect(jsonPath("$.stages[1].stage").value("AUTHORIZATION"))
             .andExpect(jsonPath("$.stages[2].stage").value("RETRIEVAL"))

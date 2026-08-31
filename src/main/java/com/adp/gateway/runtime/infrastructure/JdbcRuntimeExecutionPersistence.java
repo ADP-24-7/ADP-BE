@@ -19,6 +19,7 @@ import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersistence {
@@ -180,6 +181,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    @Transactional
     public void recordTransform(String executionId, RuntimeDecision decision, TransformResult transformResult) {
         jdbcClient.sql("""
             insert into runtime.transform_execution (

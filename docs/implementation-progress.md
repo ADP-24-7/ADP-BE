@@ -142,16 +142,22 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] ADP-DA 최신 `main` 코드와 handoff 문서 확인
 - [x] ADP-FE 최신 `main` Runtime Execution 연동 경계 확인
 - [x] `MASK`, `HMAC-PSEUDO`, `VAULT-TOKEN`, `REMOVE`, `KEEP`, `GENERALIZE`, `FIELD-SEPARATION` strategy 타입 추가
-- [x] DA final mapping 미확정 상태를 고려한 `TransformStrategyResolver` Port 추가
+- [x] DA final mapping 미확정 상태를 고려한 context-aware `TransformStrategyResolver` Port 추가
+- [x] 기본 환경 mapping 미구성 시 fail-closed resolver 적용
+- [x] `HMAC_PSEUDO`를 실제 HMAC-SHA256 key provider 기반으로 수정
 - [x] `TransformEngine` baseline 추가
-- [x] `vault.token_mapping` baseline schema 추가
+- [x] `vault.token_mapping` baseline schema와 TTL/key/mapping version 반영
 - [x] `runtime.transform_execution` / `runtime.transform_field` persistence 추가
+- [x] Transform persistence transaction 경계 추가
 - [x] Runtime Execution 응답에 raw value 없는 `privacySafeOutput` 추가
+- [x] Transform 성공 후 Runtime Execution status `TRANSFORMED` 반영
 - [x] Runtime trace에 Transform stage 반영
 - [x] Connector 실행 전 Transform 결과 전달
+- [x] Transform/Vault metric baseline 추가
 - [x] Local fixture에서 `TRANSFORM` final action 경로 검증
 - [x] Flyway migration test에 Transform/Vault schema 검증 추가
+- [x] Strategy unit test 추가
+- [x] Vault same-scope/different-scope/expired-token test 추가
 - [ ] Privileged Re-map API
-- [ ] TTL 만료 remap 차단/재발급 정책
 - [ ] Vault 장애 fallback 정책
 - [ ] DA 실제 transform policy artifact loader 연동

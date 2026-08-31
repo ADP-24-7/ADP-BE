@@ -7,7 +7,7 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 ## Upstream Check
 
 - ADP-DA 최신 `main`에서는 Raw/Mask/HMAC/Vault Token 처리기법 비교와 handoff 방향은 문서화되어 있으나, workload별 최종 transform mapping artifact는 아직 코드 계약으로 고정되어 있지 않다.
-- 따라서 BE는 strategy enum과 resolver port를 먼저 고정하고, 현재 mapping은 `ProjectProvisionalTransformStrategyResolver`에 둔다.
+- 따라서 BE는 strategy enum과 context-aware resolver port를 먼저 고정하고, 현재 mapping은 local fixture 조건에서만 `ProjectProvisionalTransformStrategyResolver`에 둔다.
 - ADP-FE 최신 `main`은 Runtime Execution API와 trace stage 표시를 사용한다. BE는 기존 응답 필드를 유지하면서 `privacySafeOutput`을 추가 필드로 확장한다.
 
 ## Runtime Flow
@@ -24,7 +24,7 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 ## Strategy Baseline
 
 - `MASK`: 식별 가능한 문자열 일부 마스킹
-- `HMAC_PSEUDO`: 원문 digest 기반 pseudonym digest 생성
+- `HMAC_PSEUDO`: key provider port에서 받은 key material로 HMAC-SHA256 pseudonym 생성
 - `VAULT_TOKEN`: `vault.token_mapping` token reference 생성/재사용
 - `REMOVE`: payload에서 값 제거
 - `KEEP`: 허용된 값만 runtime memory에서 유지
@@ -37,6 +37,8 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 - `runtime.transform_field`: field 단위 strategy와 digest/token metadata 기록
 - `vault.token_mapping`: mapping scope, data class, source digest, token ref, key version, mapping version 저장
 - raw value는 DB와 API 응답에 저장하거나 노출하지 않는다.
+- 만료된 token은 재사용하지 않고 동일 mapping row의 token ref를 교체한다.
+- 기본 환경에서 transform mapping이 구성되지 않으면 fail closed 처리한다.
 
 ## Remaining Work
 

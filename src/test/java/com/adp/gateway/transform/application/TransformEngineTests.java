@@ -1,0 +1,163 @@
+package com.adp.gateway.transform.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+
+import javax.crypto.spec.SecretKeySpec;
+
+import com.adp.gateway.common.error.ReasonCode;
+import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.context.domain.CanonicalContext;
+import com.adp.gateway.context.domain.CanonicalContextField;
+import com.adp.gateway.decision.domain.FinalAction;
+import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
+import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.policy.domain.ApplicabilityResult;
+import com.adp.gateway.policy.domain.ArtifactDigest;
+import com.adp.gateway.policy.domain.PolicyAction;
+import com.adp.gateway.policy.domain.RuntimePolicyContext;
+import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
+import com.adp.gateway.retrieval.domain.DataClass;
+import com.adp.gateway.transform.domain.TransformFieldResult;
+import com.adp.gateway.transform.domain.TransformStrategy;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Test;
+
+class TransformEngineTests {
+
+    private final CanonicalValueHasher hasher = new CanonicalValueHasher();
+
+    @Test
+    void appliesEveryTransformStrategyWithoutExposingRawValuesInResultDigest() {
+        TransformEngine engine = new TransformEngine(
+            context -> instruction(strategyFor(context.fieldPath())),
+            request -> "vault_tok_test",
+            keyVersion -> new PseudonymizationKey(
+                keyVersion,
+                new SecretKeySpec("test-hmac-key-material-32-bytes".getBytes(), "HmacSHA256")
+            ),
+            hasher,
+            new SimpleMeterRegistry()
+        );
+
+        var result = engine.transform("exec_test", context(), policyContext(), decision());
+
+        assertThat(result.applied()).isTrue();
+        assertThat(result.status()).isEqualTo("APPLIED");
+        assertThat(result.outputDigest()).hasSize(64);
+        assertThat(strategy(result, "fields.masked")).isEqualTo(TransformStrategy.MASK);
+        assertThat(strategy(result, "fields.hmac")).isEqualTo(TransformStrategy.HMAC_PSEUDO);
+        assertThat(strategy(result, "fields.vault")).isEqualTo(TransformStrategy.VAULT_TOKEN);
+        assertThat(strategy(result, "fields.removed")).isEqualTo(TransformStrategy.REMOVE);
+        assertThat(strategy(result, "fields.kept")).isEqualTo(TransformStrategy.KEEP);
+        assertThat(strategy(result, "fields.generalized")).isEqualTo(TransformStrategy.GENERALIZE);
+        assertThat(strategy(result, "fields.separated")).isEqualTo(TransformStrategy.FIELD_SEPARATION);
+        assertThat(field(result, "fields.vault").tokenRef()).isEqualTo("vault_tok_test");
+        assertThat(field(result, "fields.hmac").transformedValueDigest())
+            .isNotEqualTo(hasher.hash("HMAC_PSEUDO:" + field(result, "fields.hmac").sourceValueDigest()));
+    }
+
+    private TransformStrategy strategyFor(String path) {
+        return switch (path) {
+            case "fields.masked" -> TransformStrategy.MASK;
+            case "fields.hmac" -> TransformStrategy.HMAC_PSEUDO;
+            case "fields.vault" -> TransformStrategy.VAULT_TOKEN;
+            case "fields.removed" -> TransformStrategy.REMOVE;
+            case "fields.kept" -> TransformStrategy.KEEP;
+            case "fields.generalized" -> TransformStrategy.GENERALIZE;
+            case "fields.separated" -> TransformStrategy.FIELD_SEPARATION;
+            default -> throw new IllegalArgumentException(path);
+        };
+    }
+
+    private TransformInstruction instruction(TransformStrategy strategy) {
+        return new TransformInstruction(
+            strategy,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of()
+        );
+    }
+
+    private TransformFieldResult field(com.adp.gateway.transform.domain.TransformResult result, String path) {
+        return result.fields().stream()
+            .filter(field -> path.equals(field.path()))
+            .findFirst()
+            .orElseThrow();
+    }
+
+    private TransformStrategy strategy(com.adp.gateway.transform.domain.TransformResult result, String path) {
+        return field(result, path).strategy();
+    }
+
+    private CanonicalContext context() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_test",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(
+                field("fields.masked", "01012345678", DataClass.CUSTOMER_IDENTIFIER),
+                field("fields.hmac", "txn-1", DataClass.TRANSACTION_IDENTIFIER),
+                field("fields.vault", "customer-1", DataClass.CUSTOMER_IDENTIFIER),
+                field("fields.removed", "unknown", DataClass.UNKNOWN),
+                field("fields.kept", "metadata", DataClass.BUSINESS_METADATA),
+                field("fields.generalized", "12580.90", DataClass.FINANCIAL_AMOUNT),
+                field("fields.separated", "account-1", DataClass.ACCOUNT_IDENTIFIER)
+            ),
+            "canonical_digest"
+        );
+    }
+
+    private CanonicalContextField field(String path, Object value, DataClass dataClass) {
+        return new CanonicalContextField(path, "dataset", "field", dataClass, value, hasher.hash(String.valueOf(value)));
+    }
+
+    private RuntimePolicyContext policyContext() {
+        return new RuntimePolicyContext(
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            "canonical_digest",
+            List.of(DataClass.CUSTOMER_IDENTIFIER),
+            List.of("AI_USE"),
+            "internal-provider",
+            "input_digest",
+            "runtime_digest"
+        );
+    }
+
+    private RuntimeDecision decision() {
+        return new RuntimeDecision(
+            "decision_test",
+            PolicyAction.TRANSFORM,
+            FinalAction.TRANSFORM,
+            List.of(ReasonCode.POLICY_ALLOW),
+            RuntimeAuthorizationResult.ALLOWED,
+            ApplicabilityResult.APPLICABLE,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            "policy-v1",
+            "snapshot_digest",
+            "runtime_digest",
+            new SourcePolicyEvaluationArtifactRef(
+                "artifact",
+                "v1",
+                new ArtifactDigest("sha256", "digest")
+            )
+        );
+    }
+}

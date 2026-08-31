@@ -172,10 +172,15 @@ public class RuntimeExecutionService {
                 applicability
             );
             persistence.recordRuntimeDecision(executionId, decision);
-            RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction());
-            persistence.updateStatus(executionId, finalStatus);
-            TransformResult transformResult = transformEngine.transform(executionId, canonicalContext, decision);
+            TransformResult transformResult = transformEngine.transform(
+                executionId,
+                canonicalContext,
+                runtimePolicyContext,
+                decision
+            );
             persistence.recordTransform(executionId, decision, transformResult);
+            RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
+            persistence.updateStatus(executionId, finalStatus);
             ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, transformResult);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
@@ -192,9 +197,12 @@ public class RuntimeExecutionService {
         return persistence.load(executionId);
     }
 
-    private RuntimeExecutionStatus finalStatus(FinalAction finalAction) {
+    private RuntimeExecutionStatus finalStatus(FinalAction finalAction, TransformResult transformResult) {
         return switch (finalAction) {
-            case ALLOW, TRANSFORM -> RuntimeExecutionStatus.DECIDED;
+            case ALLOW -> RuntimeExecutionStatus.DECIDED;
+            case TRANSFORM -> transformResult.applied()
+                ? RuntimeExecutionStatus.TRANSFORMED
+                : RuntimeExecutionStatus.FAILED;
             case REVIEW -> RuntimeExecutionStatus.REVIEW_REQUIRED;
             case BLOCK -> RuntimeExecutionStatus.BLOCKED;
         };
