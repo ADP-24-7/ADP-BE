@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
+import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
+import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +102,32 @@ public class GlobalExceptionHandler {
             ReasonCode.DATA_ACCESS_DENIED,
             "Data access denied",
             HttpStatus.FORBIDDEN,
+            request
+        );
+    }
+
+    @ExceptionHandler(DuplicateRuntimeExecutionException.class)
+    ResponseEntity<ErrorResponse> handleDuplicateRuntimeExecution(
+        DuplicateRuntimeExecutionException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.IDEMPOTENCY_KEY_REUSED,
+            "Idempotency key already used for workload",
+            HttpStatus.CONFLICT,
+            request
+        );
+    }
+
+    @ExceptionHandler(RuntimeExecutionNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleRuntimeExecutionNotFound(
+        RuntimeExecutionNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.RUNTIME_EXECUTION_NOT_FOUND,
+            "Runtime execution not found",
+            HttpStatus.NOT_FOUND,
             request
         );
     }

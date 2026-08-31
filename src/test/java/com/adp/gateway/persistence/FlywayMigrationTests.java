@@ -43,6 +43,66 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesRuntimeDecisionAuditColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_event'
+                  and column_name in (
+                    'policy_action',
+                    'policy_artifact_version',
+                    'policy_artifact_digest_algorithm',
+                    'policy_artifact_digest_value',
+                    'final_action',
+                    'authorization_result',
+                    'applicability_result',
+                    'runtime_context_digest',
+                    'matched_rule_ids',
+                    'evidence_refs',
+                    'required_controls'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(11);
+    }
+
+    @Test
+    void migrationCreatesRuntimeExecutionPolicyDecisionTables() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where (table_schema, table_name) in (
+                  ('runtime', 'runtime_execution'),
+                  ('governance', 'policy_snapshot'),
+                  ('runtime', 'policy_evaluation'),
+                  ('runtime', 'runtime_decision')
+                )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(4);
+    }
+
+    @Test
+    void migrationCreatesRuntimeExecutionIdempotencyConstraint() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'uq_runtime_execution_workload_idempotency'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(1);
+    }
+
+    @Test
     void migrationCreatesAuthBaselineTables() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)

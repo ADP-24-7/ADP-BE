@@ -10,4 +10,8 @@ public record PolicyArtifact(
     List<String> limitations,
     String digest
 ) {
+
+    public PolicyArtifact {
+        limitations = List.copyOf(limitations);
+    }
 }

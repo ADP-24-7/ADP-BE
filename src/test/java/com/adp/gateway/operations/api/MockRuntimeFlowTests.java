@@ -47,22 +47,45 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.requestId").value("req_be0_test"))
             .andExpect(jsonPath("$.traceId").value("trace_be0_test"))
             .andExpect(jsonPath("$.idempotencyKey").value("idem_be0_test"))
-            .andExpect(jsonPath("$.policyArtifactId").value("PROJECT_PROVISIONAL"))
+            .andExpect(jsonPath("$.policyArtifactId").value("PROJECT_PROVISIONAL_POLICY_EVALUATION"))
+            .andExpect(jsonPath("$.policyArtifactVersion").value("0.0.0"))
+            .andExpect(jsonPath("$.policyArtifactDigestAlgorithm").value("sha256"))
+            .andExpect(jsonPath("$.policyArtifactDigestValue").value("local-fixture-policy-evaluation"))
             .andExpect(jsonPath("$.policyArtifactStatus").value("PROJECT_PROVISIONAL"))
-            .andExpect(jsonPath("$.policyVersion").value("0.0.0"))
-            .andExpect(jsonPath("$.policyDigest").value("local-fixture"))
+            .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/0.0.0"))
+            .andExpect(jsonPath("$.policyDigest").value("be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider"))
             .andExpect(jsonPath("$.decisionId").exists())
-            .andExpect(jsonPath("$.outcome").value("ALLOW"))
-            .andExpect(jsonPath("$.reasonCode").value("MOCK_DECISION_ALLOW"))
-            .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
+            .andExpect(jsonPath("$.policyAction").value("ALLOW"))
+            .andExpect(jsonPath("$.finalAction").value("REVIEW"))
+            .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
+            .andExpect(jsonPath("$.applicabilityResult").value("INCOMPLETE"))
+            .andExpect(jsonPath("$.runtimeContextDigest").exists())
+            .andExpect(jsonPath("$.matchedRuleIds").value("PROJECT_PROVISIONAL_RULE:rule:0.0.0"))
+            .andExpect(jsonPath("$.evidenceRefs").value(""))
+            .andExpect(jsonPath("$.requiredControls").value("RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0"))
+            .andExpect(jsonPath("$.outcome").value("REVIEW"))
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_INCOMPLETE"))
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"))
             .andExpect(jsonPath("$.auditId").exists());
 
         Integer auditCount = jdbcClient.sql("""
                 select count(*) from audit_event
                 where request_id = :requestId and trace_id = :traceId
-                  and policy_artifact_id = 'PROJECT_PROVISIONAL'
-                  and policy_version = '0.0.0'
-                  and policy_digest = 'local-fixture'
+                  and policy_artifact_id = 'PROJECT_PROVISIONAL_POLICY_EVALUATION'
+                  and policy_artifact_version = '0.0.0'
+                  and policy_artifact_digest_algorithm = 'sha256'
+                  and policy_artifact_digest_value = 'local-fixture-policy-evaluation'
+                  and policy_action = 'ALLOW'
+                  and final_action = 'REVIEW'
+                  and authorization_result = 'ALLOWED'
+                  and applicability_result = 'INCOMPLETE'
+                  and runtime_context_digest is not null
+                  and matched_rule_ids = 'PROJECT_PROVISIONAL_RULE:rule:0.0.0'
+                  and evidence_refs = ''
+                  and required_controls = 'RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0'
+                  and policy_version = 'be-runtime-policy/0.0.0'
+                  and policy_digest = 'be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider'
+                  and connector_status = 'NOT_EXECUTED'
                 """)
             .param("requestId", "req_be0_test")
             .param("traceId", "trace_be0_test")
@@ -81,6 +104,7 @@ class MockRuntimeFlowTests {
                 .contentType("application/json")
                 .content("{"))
             .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.reasonCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.message").value("Malformed request"))
             .andExpect(jsonPath("$.requestId").value("req_bad_json"))
@@ -103,6 +127,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.reasonCode").value("MALFORMED_REQUEST"))
             .andExpect(jsonPath("$.message").value("Malformed request"))
             .andExpect(jsonPath("$.requestId").doesNotExist())
@@ -125,6 +150,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.message").value("Authorization denied"))
             .andExpect(jsonPath("$.requestId").value("req_forbidden_subject"))
@@ -146,6 +172,7 @@ class MockRuntimeFlowTests {
                     }
                     """))
             .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"))
             .andExpect(jsonPath("$.message").value("Authorization denied"))
             .andExpect(jsonPath("$.requestId").value("req_forbidden_purpose"))
