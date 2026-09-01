@@ -88,7 +88,3 @@ alter table runtime.response_guard_result
 alter table runtime.runtime_execution
     add constraint chk_runtime_execution_connector_status
     check (connector_status is null or connector_status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));
-
-alter table audit_event
-    add constraint chk_audit_event_connector_status
-    check (connector_status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));
