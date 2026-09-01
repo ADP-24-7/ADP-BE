@@ -22,6 +22,8 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.PrincipalType;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
+import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
@@ -34,6 +36,9 @@ import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.domain.DestinationBinding;
+import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.egress.domain.OutboundGuardResult;
+import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
@@ -264,6 +269,102 @@ class RuntimeExecutionServiceTests {
         verify(connector, never()).execute(any(), any(), any());
     }
 
+    @Test
+    void connectorFailureMarksRuntimeFailedInsteadOfBlocked() {
+        AuthorizationService authorizationService = mock(AuthorizationService.class);
+        RetrievalService retrievalService = mock(RetrievalService.class);
+        CanonicalContextBuilder contextBuilder = mock(CanonicalContextBuilder.class);
+        RuntimePolicyContextFactory runtimePolicyContextFactory = mock(RuntimePolicyContextFactory.class);
+        PolicySnapshotPort policySnapshotPort = mock(PolicySnapshotPort.class);
+        PolicyApplicabilityEvaluator applicabilityEvaluator = mock(PolicyApplicabilityEvaluator.class);
+        RuntimeDecisionService decisionService = mock(RuntimeDecisionService.class);
+        RuntimeConnectorPort connector = mock(RuntimeConnectorPort.class);
+        AuditRecorder auditRecorder = mock(AuditRecorder.class);
+        RuntimeExecutionPersistence persistence = mock(RuntimeExecutionPersistence.class);
+        SubjectRefHasher subjectRefHasher = mock(SubjectRefHasher.class);
+        RuntimeInputHasher runtimeInputHasher = mock(RuntimeInputHasher.class);
+        TransformEngine transformEngine = mock(TransformEngine.class);
+        DestinationProfilePort destinationProfilePort = mock(DestinationProfilePort.class);
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
+        OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
+        ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
+        RuntimeExecutionService service = new RuntimeExecutionService(
+            authorizationService,
+            retrievalService,
+            contextBuilder,
+            runtimePolicyContextFactory,
+            policySnapshotPort,
+            applicabilityEvaluator,
+            decisionService,
+            connector,
+            auditRecorder,
+            persistence,
+            subjectRefHasher,
+            runtimeInputHasher,
+            transformEngine,
+            destinationProfilePort,
+            outboundCandidatePayloadBuilder,
+            outboundGuardChain,
+            responseGuardPort,
+            Clock.fixed(java.time.Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC)
+        );
+        RuntimeDecision decision = mock(RuntimeDecision.class);
+        OutboundCandidatePayload payload = outboundPayload();
+        ConnectorResult connectorResult = new ConnectorResult(
+            "con_failed",
+            "test-connector",
+            ConnectorStatus.FAILED,
+            payload.outboundPayloadId(),
+            payload.candidatePayloadDigest(),
+            null,
+            null
+        );
+        when(decision.finalAction()).thenReturn(FinalAction.TRANSFORM);
+        when(authorizationService.authorize(any())).thenReturn(AuthorizationDecision.allow());
+        when(destinationProfilePort.load(any(), any())).thenReturn(destinationProfile());
+        when(runtimeInputHasher.hash(any())).thenReturn("input_digest");
+        when(subjectRefHasher.hash(any())).thenReturn("subject_digest");
+        when(retrievalService.retrieve(any())).thenReturn(retrieval());
+        when(contextBuilder.build(any())).thenReturn(canonicalContext());
+        when(runtimePolicyContextFactory.from(any(), any(), any(), any())).thenReturn(policyContext());
+        when(policySnapshotPort.load(any(PolicySelectionContext.class))).thenReturn(snapshot());
+        when(applicabilityEvaluator.evaluate(any(), any())).thenReturn(ApplicabilityResult.APPLICABLE);
+        when(decisionService.decide(any(), any(), any(), any())).thenReturn(decision);
+        when(transformEngine.transform(any(), any(), any(), any()))
+            .thenReturn(new com.adp.gateway.transform.domain.TransformResult(
+                "trn_applied",
+                true,
+                "APPLIED",
+                "transform_output_digest",
+                List.of()
+            ));
+        when(outboundCandidatePayloadBuilder.build(any(), any(), any(), any())).thenReturn(payload);
+        when(outboundGuardChain.guard(any(), any(), any(), any(), any(), any()))
+            .thenReturn(OutboundGuardResult.passed());
+        when(connector.execute(any(), any(), any())).thenReturn(connectorResult);
+        when(responseGuardPort.guard(any(), any())).thenReturn(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
+        when(auditRecorder.record(any(), any(), any())).thenReturn(auditContext());
+
+        RuntimeExecutionResult result = service.execute(
+            request(),
+            principal(),
+            "dest_internal_provider_project_provisional",
+            List.of("AI_USE"),
+            Map.of()
+        );
+
+        org.assertj.core.api.Assertions.assertThat(result.status()).isEqualTo(RuntimeExecutionStatus.FAILED);
+        org.assertj.core.api.Assertions.assertThat(result.connectorResult().status()).isEqualTo(ConnectorStatus.FAILED);
+        org.assertj.core.api.Assertions.assertThat(result.responseGuardStatus()).isEqualTo("NOT_EVALUATED");
+        verify(persistence).recordConnector(any(), org.mockito.ArgumentMatchers.eq(connectorResult));
+        verify(persistence).recordResponseGuard(
+            any(),
+            org.mockito.ArgumentMatchers.eq(connectorResult),
+            org.mockito.ArgumentMatchers.any(ResponseGuardResult.class)
+        );
+        verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.FAILED));
+    }
+
     private RetrievalResult retrieval() {
         return new RetrievalResult(
             "da_test",
@@ -314,6 +415,19 @@ class RuntimeExecutionServiceTests {
             OffsetDateTime.parse("2026-01-01T00:00:00Z"),
             null,
             List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            List.of()
+        );
+    }
+
+    private OutboundCandidatePayload outboundPayload() {
+        return new OutboundCandidatePayload(
+            "out_test",
+            "dest_internal_provider_project_provisional",
+            "0.0.0",
+            "local-fixture-destination-profile",
+            ExecutionPackType.AI,
+            "project-provisional-egress-schema-v1",
+            "candidate_digest",
             List.of()
         );
     }

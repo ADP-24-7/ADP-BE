@@ -167,6 +167,25 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesConnectorExternalStatusConstraints() {
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.table_constraints
+                where constraint_schema in ('runtime', 'public')
+                  and constraint_name in (
+                    'chk_connector_execution_status',
+                    'chk_response_guard_connector_status',
+                    'chk_runtime_execution_connector_status',
+                    'chk_audit_event_connector_status'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(constraintCount).isEqualTo(4);
+    }
+
+    @Test
     void migrationCreatesTransformInstructionMetadataColumns() {
         Integer columnCount = jdbcClient.sql("""
                 select count(*)

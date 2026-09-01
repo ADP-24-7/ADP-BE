@@ -3,6 +3,7 @@ package com.adp.gateway.egress.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +15,7 @@ class NoopResponseGuardAdapterTests {
     void returnsNotEvaluatedBecauseGuardIsNotConfigured() {
         var result = responseGuard.guard(
             null,
-            new ConnectorResult("con_test", "fake", "ACKNOWLEDGED", "out_test", "payload_digest", null, null)
+            new ConnectorResult("con_test", "fake", ConnectorStatus.ACKNOWLEDGED, "out_test", "payload_digest", null, null)
         );
 
         assertThat(result.status()).isEqualTo("NOT_EVALUATED");
@@ -28,7 +29,7 @@ class NoopResponseGuardAdapterTests {
             new ConnectorResult(
                 "con_test",
                 "fake",
-                "ACKNOWLEDGED",
+                ConnectorStatus.ACKNOWLEDGED,
                 "out_test",
                 "payload_digest",
                 "response_digest",

@@ -59,7 +59,7 @@ public class AuditRecorder {
             decision.runtimeReasonCodes().stream()
                 .map(Enum::name)
                 .collect(Collectors.joining(",")),
-            connectorResult.status(),
+            connectorResult.status().name(),
             OffsetDateTime.now(clock)
         );
 

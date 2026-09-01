@@ -147,7 +147,7 @@ public class MockRuntimeController {
             auditValue(decision.requiredControls()),
             decision.finalAction().name(),
             decision.primaryReasonCode().name(),
-            connector.status(),
+            connector.status().name(),
             audit.auditId()
         ));
     }

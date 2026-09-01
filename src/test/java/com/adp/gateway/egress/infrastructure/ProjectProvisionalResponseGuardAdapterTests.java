@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -22,7 +23,7 @@ class ProjectProvisionalResponseGuardAdapterTests {
         var result = responseGuard.guard(payload, new ConnectorResult(
             "con_test",
             "fake",
-            "ACKNOWLEDGED",
+            ConnectorStatus.ACKNOWLEDGED,
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),
@@ -40,7 +41,7 @@ class ProjectProvisionalResponseGuardAdapterTests {
         var result = responseGuard.guard(payload, new ConnectorResult(
             "con_test",
             "fake",
-            "ACKNOWLEDGED",
+            ConnectorStatus.ACKNOWLEDGED,
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),

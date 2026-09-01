@@ -16,6 +16,7 @@ import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
@@ -213,6 +214,20 @@ public class RuntimeExecutionService {
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             persistence.updateStatus(executionId, finalStatus);
+            if (finalStatus == RuntimeExecutionStatus.FAILED) {
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    finalStatus,
+                    decision,
+                    transformResult,
+                    "NOT_EVALUATED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
             if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
@@ -260,6 +275,39 @@ public class RuntimeExecutionService {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
             persistence.recordConnector(executionId, connectorResult);
+            if (connectorResult.status() == ConnectorStatus.FAILED) {
+                ResponseGuardResult responseGuardResult =
+                    responseGuardPort.guard(outboundPayload, connectorResult);
+                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.FAILED,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    responseGuardResult.status(),
+                    auditContext
+                );
+            }
+            if (connectorResult.status() == ConnectorStatus.SENT_UNKNOWN) {
+                ResponseGuardResult responseGuardResult =
+                    responseGuardPort.guard(outboundPayload, connectorResult);
+                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.EGRESSING,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    responseGuardResult.status(),
+                    auditContext
+                );
+            }
             ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
             RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed()

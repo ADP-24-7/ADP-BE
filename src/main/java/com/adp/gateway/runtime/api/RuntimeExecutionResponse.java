@@ -46,7 +46,7 @@ public record RuntimeExecutionResponse(
             PrivacySafeOutputResponse.from(result.transformResult()),
             result.connectorResult().outboundCandidateDigest(),
             result.outboundGuardStatus(),
-            result.connectorResult().status(),
+            result.connectorResult().status().name(),
             result.responseGuardStatus(),
             result.auditContext().auditId()
         );

@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,11 +22,11 @@ public class FakeConnector implements RuntimeConnectorPort {
     }
 
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
-        meterRegistry.counter("connector.execution.total", "status", "ACKNOWLEDGED").increment();
+        meterRegistry.counter("connector.execution.total", "status", ConnectorStatus.ACKNOWLEDGED.name()).increment();
         return new ConnectorResult(
             "con_" + UUID.randomUUID(),
             "fake-connector",
-            "ACKNOWLEDGED",
+            ConnectorStatus.ACKNOWLEDGED,
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),

@@ -346,7 +346,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("outboundPayloadId", connectorResult.outboundPayloadId())
             .param("outboundCandidateDigest", connectorResult.outboundCandidateDigest())
             .param("connectorId", connectorResult.connectorId())
-            .param("status", connectorResult.status())
+            .param("status", connectorResult.status().name())
             .param("responseDigest", connectorResult.responseDigest())
             .param("responseSchemaVersion", connectorResult.responseSchemaVersion())
             .param("createdAt", OffsetDateTime.now(clock))
@@ -360,7 +360,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             """)
             .param("executionId", executionId)
             .param("connectorExecutionId", connectorResult.connectorExecutionId())
-            .param("connectorStatus", connectorResult.status())
+            .param("connectorStatus", connectorResult.status().name())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
     }
@@ -380,7 +380,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("connectorExecutionId", connectorResult.connectorExecutionId())
             .param("executionId", executionId)
             .param("connectorId", connectorResult.connectorId())
-            .param("connectorStatus", connectorResult.status())
+            .param("connectorStatus", connectorResult.status().name())
             .param("status", responseGuardResult.status())
             .param("leakageDetected", responseGuardResult.leakageDetected())
             .param("reasonCodes", String.join(",", responseGuardResult.reasonCodes()))

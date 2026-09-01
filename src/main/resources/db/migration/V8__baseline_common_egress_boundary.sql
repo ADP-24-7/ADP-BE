@@ -76,3 +76,19 @@ create index idx_destination_profile_provider on egress.destination_profile (pro
 create index idx_outbound_candidate_execution_id on runtime.outbound_candidate (execution_id);
 create index idx_connector_execution_execution_id on runtime.connector_execution (execution_id);
 create index idx_response_guard_execution_id on runtime.response_guard_result (execution_id);
+
+alter table runtime.connector_execution
+    add constraint chk_connector_execution_status
+    check (status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));
+
+alter table runtime.response_guard_result
+    add constraint chk_response_guard_connector_status
+    check (connector_status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));
+
+alter table runtime.runtime_execution
+    add constraint chk_runtime_execution_connector_status
+    check (connector_status is null or connector_status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));
+
+alter table audit_event
+    add constraint chk_audit_event_connector_status
+    check (connector_status in ('NOT_SENT', 'SENT_UNKNOWN', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED'));

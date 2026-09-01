@@ -3,6 +3,7 @@ package com.adp.gateway.egress.infrastructure;
 import java.util.List;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
@@ -22,7 +23,8 @@ public class NoopResponseGuardAdapter implements ResponseGuardPort {
 
     @Override
     public ResponseGuardResult guard(OutboundCandidatePayload payload, ConnectorResult connectorResult) {
-        if (!"ACKNOWLEDGED".equals(connectorResult.status()) && !"COMPLETED".equals(connectorResult.status())) {
+        if (connectorResult.status() != ConnectorStatus.ACKNOWLEDGED
+            && connectorResult.status() != ConnectorStatus.COMPLETED) {
             return record(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
         }
         return record(ResponseGuardResult.notEvaluated(List.of("RESPONSE_GUARD_NOT_CONFIGURED")));

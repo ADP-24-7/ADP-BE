@@ -202,6 +202,8 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [x] Outbound Guard reject 결과 persistence 후 BLOCK 처리
 - [x] Authorization 이후 Destination Profile load/pin 순서 보장
 - [x] Runtime status와 Connector/Response Guard external status 분리
+- [x] Connector `FAILED`는 Runtime `FAILED`로 귀결되도록 상태 의미 분리
+- [x] Connector external status enum 및 DB check constraint 추가
 - [x] Response Guard가 response metadata 없이 `PASSED`를 기록하지 않도록 수정
 - [x] No-op Response Guard와 local fixture Response Guard 분리
 - [x] Outbound Sensitive Finding Detector baseline 추가
