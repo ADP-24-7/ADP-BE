@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
+import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
+import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -128,6 +130,32 @@ public class GlobalExceptionHandler {
             ReasonCode.RUNTIME_EXECUTION_NOT_FOUND,
             "Runtime execution not found",
             HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(DestinationProfileNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleDestinationProfileNotFound(
+        DestinationProfileNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.DESTINATION_PROFILE_NOT_FOUND,
+            "Destination profile not found",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            request
+        );
+    }
+
+    @ExceptionHandler(OutboundGuardException.class)
+    ResponseEntity<ErrorResponse> handleOutboundGuardRejected(
+        OutboundGuardException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.OUTBOUND_GUARD_REJECTED,
+            "Outbound guard rejected payload",
+            HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );
     }

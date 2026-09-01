@@ -11,7 +11,9 @@ public record RuntimeExecutionResult(
     RuntimeExecutionStatus status,
     RuntimeDecision decision,
     TransformResult transformResult,
+    String outboundGuardStatus,
     ConnectorResult connectorResult,
+    String responseGuardStatus,
     AuditContext auditContext
 ) {
 }

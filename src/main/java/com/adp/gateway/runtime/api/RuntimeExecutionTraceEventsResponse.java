@@ -28,6 +28,15 @@ public record RuntimeExecutionTraceEventsResponse(
         if ("APPLIED".equals(trace.transformStatus())) {
             stages.add(new RuntimeExecutionStageResponse("TRANSFORM", "COMPLETED", trace.updatedAt()));
         }
+        if ("PASSED".equals(trace.outboundGuardStatus())) {
+            stages.add(new RuntimeExecutionStageResponse("OUTBOUND_GUARD", "COMPLETED", trace.updatedAt()));
+        }
+        if (trace.connectorExecutionId() != null) {
+            stages.add(new RuntimeExecutionStageResponse("CONNECTOR", connectorStatus(trace), trace.updatedAt()));
+        }
+        if ("PASSED".equals(trace.responseGuardStatus())) {
+            stages.add(new RuntimeExecutionStageResponse("RESPONSE_GUARD", "COMPLETED", trace.updatedAt()));
+        }
         if ("FAILED".equals(trace.status())) {
             stages.add(new RuntimeExecutionStageResponse("RUNTIME_EXECUTION", "FAILED", trace.updatedAt()));
         }
@@ -44,5 +53,12 @@ public record RuntimeExecutionTraceEventsResponse(
             return "DENIED";
         }
         return "COMPLETED";
+    }
+
+    private static String connectorStatus(RuntimeExecutionTrace trace) {
+        if ("ACKNOWLEDGED".equals(trace.connectorStatus()) || "COMPLETED".equals(trace.connectorStatus())) {
+            return "COMPLETED";
+        }
+        return trace.connectorStatus();
     }
 }

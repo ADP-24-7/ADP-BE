@@ -65,7 +65,7 @@ class MockRuntimeFlowTests {
             .andExpect(jsonPath("$.requiredControls").value("RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0"))
             .andExpect(jsonPath("$.outcome").value("REVIEW"))
             .andExpect(jsonPath("$.reasonCode").value("POLICY_INCOMPLETE"))
-            .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"))
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"))
             .andExpect(jsonPath("$.auditId").exists());
 
         Integer auditCount = jdbcClient.sql("""
@@ -85,7 +85,7 @@ class MockRuntimeFlowTests {
                   and required_controls = 'RUNTIME_AUTHORIZATION:control:0.0.0,SUBJECT_SCOPE:control:0.0.0'
                   and policy_version = 'be-runtime-policy/0.0.0'
                   and policy_digest = 'be-snapshot-local-fixture:workload-be0:be0-local-e2e:no-provider'
-                  and connector_status = 'NOT_EXECUTED'
+                  and connector_status = 'NOT_SENT'
                 """)
             .param("requestId", "req_be0_test")
             .param("traceId", "trace_be0_test")

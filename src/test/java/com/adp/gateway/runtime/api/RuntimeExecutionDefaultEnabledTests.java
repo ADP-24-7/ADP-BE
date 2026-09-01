@@ -35,7 +35,7 @@ class RuntimeExecutionDefaultEnabledTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem_def_%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
@@ -46,6 +46,6 @@ class RuntimeExecutionDefaultEnabledTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/unconfigured/0.0.0"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
-            .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"));
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"));
     }
 }

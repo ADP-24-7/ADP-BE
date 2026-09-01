@@ -49,7 +49,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
@@ -61,7 +61,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(header().string("X-Request-Id", requestId))
             .andExpect(header().string("X-Trace-Id", traceId))
             .andExpect(jsonPath("$.executionId").exists())
-            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.policyAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.finalAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
@@ -80,7 +80,10 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
-            .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
+            .andExpect(jsonPath("$.outboundCandidateDigest").exists())
+            .andExpect(jsonPath("$.outboundGuardStatus").value("PASSED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
+            .andExpect(jsonPath("$.responseGuardStatus").value("PASSED"))
             .andReturn()
             .getResponse()
             .getContentAsString();
@@ -90,12 +93,19 @@ class RuntimeExecutionControllerTests {
         Integer executionCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_execution
                 where execution_id = :executionId
-                  and status = 'TRANSFORMED'
+                  and status = 'COMPLETED'
                   and provider_profile_id = 'internal-provider'
                   and input_digest is not null
                   and canonical_context_digest is not null
                   and runtime_context_digest is not null
                   and decision_id is not null
+                  and outbound_candidate_digest is not null
+                  and destination_profile_id = 'dest_internal_provider_project_provisional'
+                  and destination_profile_version = '0.0.0'
+                  and destination_profile_digest = 'local-fixture-destination-profile'
+                  and outbound_guard_status = 'PASSED'
+                  and connector_status = 'ACKNOWLEDGED'
+                  and response_guard_status = 'PASSED'
                 """)
             .param("executionId", executionId)
             .query(Integer.class)
@@ -117,13 +127,16 @@ class RuntimeExecutionControllerTests {
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.executionId").value(executionId))
-            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.stages[0].stage").value("RECEIVED"))
             .andExpect(jsonPath("$.stages[1].stage").value("AUTHORIZATION"))
             .andExpect(jsonPath("$.stages[2].stage").value("RETRIEVAL"))
             .andExpect(jsonPath("$.stages[3].stage").value("CANONICAL_CONTEXT"))
             .andExpect(jsonPath("$.stages[4].stage").value("DECISION"))
-            .andExpect(jsonPath("$.stages[5].stage").value("TRANSFORM"));
+            .andExpect(jsonPath("$.stages[5].stage").value("TRANSFORM"))
+            .andExpect(jsonPath("$.stages[6].stage").value("OUTBOUND_GUARD"))
+            .andExpect(jsonPath("$.stages[7].stage").value("CONNECTOR"))
+            .andExpect(jsonPath("$.stages[8].stage").value("RESPONSE_GUARD"));
 
         Integer transformCount = jdbcClient.sql("""
                 select count(*)
@@ -144,6 +157,25 @@ class RuntimeExecutionControllerTests {
             .query(Integer.class)
             .single();
         assertThat(transformCount).isGreaterThanOrEqualTo(1);
+
+        Integer egressCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.outbound_candidate oc
+                join runtime.connector_execution ce on ce.outbound_payload_id = oc.outbound_payload_id
+                join runtime.response_guard_result rg on rg.execution_id = oc.execution_id
+                where oc.execution_id = :executionId
+                  and oc.guard_status = 'PASSED'
+                  and oc.candidate_payload_digest is not null
+                  and oc.field_count > 0
+                  and ce.status = 'ACKNOWLEDGED'
+                  and ce.outbound_candidate_digest = oc.candidate_payload_digest
+                  and rg.status = 'PASSED'
+                  and rg.leakage_detected = false
+                """)
+            .param("executionId", executionId)
+            .query(Integer.class)
+            .single();
+        assertThat(egressCount).isEqualTo(1);
 
         Integer vaultCount = jdbcClient.sql("""
                 select count(*)
@@ -228,7 +260,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "%s",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-size",
                       "processingContexts": ["AI_USE"],
                       "input": {}
@@ -265,7 +297,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-pc",
                       "processingContexts": ["AI_USE", null],
                       "input": {}
@@ -273,6 +305,44 @@ class RuntimeExecutionControllerTests {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void unknownDestinationProfileIsBlockedAndRecorded() throws Exception {
+        String suffix = token();
+        String requestId = "req_dest_" + suffix;
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", "trace_dest_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purposeCode": "CUSTOMER_SUPPORT",
+                      "subjectScope": "customer:customer-100",
+                      "destinationProfileId": "dest_missing",
+                      "idempotencyKey": "idem_dest_%s",
+                      "processingContexts": ["AI_USE"],
+                      "input": {}
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("DESTINATION_PROFILE_NOT_FOUND"));
+
+        Integer blockedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where request_id = :requestId
+                  and destination_profile_id = 'dest_missing'
+                  and provider_profile_id is null
+                  and status = 'BLOCKED'
+                """)
+            .param("requestId", requestId)
+            .query(Integer.class)
+            .single();
+        assertThat(blockedCount).isEqualTo(1);
     }
 
     private String postRuntimeExecution(
@@ -299,7 +369,7 @@ class RuntimeExecutionControllerTests {
               "workloadId": "customer_summary",
               "purposeCode": "CUSTOMER_SUPPORT",
               "subjectScope": "customer:customer-100",
-              "providerProfileId": "internal-provider",
+              "destinationProfileId": "dest_internal_provider_project_provisional",
               "idempotencyKey": "%s",
               "processingContexts": ["AI_USE"],
               "input": {

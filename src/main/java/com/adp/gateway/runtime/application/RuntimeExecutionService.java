@@ -16,6 +16,7 @@ import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
@@ -24,6 +25,15 @@ import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
+import com.adp.gateway.egress.application.DestinationProfilePort;
+import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
+import com.adp.gateway.egress.application.OutboundGuardChain;
+import com.adp.gateway.egress.application.OutboundGuardException;
+import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.OutboundGuardResult;
+import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -56,6 +66,10 @@ public class RuntimeExecutionService {
     private final SubjectRefHasher subjectRefHasher;
     private final RuntimeInputHasher runtimeInputHasher;
     private final TransformEngine transformEngine;
+    private final DestinationProfilePort destinationProfilePort;
+    private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
+    private final OutboundGuardChain outboundGuardChain;
+    private final ResponseGuardPort responseGuardPort;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -72,6 +86,10 @@ public class RuntimeExecutionService {
         SubjectRefHasher subjectRefHasher,
         RuntimeInputHasher runtimeInputHasher,
         TransformEngine transformEngine,
+        DestinationProfilePort destinationProfilePort,
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
+        OutboundGuardChain outboundGuardChain,
+        ResponseGuardPort responseGuardPort,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -87,13 +105,17 @@ public class RuntimeExecutionService {
         this.subjectRefHasher = subjectRefHasher;
         this.runtimeInputHasher = runtimeInputHasher;
         this.transformEngine = transformEngine;
+        this.destinationProfilePort = destinationProfilePort;
+        this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
+        this.outboundGuardChain = outboundGuardChain;
+        this.responseGuardPort = responseGuardPort;
         this.clock = clock;
     }
 
     public RuntimeExecutionResult execute(
         RuntimeRequestContext requestContext,
         AuthPrincipal principal,
-        String providerProfileId,
+        String destinationProfileId,
         List<String> processingContexts,
         Map<String, Object> input
     ) {
@@ -109,8 +131,17 @@ public class RuntimeExecutionService {
             requestContext.workloadId(),
             requestContext.purpose(),
             subject == null ? null : subjectRefHasher.hash(subject),
-            providerProfileId,
+            null,
+            destinationProfileId,
+            null,
+            null,
             inputDigest,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -137,6 +168,8 @@ public class RuntimeExecutionService {
                 throw new AccessDeniedException("Runtime execution is not allowed");
             }
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+            DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
+            persistence.recordDestinationProfile(executionId, destinationProfile);
 
             RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
                 requestContext.requestId(),
@@ -152,7 +185,7 @@ public class RuntimeExecutionService {
             RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
                 canonicalContext,
                 processingContexts,
-                providerProfileId,
+                destinationProfile.providerProfileId(),
                 inputDigest
             );
             PolicySnapshot snapshot = policySnapshotPort.load(new PolicySelectionContext(
@@ -181,11 +214,122 @@ public class RuntimeExecutionService {
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             persistence.updateStatus(executionId, finalStatus);
-            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, transformResult);
+            if (finalStatus == RuntimeExecutionStatus.FAILED) {
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    finalStatus,
+                    decision,
+                    transformResult,
+                    "NOT_EVALUATED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
+            if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    finalStatus,
+                    decision,
+                    transformResult,
+                    "NOT_EVALUATED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
+            var outboundPayload = outboundCandidatePayloadBuilder.build(
+                destinationProfile,
+                canonicalContext,
+                decision,
+                transformResult
+            );
+            OutboundGuardResult outboundGuardResult = outboundGuardChain.guard(
+                destinationProfile,
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                now,
+                decision,
+                outboundPayload
+            );
+            persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
+            if (!outboundGuardResult.isPassed()) {
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.BLOCKED,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
+            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
+            persistence.recordConnector(executionId, connectorResult);
+            if (connectorResult.status() == ConnectorStatus.FAILED) {
+                ResponseGuardResult responseGuardResult =
+                    responseGuardPort.guard(outboundPayload, connectorResult);
+                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.FAILED,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    responseGuardResult.status(),
+                    auditContext
+                );
+            }
+            if (connectorResult.status() == ConnectorStatus.SENT_UNKNOWN) {
+                ResponseGuardResult responseGuardResult =
+                    responseGuardPort.guard(outboundPayload, connectorResult);
+                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.EGRESSING,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    responseGuardResult.status(),
+                    auditContext
+                );
+            }
+            ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
+            persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+            RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed()
+                ? RuntimeExecutionStatus.COMPLETED
+                : RuntimeExecutionStatus.BLOCKED;
+            persistence.updateStatus(executionId, completedStatus);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
-            return new RuntimeExecutionResult(executionId, finalStatus, decision, transformResult, connectorResult, auditContext);
+            return new RuntimeExecutionResult(
+                executionId,
+                completedStatus,
+                decision,
+                transformResult,
+                outboundGuardResult.status(),
+                connectorResult,
+                responseGuardResult.status(),
+                auditContext
+            );
         } catch (AccessDeniedException exception) {
+            throw exception;
+        } catch (DestinationProfileNotFoundException | OutboundGuardException exception) {
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);

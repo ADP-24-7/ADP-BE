@@ -5,8 +5,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.egress.domain.OutboundGuardResult;
+import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
@@ -38,12 +43,16 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             jdbcClient.sql("""
                 insert into runtime.runtime_execution (
                     execution_id, request_id, trace_id, idempotency_key, workload_id,
-                    purpose_code, subject_ref_digest, provider_profile_id, input_digest, status,
+                    purpose_code, subject_ref_digest, provider_profile_id,
+                    destination_profile_id, destination_profile_version, destination_profile_digest,
+                    input_digest, status,
                     created_at, updated_at
                 )
                 values (
                     :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
-                    :purposeCode, :subjectRefDigest, :providerProfileId, :inputDigest, :status,
+                    :purposeCode, :subjectRefDigest, :providerProfileId,
+                    :destinationProfileId, :destinationProfileVersion, :destinationProfileDigest,
+                    :inputDigest, :status,
                     :createdAt, :updatedAt
                 )
                 """)
@@ -55,6 +64,9 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 .param("purposeCode", trace.purposeCode())
                 .param("subjectRefDigest", trace.subjectRefDigest())
                 .param("providerProfileId", trace.providerProfileId())
+                .param("destinationProfileId", trace.destinationProfileId())
+                .param("destinationProfileVersion", trace.destinationProfileVersion())
+                .param("destinationProfileDigest", trace.destinationProfileDigest())
                 .param("inputDigest", trace.inputDigest())
                 .param("status", trace.status())
                 .param("createdAt", trace.createdAt())
@@ -63,6 +75,26 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         } catch (DuplicateKeyException exception) {
             throw new DuplicateRuntimeExecutionException("Idempotency key already used for workload");
         }
+    }
+
+    @Override
+    public void recordDestinationProfile(String executionId, DestinationProfile destinationProfile) {
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set provider_profile_id = :providerProfileId,
+                destination_profile_id = :destinationProfileId,
+                destination_profile_version = :destinationProfileVersion,
+                destination_profile_digest = :destinationProfileDigest,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("providerProfileId", destinationProfile.providerProfileId())
+            .param("destinationProfileId", destinationProfile.destinationProfileId())
+            .param("destinationProfileVersion", destinationProfile.profileVersion())
+            .param("destinationProfileDigest", destinationProfile.profileDigest())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
     }
 
     @Override
@@ -251,6 +283,122 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void recordOutbound(String executionId, OutboundCandidatePayload payload, OutboundGuardResult guardResult) {
+        jdbcClient.sql("""
+            insert into runtime.outbound_candidate (
+                outbound_payload_id, execution_id, destination_profile_id,
+                destination_profile_version, destination_profile_digest, pack_type,
+                schema_version, candidate_payload_digest, field_count, guard_status,
+                guard_reason_codes, created_at
+            )
+            values (
+                :outboundPayloadId, :executionId, :destinationProfileId,
+                :destinationProfileVersion, :destinationProfileDigest, :packType,
+                :schemaVersion, :candidatePayloadDigest, :fieldCount, :guardStatus,
+                :guardReasonCodes, :createdAt
+            )
+            """)
+            .param("outboundPayloadId", payload.outboundPayloadId())
+            .param("executionId", executionId)
+            .param("destinationProfileId", payload.destinationProfileId())
+            .param("destinationProfileVersion", payload.destinationProfileVersion())
+            .param("destinationProfileDigest", payload.destinationProfileDigest())
+            .param("packType", payload.packType().name())
+            .param("schemaVersion", payload.schemaVersion())
+            .param("candidatePayloadDigest", payload.candidatePayloadDigest())
+            .param("fieldCount", payload.fieldCount())
+            .param("guardStatus", guardResult.status())
+            .param("guardReasonCodes", String.join(",", guardResult.reasonCodes()))
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set outbound_payload_id = :outboundPayloadId,
+                outbound_candidate_digest = :outboundCandidateDigest,
+                outbound_guard_status = :outboundGuardStatus,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("outboundPayloadId", payload.outboundPayloadId())
+            .param("outboundCandidateDigest", payload.candidatePayloadDigest())
+            .param("outboundGuardStatus", guardResult.status())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    public void recordConnector(String executionId, ConnectorResult connectorResult) {
+        jdbcClient.sql("""
+            insert into runtime.connector_execution (
+                connector_execution_id, execution_id, outbound_payload_id,
+                outbound_candidate_digest, connector_id, status,
+                response_digest, response_schema_version, created_at
+            )
+            values (
+                :connectorExecutionId, :executionId, :outboundPayloadId,
+                :outboundCandidateDigest, :connectorId, :status,
+                :responseDigest, :responseSchemaVersion, :createdAt
+            )
+            """)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
+            .param("executionId", executionId)
+            .param("outboundPayloadId", connectorResult.outboundPayloadId())
+            .param("outboundCandidateDigest", connectorResult.outboundCandidateDigest())
+            .param("connectorId", connectorResult.connectorId())
+            .param("status", connectorResult.status().name())
+            .param("responseDigest", connectorResult.responseDigest())
+            .param("responseSchemaVersion", connectorResult.responseSchemaVersion())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set connector_execution_id = :connectorExecutionId,
+                connector_status = :connectorStatus,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
+            .param("connectorStatus", connectorResult.status().name())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    public void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult) {
+        jdbcClient.sql("""
+            insert into runtime.response_guard_result (
+                connector_execution_id, execution_id, connector_id, connector_status,
+                status, leakage_detected, reason_codes, created_at
+            )
+            values (
+                :connectorExecutionId, :executionId, :connectorId, :connectorStatus,
+                :status, :leakageDetected, :reasonCodes, :createdAt
+            )
+            """)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
+            .param("executionId", executionId)
+            .param("connectorId", connectorResult.connectorId())
+            .param("connectorStatus", connectorResult.status().name())
+            .param("status", responseGuardResult.status())
+            .param("leakageDetected", responseGuardResult.leakageDetected())
+            .param("reasonCodes", String.join(",", responseGuardResult.reasonCodes()))
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set response_guard_status = :responseGuardStatus,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("responseGuardStatus", responseGuardResult.status())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
     public void recordRetrieved(String executionId, CanonicalContext context) {
         jdbcClient.sql("""
             update runtime.runtime_execution
@@ -282,10 +430,14 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     public RuntimeExecutionTrace load(String executionId) {
         return jdbcClient.sql("""
             select execution_id, request_id, trace_id, idempotency_key, workload_id,
-                   purpose_code, subject_ref_digest, provider_profile_id, input_digest,
+                   purpose_code, subject_ref_digest, provider_profile_id,
+                   destination_profile_id, destination_profile_version, destination_profile_digest,
+                   input_digest,
                    canonical_context_digest, runtime_context_digest,
                    policy_version, snapshot_digest, decision_id, final_action,
                    transform_execution_id, transform_status, transform_output_digest,
+                   outbound_payload_id, outbound_candidate_digest, outbound_guard_status,
+                   connector_execution_id, connector_status, response_guard_status,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

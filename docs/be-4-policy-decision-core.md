@@ -143,7 +143,7 @@ Rule 미매칭, Rule 충돌, Unknown Data Class, 불완전 Applicability는 암�
 - `/v1/runtime/executions`는 Retrieval과 Canonical Context 조립 후 RuntimeDecision을 생성한다.
 - Runtime execution, policy evaluation, runtime decision을 audit event와 별도 테이블에 저장한다.
 - Runtime request input이 다르면 `input_digest`와 `runtime_context_digest`가 달라진다.
-- `adp.mock-runtime.enabled=false`에서도 `/v1/runtime/executions` API는 존재하며, unconfigured policy/provider adapter는 fail-safe REVIEW/NOT_EXECUTED로 동작한다.
+- `adp.mock-runtime.enabled=false`에서도 `/v1/runtime/executions` API는 존재하며, unconfigured policy/provider adapter는 fail-safe REVIEW/NOT_SENT로 동작한다.
 - `/v1/runtime/executions/{id}/trace`는 RECEIVED, AUTHORIZATION, RETRIEVAL, CANONICAL_CONTEXT, DECISION stage를 반환한다.
 - Runtime Execution GET/trace는 principal workload scope가 맞지 않으면 403을 반환한다.
 - 동일 workload에서 같은 idempotency key를 재사용하면 409를 반환한다.
