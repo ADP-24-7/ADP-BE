@@ -35,6 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate Docker Compose
+        run: |
+          mkdir -p ../ADP-FE ../ADP-DA ../ADP-Docs
+          touch ../ADP-DA/Dockerfile
+          docker compose --profile test config
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

@@ -1,12 +1,32 @@
 services:
   postgres:
     image: postgres:16-alpine
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-adp}
+      POSTGRES_USER: ${POSTGRES_USER:-adp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adp}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - adp-be-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-adp} -d $${POSTGRES_DB:-adp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - adp-local
+
+  postgres-test:
+    image: postgres:16-alpine
+    profiles:
+      - test
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_DB: adp
       POSTGRES_USER: adp
       POSTGRES_PASSWORD: adp
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U adp -d adp"]
       interval: 5s
@@ -18,23 +38,27 @@ services:
   adp-be:
     build:
       context: .
+      dockerfile: Dockerfile.dev
     environment:
-      SERVER_PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/adp
-      SPRING_DATASOURCE_USERNAME: adp
-      SPRING_DATASOURCE_PASSWORD: adp
-      ADP_LOCAL_USER_AUTH_ENABLED: "true"
-      ADP_LOCAL_FIXTURES_ENABLED: "true"
-      ADP_MOCK_RUNTIME_ENABLED: "true"
-      ADP_DATA_ACCESS_PREVIEW_ENABLED: "true"
-      ADP_CONTEXT_PREVIEW_ENABLED: "true"
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/adp}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-adp}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-adp}
+      ADP_LOCAL_USER_AUTH_ENABLED: "${ADP_LOCAL_USER_AUTH_ENABLED:-true}"
+      ADP_LOCAL_FIXTURES_ENABLED: "${ADP_LOCAL_FIXTURES_ENABLED:-true}"
+      ADP_MOCK_RUNTIME_ENABLED: "${ADP_MOCK_RUNTIME_ENABLED:-true}"
+      ADP_DATA_ACCESS_PREVIEW_ENABLED: "${ADP_DATA_ACCESS_PREVIEW_ENABLED:-true}"
+      ADP_CONTEXT_PREVIEW_ENABLED: "${ADP_CONTEXT_PREVIEW_ENABLED:-true}"
     ports:
-      - "8080:8080"
+      - "${ADP_BE_PORT:-8080}:8080"
+    volumes:
+      - .:/workspace
+      - adp-be-gradle-cache:/home/gradle/.gradle
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -42,6 +66,75 @@ services:
     networks:
       - adp-local
 
+  adp-fe:
+    image: node:22.22.2-bookworm-slim
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_APP_ENV: ${VITE_APP_ENV:-local}
+      VITE_API_MODE: ${VITE_API_MODE:-real}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://adp-be:8080}
+    ports:
+      - "${ADP_FE_PORT:-5173}:5173"
+    volumes:
+      - ../ADP-FE:/workspace
+      - adp-fe-node-modules:/workspace/node_modules
+    depends_on:
+      adp-be:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+    networks:
+      - adp-local
+
+  adp-da:
+    build:
+      context: ../ADP-DA
+    env_file:
+      - path: ../ADP-DA/.env
+        required: false
+    command: ["uvicorn", "adp_da.api:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
+    ports:
+      - "${ADP_DA_PORT:-8010}:8010"
+    volumes:
+      - ../ADP-DA:/app
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=2).read()\""]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    networks:
+      - adp-local
+
+  adp-docs:
+    image: node:20-alpine
+    working_dir: /workspace
+    command: ["sh", "-c", "npm ci && npm start -- --host 0.0.0.0 --port 3000"]
+    ports:
+      - "${ADP_DOCS_PORT:-3000}:3000"
+    volumes:
+      - ../ADP-Docs:/workspace
+      - adp-docs-node-modules:/workspace/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+    networks:
+      - adp-local
+
 networks:
   adp-local:
     external: true
+
+volumes:
+  adp-be-gradle-cache:
+  adp-be-postgres-data:
+  adp-fe-node-modules:
+  adp-docs-node-modules:

@@ -2,14 +2,17 @@
 
 Java 21 / Spring Boot 3 / Gradle 기반 ADP Gateway Runtime입니다.
 
-## 역할 범위
+## 역할
 
 - Runtime Policy Enforcement
-- Decision Source of Truth
-- Transform orchestration
+- Decision / Transform / Egress orchestration
 - Vault / Connector integration boundary
 - Audit Event 생성
 - Runtime API 제공
+
+## Docker 개발 환경
+
+ADP-BE의 `docker-compose.yml`은 로컬 통합 개발 스택의 진입점입니다. BE 레포에서 실행하면 같은 상위 폴더에 있는 `ADP-BE`, `ADP-FE`, `ADP-DA`, `ADP-Docs` 네 레포와 PostgreSQL이 함께 실행됩니다.
 
 ## 기본 구조
 
@@ -28,76 +31,54 @@ ADP-BE/
 │   ├── transform/      # Transform 경계
 │   ├── vault/          # Vault Mapping 경계
 │   ├── connector/      # Connector 경계
-│   ├── guard/          # Guard 경계
+│   ├── egress/         # Outbound Guard / Connector / Response Guard 경계
 │   ├── audit/          # Audit Event 경계
 │   ├── operations/     # 내부 운영·Mock Runtime API
 │   └── config/         # 공통 애플리케이션 설정
-├── src/main/resources  # Spring Boot 설정
+├── src/main/resources
 │   └── db/migration    # Flyway migration
-├── src/test/java       # 부트스트랩 검증 테스트
+├── src/test/java       # 검증 테스트
 ├── docs                # 구현 단계 추적과 개발 기준
-├── Dockerfile
-├── docker-compose.yml
+├── Dockerfile          # CI/NCP 배포용 이미지
+├── Dockerfile.dev      # 로컬 개발용 이미지
+├── docker-compose.yml  # 로컬 통합 개발 스택
 ├── Makefile
 ├── settings.gradle
 └── build.gradle
 ```
 
-## 빠른 시작
+## 실행
 
-현재 로컬 환경에 Gradle이 없어도 Docker 기반 Gradle 이미지로 검증할 수 있습니다.
+각 레포의 최신 `main`을 받은 뒤 BE 레포에서 실행합니다.
 
 ```bash
 make setup
-make check
-```
-
-## 로컬 실행
-
-```bash
 make docker-up
-curl http://localhost:8080/actuator/health
-curl http://localhost:8080/actuator/health/readiness
-curl http://localhost:8080/api/internal/info
-curl http://localhost:8080/api/internal/auth/context \
-  -H 'X-ADP-API-Key: local-dev-api-key'
-curl -X POST http://localhost:8080/api/runtime/mock \
-  -H 'Content-Type: application/json' \
-  -H 'X-ADP-API-Key: local-dev-api-key' \
-  -H 'X-Request-Id: req_local_001' \
-  -H 'X-Trace-Id: trace_local_001' \
-  -H 'Idempotency-Key: idem_local_001' \
-  -d '{"workloadId":"workload_local","purpose":"local-smoke","subject":"customer:mock-subject"}'
-curl -X POST http://localhost:8080/api/runtime/data-access/preview \
-  -H 'Content-Type: application/json' \
-  -H 'X-ADP-API-Key: local-dev-api-key' \
-  -H 'X-Request-Id: req_data_access_local' \
-  -H 'X-Trace-Id: trace_data_access_local' \
-  -d '{"workloadId":"customer_summary","purpose":"CUSTOMER_SUPPORT","subject":"customer:customer-100"}'
-curl -X POST http://localhost:8080/api/runtime/context/preview \
-  -H 'Content-Type: application/json' \
-  -H 'X-ADP-API-Key: local-dev-api-key' \
-  -H 'X-Request-Id: req_context_local' \
-  -H 'X-Trace-Id: trace_context_local' \
-  -d '{"workloadId":"customer_summary","purpose":"CUSTOMER_SUPPORT","subject":"customer:customer-100"}'
 ```
+
+## Docker 파일 기준
+
+- `Dockerfile`: CI/NCP 배포용 jar image build
+- `Dockerfile.dev`: 로컬 개발용 Gradle `bootRun`
+- `docker-compose.yml`: BE/FE/DA/Docs/PostgreSQL 통합 개발 스택
+- `.env.example`: 팀 공통 로컬 환경변수 샘플
 
 ## Make 명령
 
 ```bash
-make help
 make setup
-make test
-make package
-make check
-make run
 make docker-up
+make docker-logs
+make docker-ps
 make docker-down
+make check
 ```
 
-## 구현 단계 추적
+`make check`는 개발 DB를 오염시키지 않도록 별도 `postgres-test` 컨테이너를 사용합니다.
 
-README는 프로젝트 개요와 실행 방법만 유지합니다.
+## 문서
 
 - [구현 진행 현황](docs/implementation-progress.md)
-- [BE-4 개발 기준](docs/be-4-policy-decision-core.md)
+- [BE-4 Policy & Decision Core](docs/be-4-policy-decision-core.md)
+- [BE-5 Transform Engine & Vault](docs/be-5-transform-vault.md)
+- [BE-6 Common Egress Boundary](docs/be-6-common-egress-boundary.md)
