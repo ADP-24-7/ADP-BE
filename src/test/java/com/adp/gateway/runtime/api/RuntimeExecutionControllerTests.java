@@ -147,9 +147,9 @@ class RuntimeExecutionControllerTests {
         Integer vaultCount = jdbcClient.sql("""
                 select count(*)
                 from vault.token_mapping
-                where mapping_scope = 'be-snapshot-local-fixture:customer-summary:customer-support:internal-provider:CUSTOMER_IDENTIFIER'
-                  and data_class = 'CUSTOMER_IDENTIFIER'
+                where data_class = 'CUSTOMER_IDENTIFIER'
                   and status = 'ACTIVE'
+                  and length(mapping_scope) = 64
                   and source_value_digest is not null
                   and token_ref is not null
                 """)

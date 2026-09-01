@@ -163,9 +163,15 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] Strategy unit test 추가
 - [x] Vault same-scope/different-scope/expired-token/concurrent-token test 추가
 - [x] Vault failure 시 Runtime FAILED 및 Connector 미실행 test 추가
+- [x] Vault/HMAC transform scope isolation 추가
+- [x] Expired token concurrent replacement lineage test 추가
 - [x] Default/local fixture transform wiring test 추가
 - [ ] Privileged Re-map API
 - [ ] Vault 장애 fallback 정책
 - [ ] DA 실제 transform policy artifact loader 연동
 - [ ] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
 - [ ] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
+
+## Troubleshooting
+
+리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.

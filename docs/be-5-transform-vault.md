@@ -40,6 +40,7 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 - `privacySafeOutput`은 source digest를 외부 응답으로 내리지 않는다.
 - 만료된 token은 재사용하지 않고 기존 row를 `EXPIRED`로 보존한 뒤 새 `ACTIVE` row를 발급한다.
 - 기본 환경에서 transform mapping이 구성되지 않으면 fail closed 처리한다.
+- Vault/HMAC scope는 workload, purpose, provider profile, policy version, snapshot digest, data class를 canonical hash한 `TransformScope.scopeId`로 격리한다.
 - 모든 instruction은 `strategyVersion`, `keyVersion`, `mappingVersion`을 공통 재현성 identity로 가진다.
 - `instructionDigest`는 strategy, strategy version, key version, mapping version, TTL, canonical parameters를 포함한다.
 - 잘못된 strategy parameter는 fallback output으로 숨기지 않고 fail closed 처리한다.

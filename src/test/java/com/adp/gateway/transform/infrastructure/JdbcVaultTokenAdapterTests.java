@@ -11,6 +11,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.transform.application.TransformScope;
 import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.transform.application.VaultTokenRequest;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,8 @@ class JdbcVaultTokenAdapterTests {
 
     @Autowired
     private JdbcClient jdbcClient;
+
+    private final CanonicalValueHasher hasher = new CanonicalValueHasher();
 
     @Test
     void sameScopeAndDigestReusesToken() {
@@ -65,7 +69,7 @@ class JdbcVaultTokenAdapterTests {
                 )
                 """)
             .param("tokenRef", "vault_tok_expired_" + suffix)
-            .param("mappingScope", scope)
+            .param("mappingScope", scopeId(scope))
             .param("dataClass", DataClass.CUSTOMER_IDENTIFIER.name())
             .param("sourceValueDigest", sourceDigest)
             .param("keyVersion", "key-v1")
@@ -84,7 +88,7 @@ class JdbcVaultTokenAdapterTests {
                   and source_value_digest = :sourceValueDigest
                   and status = 'EXPIRED'
                 """)
-            .param("mappingScope", scope)
+            .param("mappingScope", scopeId(scope))
             .param("sourceValueDigest", sourceDigest)
             .query(String.class)
             .single();
@@ -96,7 +100,7 @@ class JdbcVaultTokenAdapterTests {
                   and source_value_digest = :sourceValueDigest
                   and status = 'EXPIRED'
                 """)
-            .param("mappingScope", scope)
+            .param("mappingScope", scopeId(scope))
             .param("sourceValueDigest", sourceDigest)
             .query(Integer.class)
             .single();
@@ -136,7 +140,7 @@ class JdbcVaultTokenAdapterTests {
                   and source_value_digest = :sourceValueDigest
                   and status = 'ACTIVE'
                 """)
-            .param("mappingScope", scope)
+            .param("mappingScope", scopeId(scope))
             .param("sourceValueDigest", sourceDigest)
             .query(Integer.class)
             .single();
@@ -144,14 +148,104 @@ class JdbcVaultTokenAdapterTests {
         assertThat(activeCount).isEqualTo(1);
     }
 
+    @Test
+    void concurrentExpiredRefreshConvergesToOneActiveTokenAndKeepsLineage() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String scope = "scope_expired_concurrent_" + suffix;
+        String sourceDigest = "digest_expired_concurrent_" + suffix;
+        jdbcClient.sql("""
+                insert into vault.token_mapping (
+                    token_ref, mapping_scope, data_class, source_value_digest, key_version,
+                    mapping_version, status, expires_at, created_at
+                )
+                values (
+                    :tokenRef, :mappingScope, :dataClass, :sourceValueDigest, :keyVersion,
+                    :mappingVersion, 'ACTIVE', :expiresAt, :createdAt
+                )
+                """)
+            .param("tokenRef", "vault_tok_expired_concurrent_" + suffix)
+            .param("mappingScope", scopeId(scope))
+            .param("dataClass", DataClass.CUSTOMER_IDENTIFIER.name())
+            .param("sourceValueDigest", sourceDigest)
+            .param("keyVersion", "key-v1")
+            .param("mappingVersion", "mapping-v1")
+            .param("expiresAt", OffsetDateTime.now().minusMinutes(1))
+            .param("createdAt", OffsetDateTime.now().minusHours(2))
+            .update();
+        VaultTokenRequest request = request(scope, sourceDigest);
+        var executor = Executors.newFixedThreadPool(20);
+        CountDownLatch ready = new CountDownLatch(20);
+        CountDownLatch start = new CountDownLatch(1);
+        List<java.util.concurrent.Future<String>> futures = java.util.stream.IntStream.range(0, 20)
+            .mapToObj(index -> executor.submit(() -> {
+                ready.countDown();
+                start.await(5, TimeUnit.SECONDS);
+                return adapter.tokenFor(request);
+            }))
+            .toList();
+
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        HashSet<String> tokens = new HashSet<>();
+        for (java.util.concurrent.Future<String> future : futures) {
+            tokens.add(future.get(5, TimeUnit.SECONDS));
+        }
+        executor.shutdown();
+        assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        String token = tokens.iterator().next();
+
+        Integer activeCount = jdbcClient.sql("""
+                select count(*)
+                from vault.token_mapping
+                where mapping_scope = :mappingScope
+                  and source_value_digest = :sourceValueDigest
+                  and status = 'ACTIVE'
+                """)
+            .param("mappingScope", scopeId(scope))
+            .param("sourceValueDigest", sourceDigest)
+            .query(Integer.class)
+            .single();
+        String replacementRef = jdbcClient.sql("""
+                select replaced_by_token_ref
+                from vault.token_mapping
+                where mapping_scope = :mappingScope
+                  and source_value_digest = :sourceValueDigest
+                  and status = 'EXPIRED'
+                """)
+            .param("mappingScope", scopeId(scope))
+            .param("sourceValueDigest", sourceDigest)
+            .query(String.class)
+            .single();
+
+        assertThat(tokens).hasSize(1);
+        assertThat(activeCount).isEqualTo(1);
+        assertThat(replacementRef).isEqualTo(token);
+    }
+
     private VaultTokenRequest request(String scope, String sourceDigest) {
         return new VaultTokenRequest(
-            scope,
+            transformScope(scope),
             DataClass.CUSTOMER_IDENTIFIER,
             sourceDigest,
             "key-v1",
             "mapping-v1",
             Duration.ofHours(1)
         );
+    }
+
+    private TransformScope transformScope(String scope) {
+        return new TransformScope(
+            scopeId(scope),
+            "customer_summary",
+            scope,
+            "internal-provider",
+            "policy-v1",
+            "snapshot-v1",
+            DataClass.CUSTOMER_IDENTIFIER
+        );
+    }
+
+    private String scopeId(String scope) {
+        return hasher.hash(scope);
     }
 }

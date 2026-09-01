@@ -68,7 +68,8 @@ public class TransformEngine {
             for (CanonicalContextField field : context.fields()) {
                 TransformInstruction instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
                 validateInstruction(instruction);
-                Object transformedValue = transformedValue(decision, field, instruction);
+                TransformScope transformScope = TransformScope.from(policyContext, decision, field.dataClass(), hasher);
+                Object transformedValue = transformedValue(field, instruction, transformScope);
                 String instructionDigest = instructionDigest(instruction);
                 String transformedDigest = transformedValue == null
                     ? null
@@ -124,13 +125,13 @@ public class TransformEngine {
         );
     }
 
-    private Object transformedValue(RuntimeDecision decision, CanonicalContextField field, TransformInstruction instruction) {
+    private Object transformedValue(CanonicalContextField field, TransformInstruction instruction, TransformScope transformScope) {
         Object value = field.value();
         return switch (instruction.strategy()) {
             case MASK -> mask(value, instruction);
-            case HMAC_PSEUDO -> hmacPseudo(field.valueDigest(), instruction.keyVersion());
+            case HMAC_PSEUDO -> hmacPseudo(transformScope, field.valueDigest(), instruction.keyVersion());
             case VAULT_TOKEN -> vaultTokenPort.tokenFor(new VaultTokenRequest(
-                scope(decision, field.dataClass()),
+                transformScope,
                 field.dataClass(),
                 field.valueDigest(),
                 instruction.keyVersion(),
@@ -189,12 +190,13 @@ public class TransformEngine {
         return "*".repeat(raw.length() - visibleSuffix) + raw.substring(raw.length() - visibleSuffix);
     }
 
-    private String hmacPseudo(String valueDigest, String keyVersion) {
+    private String hmacPseudo(TransformScope transformScope, String valueDigest, String keyVersion) {
         try {
             PseudonymizationKey key = pseudonymizationKeyPort.load(keyVersion);
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(key.secretKey());
-            return HexFormat.of().formatHex(mac.doFinal(valueDigest.getBytes(StandardCharsets.UTF_8)));
+            String scopedMessage = transformScope.scopeId() + ":" + valueDigest;
+            return HexFormat.of().formatHex(mac.doFinal(scopedMessage.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception exception) {
             throw new IllegalStateException("HMAC pseudonymization failed", exception);
         }
@@ -207,12 +209,8 @@ public class TransformEngine {
             BigDecimal bucket = amount.divideToIntegralValue(BigDecimal.valueOf(bucketSize)).multiply(BigDecimal.valueOf(bucketSize));
             return bucket.toPlainString() + "+";
         } catch (NumberFormatException exception) {
-            return "<generalized>";
+            throw new TransformInputException("GENERALIZE input must be numeric", exception);
         }
-    }
-
-    private String scope(RuntimeDecision decision, DataClass dataClass) {
-        return decision.snapshotDigest() + ":" + dataClass.name();
     }
 
     private String value(String value) {

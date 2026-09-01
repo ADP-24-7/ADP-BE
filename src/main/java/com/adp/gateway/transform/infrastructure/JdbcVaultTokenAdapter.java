@@ -11,6 +11,8 @@ import io.micrometer.core.instrument.Timer;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 public class JdbcVaultTokenAdapter implements VaultTokenPort {
@@ -18,11 +20,18 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
     private final JdbcClient jdbcClient;
     private final Clock clock;
     private final MeterRegistry meterRegistry;
+    private final TransactionTemplate transactionTemplate;
 
-    public JdbcVaultTokenAdapter(JdbcClient jdbcClient, Clock clock, MeterRegistry meterRegistry) {
+    public JdbcVaultTokenAdapter(
+        JdbcClient jdbcClient,
+        Clock clock,
+        MeterRegistry meterRegistry,
+        PlatformTransactionManager transactionManager
+    ) {
         this.jdbcClient = jdbcClient;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -70,38 +79,41 @@ public class JdbcVaultTokenAdapter implements VaultTokenPort {
 
     private String create(VaultTokenRequest request) {
         String tokenRef = "vault_tok_" + UUID.randomUUID();
-        expireStaleMappings(request, tokenRef);
         try {
-            jdbcClient.sql("""
-                    insert into vault.token_mapping (
-                        token_ref, mapping_scope, data_class, source_value_digest, key_version,
-                        mapping_version, status, expires_at, created_at
-                    )
-                    values (
-                        :tokenRef, :mappingScope, :dataClass, :sourceValueDigest, :keyVersion,
-                        :mappingVersion, 'ACTIVE', :expiresAt, :createdAt
-                    )
-                    """)
-                .param("tokenRef", tokenRef)
-                .param("mappingScope", request.mappingScope())
-                .param("dataClass", request.dataClass().name())
-                .param("sourceValueDigest", request.sourceValueDigest())
-                .param("keyVersion", request.keyVersion())
-                .param("mappingVersion", request.mappingVersion())
-                .param("expiresAt", expiresAt(request))
-                .param("createdAt", OffsetDateTime.now(clock))
-                .update();
+            transactionTemplate.execute(status -> {
+                expireStaleMappings(request, tokenRef);
+                insertActiveMapping(request, tokenRef);
+                return tokenRef;
+            });
             meterRegistry.counter("vault.token.create.total", "result", "CREATED").increment();
             return tokenRef;
         } catch (DuplicateKeyException exception) {
             meterRegistry.counter("vault.token.create.total", "result", "DUPLICATE").increment();
             return find(request)
-                .or(() -> {
-                    expireStaleMappings(request, tokenRef);
-                    return find(request);
-                })
                 .orElseThrow(() -> exception);
         }
+    }
+
+    private void insertActiveMapping(VaultTokenRequest request, String tokenRef) {
+        jdbcClient.sql("""
+                insert into vault.token_mapping (
+                    token_ref, mapping_scope, data_class, source_value_digest, key_version,
+                    mapping_version, status, expires_at, created_at
+                )
+                values (
+                    :tokenRef, :mappingScope, :dataClass, :sourceValueDigest, :keyVersion,
+                    :mappingVersion, 'ACTIVE', :expiresAt, :createdAt
+                )
+                """)
+            .param("tokenRef", tokenRef)
+            .param("mappingScope", request.mappingScope())
+            .param("dataClass", request.dataClass().name())
+            .param("sourceValueDigest", request.sourceValueDigest())
+            .param("keyVersion", request.keyVersion())
+            .param("mappingVersion", request.mappingVersion())
+            .param("expiresAt", expiresAt(request))
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
     }
 
     private void expireStaleMappings(VaultTokenRequest request, String replacementTokenRef) {

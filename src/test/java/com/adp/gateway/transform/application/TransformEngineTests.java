@@ -56,7 +56,7 @@ class TransformEngineTests {
         assertThat(strategy(result, "fields.kept")).isEqualTo(TransformStrategy.KEEP);
         assertThat(strategy(result, "fields.generalized")).isEqualTo(TransformStrategy.GENERALIZE);
         assertThat(strategy(result, "fields.separated")).isEqualTo(TransformStrategy.FIELD_SEPARATION);
-        assertThat(field(result, "fields.vault").tokenRef()).isEqualTo("vault_tok_test");
+        assertThat(field(result, "fields.vault").tokenRef()).startsWith("vault_tok_");
         assertThat(field(result, "fields.hmac").keyVersion()).isEqualTo("test-key-v1");
         assertThat(field(result, "fields.hmac").strategyVersion()).isEqualTo("test-strategy-v1");
         assertThat(field(result, "fields.hmac").mappingVersion()).isEqualTo("test-mapping-v1");
@@ -105,6 +105,36 @@ class TransformEngineTests {
     }
 
     @Test
+    void transformScopeSeparatesVaultAndHmacAcrossPurposes() {
+        TransformEngine vaultEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.VAULT_TOKEN,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of()
+        ));
+        TransformEngine hmacEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.HMAC_PSEUDO,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of()
+        ));
+
+        var supportVault = vaultEngine.transform("exec_test", vaultContext(), policyContext("CUSTOMER_SUPPORT"), decision());
+        var riskVault = vaultEngine.transform("exec_test", vaultContext(), policyContext("RISK_ANALYSIS"), decision());
+        var supportHmac = hmacEngine.transform("exec_test", hmacContext(), policyContext("CUSTOMER_SUPPORT"), decision());
+        var riskHmac = hmacEngine.transform("exec_test", hmacContext(), policyContext("RISK_ANALYSIS"), decision());
+
+        assertThat(field(riskVault, "fields.vault").tokenRef())
+            .isNotEqualTo(field(supportVault, "fields.vault").tokenRef());
+        assertThat(field(riskHmac, "fields.hmac").transformedValueDigest())
+            .isNotEqualTo(field(supportHmac, "fields.hmac").transformedValueDigest());
+    }
+
+    @Test
     void invalidInstructionParametersFailClosed() {
         TransformEngine invalidGeneralize = engineWithInstruction(new TransformInstruction(
             TransformStrategy.GENERALIZE,
@@ -140,6 +170,22 @@ class TransformEngineTests {
         assertThatThrownBy(() -> invalidVault.transform("exec_test", vaultContext(), policyContext(), decision()))
             .isInstanceOf(TransformResolutionException.class)
             .hasMessageContaining("tokenTtl");
+    }
+
+    @Test
+    void invalidGeneralizeInputFailsClosed() {
+        TransformEngine engine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.GENERALIZE,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of("bucketSize", "1000")
+        ));
+
+        assertThatThrownBy(() -> engine.transform("exec_test", invalidGeneralizeContext(), policyContext(), decision()))
+            .isInstanceOf(TransformInputException.class)
+            .hasMessageContaining("GENERALIZE input must be numeric");
     }
 
     private TransformStrategy strategyFor(String path) {
@@ -180,7 +226,7 @@ class TransformEngineTests {
     private TransformEngine engineWithInstruction(TransformInstruction instruction) {
         return new TransformEngine(
             context -> instruction,
-            request -> "vault_tok_test",
+            request -> "vault_tok_" + request.mappingScope(),
             keyVersion -> new PseudonymizationKey(
                 keyVersion,
                 new SecretKeySpec("test-hmac-key-material-32-bytes".getBytes(), "HmacSHA256")
@@ -270,9 +316,13 @@ class TransformEngineTests {
     }
 
     private RuntimePolicyContext policyContext() {
+        return policyContext("CUSTOMER_SUPPORT");
+    }
+
+    private RuntimePolicyContext policyContext(String purpose) {
         return new RuntimePolicyContext(
             "customer_summary",
-            "CUSTOMER_SUPPORT",
+            purpose,
             "customer",
             "subject_digest",
             "canonical_digest",
@@ -281,6 +331,34 @@ class TransformEngineTests {
             "internal-provider",
             "input_digest",
             "runtime_digest"
+        );
+    }
+
+    private CanonicalContext hmacContext() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_hmac",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(field("fields.hmac", "txn-1", DataClass.TRANSACTION_IDENTIFIER)),
+            "canonical_digest"
+        );
+    }
+
+    private CanonicalContext invalidGeneralizeContext() {
+        return new CanonicalContext(
+            CanonicalContext.SCHEMA_VERSION,
+            "ctx_generalize_invalid",
+            "da_test",
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "customer",
+            "subject_digest",
+            List.of(field("fields.generalized", "INVALID_AMOUNT", DataClass.FINANCIAL_AMOUNT)),
+            "canonical_digest"
         );
     }
 
