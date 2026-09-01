@@ -5,6 +5,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 ## 문서
 
 - [BE 리뷰 및 CI 트러블슈팅](be-review-and-ci.md)
+- [BE-5 Deep Dives](be-5-deep-dives.md)
 
 ## 기준 커밋
 
@@ -17,3 +18,4 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - `4128b55` BE-5 transform/vault contract hardening
 - `c87caad` BE-5 transform wiring gap close
 - `b012902` BE-5 transform invariant enforcement
+- `b144d36` BE-5 transform scope isolation

@@ -103,13 +103,14 @@ README의 완료 기준과 별도로, 리뷰 과정에서 실제로 문제가 �
 ### Vault/HMAC scope isolation
 
 - 문제: scope가 `snapshotDigest:dataClass`에만 의존하면 workload/purpose/provider가 다른 실행 사이에서 같은 token/HMAC이 나올 수 있다.
-- 조치: workload, purpose, provider profile, policy version, snapshot digest, data class를 canonical hash한 `TransformScope.scopeId`를 도입했다.
+- 조치: workload, purpose, provider profile, data class를 canonical hash한 `TransformScope.scopeId`를 도입했다.
 - 추가 조치: Vault mapping scope와 HMAC message 모두 `TransformScope.scopeId`로 domain separation한다.
+- 설계 결정: `policyVersion`과 `snapshotDigest`는 token namespace가 아니라 audit provenance로 둔다. 정책 evidence나 snapshot만 바뀌어도 token/HMAC이 회전하면 continuity가 깨지기 때문이다.
 
 ### Privacy-safe API
 
 - 문제: `privacySafeOutput`에 `sourceValueDigest`를 내려주면 낮은 entropy 값의 dictionary 추측과 실행 간 correlation 위험이 생긴다.
-- 조치: 외부 응답은 `path`, `dataClass`, `strategy`, `transformedValueDigest`만 노출하고 source digest/token mapping 내부정보는 DB persistence에만 남긴다.
+- 조치: 외부 응답은 `path`, `dataClass`, `strategy`만 노출하고 source/transformed digest와 token mapping 내부정보는 DB persistence에만 남긴다.
 
 ### CI와 local DB 이슈
 

@@ -25,8 +25,6 @@ public record TransformScope(
             value(policyContext.workloadId()),
             value(policyContext.purpose()),
             value(policyContext.provider()),
-            value(decision.policyVersion()),
-            value(decision.snapshotDigest()),
             dataClass.name()
         );
         return new TransformScope(

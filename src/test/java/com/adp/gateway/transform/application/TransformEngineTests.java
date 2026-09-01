@@ -135,6 +135,36 @@ class TransformEngineTests {
     }
 
     @Test
+    void transformScopeDoesNotRotateForPolicyProvenanceOnlyChanges() {
+        TransformEngine vaultEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.VAULT_TOKEN,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of()
+        ));
+        TransformEngine hmacEngine = engineWithInstruction(new TransformInstruction(
+            TransformStrategy.HMAC_PSEUDO,
+            "test-strategy-v1",
+            "test-key-v1",
+            "test-mapping-v1",
+            Duration.ofHours(1),
+            Map.of()
+        ));
+
+        var policyV1Vault = vaultEngine.transform("exec_test", vaultContext(), policyContext(), decision("policy-v1", "snapshot-v1"));
+        var policyV2Vault = vaultEngine.transform("exec_test", vaultContext(), policyContext(), decision("policy-v2", "snapshot-v2"));
+        var policyV1Hmac = hmacEngine.transform("exec_test", hmacContext(), policyContext(), decision("policy-v1", "snapshot-v1"));
+        var policyV2Hmac = hmacEngine.transform("exec_test", hmacContext(), policyContext(), decision("policy-v2", "snapshot-v2"));
+
+        assertThat(field(policyV2Vault, "fields.vault").tokenRef())
+            .isEqualTo(field(policyV1Vault, "fields.vault").tokenRef());
+        assertThat(field(policyV2Hmac, "fields.hmac").transformedValueDigest())
+            .isEqualTo(field(policyV1Hmac, "fields.hmac").transformedValueDigest());
+    }
+
+    @Test
     void invalidInstructionParametersFailClosed() {
         TransformEngine invalidGeneralize = engineWithInstruction(new TransformInstruction(
             TransformStrategy.GENERALIZE,
@@ -363,6 +393,10 @@ class TransformEngineTests {
     }
 
     private RuntimeDecision decision() {
+        return decision("policy-v1", "snapshot_digest");
+    }
+
+    private RuntimeDecision decision(String policyVersion, String snapshotDigest) {
         return new RuntimeDecision(
             "decision_test",
             PolicyAction.TRANSFORM,
@@ -376,8 +410,8 @@ class TransformEngineTests {
             List.of(),
             List.of(),
             List.of(),
-            "policy-v1",
-            "snapshot_digest",
+            policyVersion,
+            snapshotDigest,
             "runtime_digest",
             new SourcePolicyEvaluationArtifactRef(
                 "artifact",

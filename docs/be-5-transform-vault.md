@@ -37,10 +37,11 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 - `runtime.transform_field`: field 단위 strategy, strategy version, key version, mapping version, instruction digest, source/transformed digest, token metadata 기록
 - `vault.token_mapping`: mapping scope, data class, source digest, token ref, key version, mapping version, lifecycle status 저장
 - raw value는 DB와 API 응답에 저장하거나 노출하지 않는다.
-- `privacySafeOutput`은 source digest를 외부 응답으로 내리지 않는다.
+- `privacySafeOutput`은 source digest와 field-level transformed digest를 외부 응답으로 내리지 않는다.
 - 만료된 token은 재사용하지 않고 기존 row를 `EXPIRED`로 보존한 뒤 새 `ACTIVE` row를 발급한다.
 - 기본 환경에서 transform mapping이 구성되지 않으면 fail closed 처리한다.
-- Vault/HMAC scope는 workload, purpose, provider profile, policy version, snapshot digest, data class를 canonical hash한 `TransformScope.scopeId`로 격리한다.
+- Vault/HMAC scope는 workload, purpose, provider profile, data class를 canonical hash한 `TransformScope.scopeId`로 격리한다.
+- `policyVersion`과 `snapshotDigest`는 token namespace가 아니라 audit provenance로 유지한다.
 - 모든 instruction은 `strategyVersion`, `keyVersion`, `mappingVersion`을 공통 재현성 identity로 가진다.
 - `instructionDigest`는 strategy, strategy version, key version, mapping version, TTL, canonical parameters를 포함한다.
 - 잘못된 strategy parameter는 fallback output으로 숨기지 않고 fail closed 처리한다.

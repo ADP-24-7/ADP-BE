@@ -78,6 +78,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.privacySafeOutput.fieldCount").value(13))
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].strategy").isArray())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
             .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
             .andReturn()

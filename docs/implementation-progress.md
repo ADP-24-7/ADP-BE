@@ -153,7 +153,7 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] `runtime.transform_execution` / `runtime.transform_field` persistence 추가
 - [x] Transform field에 strategy/key/mapping version과 instruction digest 저장
 - [x] Transform persistence transaction 경계 추가
-- [x] Runtime Execution 응답에 raw/source digest 없는 `privacySafeOutput` 추가
+- [x] Runtime Execution 응답에 raw/source/field-level transformed digest 없는 `privacySafeOutput` 추가
 - [x] Transform 성공 후 Runtime Execution status `TRANSFORMED` 반영
 - [x] Runtime trace에 Transform stage 반영
 - [x] Connector 실행 전 Transform 결과 전달
@@ -164,6 +164,7 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] Vault same-scope/different-scope/expired-token/concurrent-token test 추가
 - [x] Vault failure 시 Runtime FAILED 및 Connector 미실행 test 추가
 - [x] Vault/HMAC transform scope isolation 추가
+- [x] Policy/Snapshot provenance와 token namespace 분리
 - [x] Expired token concurrent replacement lineage test 추가
 - [x] Default/local fixture transform wiring test 추가
 - [ ] Privileged Re-map API
