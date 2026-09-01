@@ -1,5 +1,7 @@
 package com.adp.gateway.connector.infrastructure;
 
+import java.util.UUID;
+
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
@@ -15,10 +17,14 @@ public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort
     @Override
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
         return new ConnectorResult(
+            "con_" + UUID.randomUUID(),
             "unconfigured-runtime-connector",
             "PROVIDER_NOT_CONFIGURED",
             payload.outboundPayloadId(),
-            payload.payloadDigest()
+            payload.candidatePayloadDigest(),
+            null,
+            null,
+            false
         );
     }
 }

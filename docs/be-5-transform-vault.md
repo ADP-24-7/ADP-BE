@@ -52,7 +52,7 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 - TTL 만료 정책
 - Vault 장애 정책
 - DA 실제 transform mapping artifact loader
-- BE-6 Outbound Guard에서 `OutboundCandidatePayload`와 실제 provider payload canonical digest 도입
+- BE-6 Outbound Guard에서 `OutboundCandidatePayload`와 outbound candidate metadata digest 도입. 실제 provider payload canonical digest는 Pack별 schema mapper 단계에서 구현한다.
 
 ## Boundary
 

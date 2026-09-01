@@ -5,9 +5,11 @@ import java.util.List;
 public record OutboundCandidatePayload(
     String outboundPayloadId,
     String destinationProfileId,
+    String destinationProfileVersion,
+    String destinationProfileDigest,
     ExecutionPackType packType,
     String schemaVersion,
-    String payloadDigest,
+    String candidatePayloadDigest,
     List<OutboundCandidateField> fields
 ) {
 

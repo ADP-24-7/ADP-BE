@@ -115,6 +115,8 @@ public class MockRuntimeController {
             ? fakeConnector.execute(context, decision, new OutboundCandidatePayload(
                 "out_mock_skipped",
                 "dest_mock",
+                "0.0.0",
+                "mock-destination-profile",
                 ExecutionPackType.COMMON,
                 "mock-runtime-egress-schema-v1",
                 "mock-runtime-no-payload",

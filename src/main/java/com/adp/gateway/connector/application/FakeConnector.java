@@ -1,5 +1,7 @@
 package com.adp.gateway.connector.application;
 
+import java.util.UUID;
+
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
@@ -13,10 +15,14 @@ public class FakeConnector implements RuntimeConnectorPort {
 
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
         return new ConnectorResult(
+            "con_" + UUID.randomUUID(),
             "fake-connector",
             "EXECUTED",
             payload.outboundPayloadId(),
-            payload.payloadDigest()
+            payload.candidatePayloadDigest(),
+            "fake-response-digest:" + payload.candidatePayloadDigest(),
+            "fake-response-schema-v1",
+            false
         );
     }
 }

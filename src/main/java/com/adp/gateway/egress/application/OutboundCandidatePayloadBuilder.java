@@ -7,13 +7,15 @@ import java.util.stream.Collectors;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.context.domain.CanonicalContext;
+import com.adp.gateway.context.domain.CanonicalContextField;
+import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.DestinationProfile;
-import com.adp.gateway.egress.domain.FieldObligation;
+import com.adp.gateway.egress.domain.DestinationFieldContract;
 import com.adp.gateway.egress.domain.FieldTreatment;
 import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
-import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.transform.domain.TransformFieldResult;
 import com.adp.gateway.transform.domain.TransformResult;
 import com.adp.gateway.transform.domain.TransformStrategy;
@@ -36,17 +38,18 @@ public class OutboundCandidatePayloadBuilder {
     public OutboundCandidatePayload build(
         RuntimeRequestContext requestContext,
         String providerProfileId,
+        CanonicalContext canonicalContext,
         RuntimeDecision decision,
         TransformResult transformResult
     ) {
         DestinationProfile profile = destinationProfilePort.load(providerProfileId);
-        List<OutboundCandidateField> fields = transformResult.fields().stream()
-            .filter(field -> field.strategy() != TransformStrategy.REMOVE)
-            .map(this::field)
+        List<OutboundCandidateField> fields = fields(profile, canonicalContext, decision, transformResult).stream()
             .sorted(Comparator.comparing(OutboundCandidateField::path))
             .toList();
-        String payloadDigest = hasher.hash(String.join("|",
+        String candidatePayloadDigest = hasher.hash(String.join("|",
             profile.destinationProfileId(),
+            profile.profileVersion(),
+            profile.profileDigest(),
             profile.schemaVersion(),
             decision.decisionId(),
             transformResult.outputDigest() == null ? "<none>" : transformResult.outputDigest(),
@@ -58,37 +61,64 @@ public class OutboundCandidatePayloadBuilder {
         return new OutboundCandidatePayload(
             "out_" + UUID.randomUUID(),
             profile.destinationProfileId(),
+            profile.profileVersion(),
+            profile.profileDigest(),
             profile.packType(),
             profile.schemaVersion(),
-            payloadDigest,
+            candidatePayloadDigest,
             fields
         );
     }
 
-    private OutboundCandidateField field(TransformFieldResult field) {
+    private List<OutboundCandidateField> fields(
+        DestinationProfile profile,
+        CanonicalContext canonicalContext,
+        RuntimeDecision decision,
+        TransformResult transformResult
+    ) {
+        if (decision.finalAction() == FinalAction.ALLOW) {
+            return canonicalContext.fields().stream()
+                .map(field -> exactField(profile, field))
+                .toList();
+        }
+        return transformResult.fields().stream()
+            .filter(field -> field.strategy() != TransformStrategy.REMOVE)
+            .map(field -> transformedField(profile, field))
+            .toList();
+    }
+
+    private OutboundCandidateField exactField(DestinationProfile profile, CanonicalContextField field) {
+        DestinationFieldContract contract = contract(profile, field.path());
+        return new OutboundCandidateField(
+            field.path(),
+            field.dataClass(),
+            TransformStrategy.KEEP,
+            contract.obligation(),
+            FieldTreatment.KEEP_EXACT_PROTECTED,
+            field.valueDigest(),
+            field.value()
+        );
+    }
+
+    private OutboundCandidateField transformedField(DestinationProfile profile, TransformFieldResult field) {
+        DestinationFieldContract contract = contract(profile, field.path());
         return new OutboundCandidateField(
             field.path(),
             field.dataClass(),
             field.strategy(),
-            obligation(field.dataClass(), field.strategy()),
+            contract.obligation(),
             treatment(field.strategy()),
             field.transformedValueDigest(),
             field.transformedValue()
         );
     }
 
-    private FieldObligation obligation(DataClass dataClass, TransformStrategy strategy) {
-        if (strategy == TransformStrategy.KEEP) {
-            return switch (dataClass) {
-                case BUSINESS_METADATA, FINANCIAL_METADATA -> FieldObligation.CONDITIONAL_EXACT;
-                default -> FieldObligation.REQUIRED_EXACT;
-            };
-        }
-        return switch (dataClass) {
-            case UNKNOWN -> FieldObligation.PROHIBITED;
-            case BUSINESS_METADATA, FINANCIAL_METADATA -> FieldObligation.MINIMIZABLE;
-            default -> FieldObligation.PSEUDONYMIZABLE;
-        };
+    private DestinationFieldContract contract(DestinationProfile profile, String path) {
+        return profile.fieldContract(path)
+            .orElseThrow(() -> new OutboundGuardException(
+                "Destination field contract is not configured: " + path,
+                List.of("DESTINATION_FIELD_CONTRACT_NOT_FOUND")
+            ));
     }
 
     private FieldTreatment treatment(TransformStrategy strategy) {

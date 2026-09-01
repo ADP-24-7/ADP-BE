@@ -258,22 +258,26 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     public void recordOutbound(String executionId, OutboundCandidatePayload payload, OutboundGuardResult guardResult) {
         jdbcClient.sql("""
             insert into runtime.outbound_candidate (
-                outbound_payload_id, execution_id, destination_profile_id, pack_type,
-                schema_version, payload_digest, field_count, guard_status,
+                outbound_payload_id, execution_id, destination_profile_id,
+                destination_profile_version, destination_profile_digest, pack_type,
+                schema_version, candidate_payload_digest, field_count, guard_status,
                 guard_reason_codes, created_at
             )
             values (
-                :outboundPayloadId, :executionId, :destinationProfileId, :packType,
-                :schemaVersion, :payloadDigest, :fieldCount, :guardStatus,
+                :outboundPayloadId, :executionId, :destinationProfileId,
+                :destinationProfileVersion, :destinationProfileDigest, :packType,
+                :schemaVersion, :candidatePayloadDigest, :fieldCount, :guardStatus,
                 :guardReasonCodes, :createdAt
             )
             """)
             .param("outboundPayloadId", payload.outboundPayloadId())
             .param("executionId", executionId)
             .param("destinationProfileId", payload.destinationProfileId())
+            .param("destinationProfileVersion", payload.destinationProfileVersion())
+            .param("destinationProfileDigest", payload.destinationProfileDigest())
             .param("packType", payload.packType().name())
             .param("schemaVersion", payload.schemaVersion())
-            .param("payloadDigest", payload.payloadDigest())
+            .param("candidatePayloadDigest", payload.candidatePayloadDigest())
             .param("fieldCount", payload.fieldCount())
             .param("guardStatus", guardResult.status())
             .param("guardReasonCodes", String.join(",", guardResult.reasonCodes()))
@@ -289,7 +293,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             """)
             .param("executionId", executionId)
             .param("outboundPayloadId", payload.outboundPayloadId())
-            .param("outboundPayloadDigest", payload.payloadDigest())
+            .param("outboundPayloadDigest", payload.candidatePayloadDigest())
             .param("outboundGuardStatus", guardResult.status())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
@@ -297,23 +301,26 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     @Override
     public void recordConnector(String executionId, ConnectorResult connectorResult) {
-        String connectorExecutionId = "con_" + java.util.UUID.randomUUID();
         jdbcClient.sql("""
             insert into runtime.connector_execution (
                 connector_execution_id, execution_id, outbound_payload_id,
-                outbound_payload_digest, connector_id, status, created_at
+                outbound_payload_digest, connector_id, status,
+                response_digest, response_schema_version, created_at
             )
             values (
                 :connectorExecutionId, :executionId, :outboundPayloadId,
-                :outboundPayloadDigest, :connectorId, :status, :createdAt
+                :outboundPayloadDigest, :connectorId, :status,
+                :responseDigest, :responseSchemaVersion, :createdAt
             )
             """)
-            .param("connectorExecutionId", connectorExecutionId)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
             .param("executionId", executionId)
             .param("outboundPayloadId", connectorResult.outboundPayloadId())
             .param("outboundPayloadDigest", connectorResult.outboundPayloadDigest())
             .param("connectorId", connectorResult.connectorId())
             .param("status", connectorResult.status())
+            .param("responseDigest", connectorResult.responseDigest())
+            .param("responseSchemaVersion", connectorResult.responseSchemaVersion())
             .param("createdAt", OffsetDateTime.now(clock))
             .update();
         jdbcClient.sql("""
@@ -324,7 +331,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             where execution_id = :executionId
             """)
             .param("executionId", executionId)
-            .param("connectorExecutionId", connectorExecutionId)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
             .param("connectorStatus", connectorResult.status())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
@@ -334,14 +341,15 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     public void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult) {
         jdbcClient.sql("""
             insert into runtime.response_guard_result (
-                execution_id, connector_id, connector_status,
+                connector_execution_id, execution_id, connector_id, connector_status,
                 status, leakage_detected, reason_codes, created_at
             )
             values (
-                :executionId, :connectorId, :connectorStatus,
+                :connectorExecutionId, :executionId, :connectorId, :connectorStatus,
                 :status, :leakageDetected, :reasonCodes, :createdAt
             )
             """)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
             .param("executionId", executionId)
             .param("connectorId", connectorResult.connectorId())
             .param("connectorStatus", connectorResult.status())

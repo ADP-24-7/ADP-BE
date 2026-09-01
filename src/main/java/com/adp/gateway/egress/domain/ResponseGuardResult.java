@@ -15,4 +15,16 @@ public record ResponseGuardResult(
     public static ResponseGuardResult passed() {
         return new ResponseGuardResult("PASSED", false, List.of());
     }
+
+    public static ResponseGuardResult rejected(List<String> reasonCodes) {
+        return new ResponseGuardResult("REJECTED", true, reasonCodes);
+    }
+
+    public static ResponseGuardResult notEvaluated(List<String> reasonCodes) {
+        return new ResponseGuardResult("NOT_EVALUATED", false, reasonCodes);
+    }
+
+    public boolean isPassed() {
+        return "PASSED".equals(status);
+    }
 }

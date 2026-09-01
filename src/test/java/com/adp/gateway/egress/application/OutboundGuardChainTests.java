@@ -1,14 +1,15 @@
 package com.adp.gateway.egress.application;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import java.util.Set;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.DestinationBinding;
+import com.adp.gateway.egress.domain.DestinationFieldContract;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.egress.domain.FieldTreatment;
@@ -25,22 +26,29 @@ class OutboundGuardChainTests {
 
     private final OutboundGuardChain guardChain = new OutboundGuardChain(providerProfileId -> new DestinationProfile(
         "dest_test",
+        "v1",
+        "profile_digest",
+        "contract-v1",
         providerProfileId,
         ExecutionPackType.AI,
         "schema-v1",
-        true,
-        Set.of("customer_summary"),
-        Set.of("CUSTOMER_SUPPORT")
+        "ACTIVE",
+        java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+        null,
+        List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+        List.of(
+            new DestinationFieldContract("customer.customer_id", DataClass.CUSTOMER_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, false, false),
+            new DestinationFieldContract("customer.segment", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
+            new DestinationFieldContract("credential.api_key", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, false, true)
+        )
     ));
 
     @Test
     void rejectsReviewDecisionBeforeConnectorBoundary() {
-        assertThatThrownBy(() -> guardChain.guard(request(), "internal-provider", decision(FinalAction.REVIEW), payload(metadataField())))
-            .isInstanceOf(OutboundGuardException.class)
-            .hasMessageContaining("Outbound guard rejected payload")
-            .extracting("reasonCodes")
-            .asList()
-            .contains("FINAL_ACTION_NOT_EGRESSIBLE");
+        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.REVIEW), payload(metadataField()));
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains("FINAL_ACTION_NOT_EGRESSIBLE");
     }
 
     @Test
@@ -55,11 +63,47 @@ class OutboundGuardChainTests {
             "customer-100"
         );
 
-        assertThatThrownBy(() -> guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), payload(rawSensitive)))
-            .isInstanceOf(OutboundGuardException.class)
-            .extracting("reasonCodes")
-            .asList()
-            .contains("UNAPPROVED_RAW_FIELD_PRESENT");
+        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), payload(rawSensitive));
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains("UNAPPROVED_RAW_FIELD_PRESENT");
+    }
+
+    @Test
+    void rejectsSchemaPackAndRequiredFieldFailures() {
+        OutboundCandidatePayload invalidPayload = new OutboundCandidatePayload(
+            "out_test",
+            "dest_test",
+            "v1",
+            "profile_digest",
+            ExecutionPackType.DIGITAL_ASSET,
+            "schema-v2",
+            "payload_digest",
+            List.of()
+        );
+
+        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), invalidPayload);
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains("PACK_TYPE_MISMATCH", "SCHEMA_VERSION_MISMATCH", "REQUIRED_FIELD_MISSING");
+    }
+
+    @Test
+    void rejectsSecretExactPayload() {
+        OutboundCandidateField secret = new OutboundCandidateField(
+            "$.records[0].credential.api_key",
+            DataClass.BUSINESS_METADATA,
+            TransformStrategy.KEEP,
+            FieldObligation.CONDITIONAL_EXACT,
+            FieldTreatment.KEEP_EXACT_PROTECTED,
+            "digest",
+            "api_key_live_secret"
+        );
+
+        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), payload(secret));
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains("SECRET_FIELD_PRESENT");
     }
 
     private RuntimeRequestContext request() {
@@ -98,6 +142,8 @@ class OutboundGuardChainTests {
         return new OutboundCandidatePayload(
             "out_test",
             "dest_test",
+            "v1",
+            "profile_digest",
             ExecutionPackType.AI,
             "schema-v1",
             "payload_digest",

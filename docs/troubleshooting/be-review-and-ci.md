@@ -128,5 +128,5 @@ README의 완료 기준과 별도로, 리뷰 과정에서 실제로 문제가 �
 ## BE-6로 이관한 항목
 
 - Connector가 `TransformResult`에 직접 결합된 구조는 BE-6에서 `OutboundCandidatePayload`와 Outbound Guard로 분리한다.
-- 현재 transform output digest는 transform result metadata digest이며, 실제 provider payload canonical digest는 BE-6 Outbound Guard에서 생성한다.
+- 현재 transform output digest는 transform result metadata digest이며, BE-6 baseline은 outbound candidate metadata digest만 생성한다. 실제 provider payload canonical digest는 Pack별 schema mapper가 추가될 때 별도 구현한다.
 - DA 실제 transform mapping artifact loader와 Privileged Re-map/Audit는 BE-5 후속 완료 항목으로 남긴다.

@@ -2,6 +2,7 @@ package com.adp.gateway.egress.application;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.decision.domain.FinalAction;
@@ -16,6 +17,10 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class OutboundGuardChain {
+
+    private static final Pattern SECRET_PATTERN = Pattern.compile(
+        "(?i).*(api[_-]?key|secret|private[_-]?key|seed|credential|access[_-]?token|refresh[_-]?token).*"
+    );
 
     private final DestinationProfilePort destinationProfilePort;
 
@@ -34,6 +39,16 @@ public class OutboundGuardChain {
         if (!destinationProfile.destinationProfileId().equals(payload.destinationProfileId())) {
             reasonCodes.add("DESTINATION_PROFILE_MISMATCH");
         }
+        if (!destinationProfile.profileVersion().equals(payload.destinationProfileVersion())
+            || !destinationProfile.profileDigest().equals(payload.destinationProfileDigest())) {
+            reasonCodes.add("DESTINATION_PROFILE_VERSION_MISMATCH");
+        }
+        if (destinationProfile.packType() != payload.packType()) {
+            reasonCodes.add("PACK_TYPE_MISMATCH");
+        }
+        if (!destinationProfile.schemaVersion().equals(payload.schemaVersion())) {
+            reasonCodes.add("SCHEMA_VERSION_MISMATCH");
+        }
         if (!destinationProfile.allows(requestContext.workloadId(), requestContext.purpose())) {
             reasonCodes.add("DESTINATION_PROFILE_NOT_ALLOWED");
         }
@@ -41,15 +56,33 @@ public class OutboundGuardChain {
             reasonCodes.add("FINAL_ACTION_NOT_EGRESSIBLE");
         }
         for (OutboundCandidateField field : payload.fields()) {
-            validateField(field, reasonCodes);
+            validateField(destinationProfile.fieldContract(field.path()).orElse(null), field, reasonCodes);
         }
+        destinationProfile.fieldContracts().stream()
+            .filter(contract -> contract.required()
+                && payload.fields().stream().noneMatch(field -> matchesContract(field.path(), contract.path())))
+            .forEach(contract -> reasonCodes.add("REQUIRED_FIELD_MISSING"));
         if (!reasonCodes.isEmpty()) {
-            throw new OutboundGuardException("Outbound guard rejected payload", reasonCodes);
+            return OutboundGuardResult.rejected(reasonCodes);
         }
         return OutboundGuardResult.passed();
     }
 
-    private void validateField(OutboundCandidateField field, List<String> reasonCodes) {
+    private void validateField(
+        com.adp.gateway.egress.domain.DestinationFieldContract contract,
+        OutboundCandidateField field,
+        List<String> reasonCodes
+    ) {
+        if (contract == null) {
+            reasonCodes.add("DESTINATION_FIELD_CONTRACT_NOT_FOUND");
+            return;
+        }
+        if (contract.dataClass() != field.dataClass()) {
+            reasonCodes.add("FIELD_DATA_CLASS_MISMATCH");
+        }
+        if (contract.obligation() != field.obligation()) {
+            reasonCodes.add("FIELD_OBLIGATION_MISMATCH");
+        }
         if (field.dataClass() == DataClass.UNKNOWN || field.obligation() == FieldObligation.PROHIBITED) {
             reasonCodes.add("PROHIBITED_FIELD_PRESENT");
         }
@@ -57,12 +90,23 @@ public class OutboundGuardChain {
             reasonCodes.add("REMOVED_FIELD_PRESENT");
         }
         if (field.treatment() == FieldTreatment.KEEP_EXACT_PROTECTED
-            && field.dataClass() != DataClass.BUSINESS_METADATA
-            && field.dataClass() != DataClass.FINANCIAL_METADATA) {
+            && !contract.exactAllowed()) {
             reasonCodes.add("UNAPPROVED_RAW_FIELD_PRESENT");
+        }
+        if (field.obligation() == FieldObligation.REQUIRED_EXACT
+            && field.treatment() != FieldTreatment.KEEP_EXACT_PROTECTED) {
+            reasonCodes.add("REQUIRED_EXACT_NOT_PRESERVED");
+        }
+        if ((SECRET_PATTERN.matcher(field.path()).matches() || SECRET_PATTERN.matcher(String.valueOf(field.value())).matches())
+            && field.treatment() == FieldTreatment.KEEP_EXACT_PROTECTED) {
+            reasonCodes.add("SECRET_FIELD_PRESENT");
         }
         if (field.valueDigest() == null && field.treatment() != FieldTreatment.REMOVED) {
             reasonCodes.add("EGRESS_FIELD_DIGEST_MISSING");
         }
+    }
+
+    private boolean matchesContract(String fieldPath, String contractPath) {
+        return fieldPath.equals(contractPath) || fieldPath.endsWith("." + contractPath);
     }
 }

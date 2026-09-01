@@ -24,8 +24,10 @@ import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
+import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
@@ -218,6 +220,7 @@ public class RuntimeExecutionService {
             var outboundPayload = outboundCandidatePayloadBuilder.build(
                 requestContext,
                 providerProfileId,
+                canonicalContext,
                 decision,
                 transformResult
             );
@@ -228,17 +231,36 @@ public class RuntimeExecutionService {
                 outboundPayload
             );
             persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
+            if (!outboundGuardResult.isPassed()) {
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.BLOCKED,
+                    decision,
+                    transformResult,
+                    outboundGuardResult.status(),
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
             persistence.updateStatus(executionId, RuntimeExecutionStatus.OUTBOUND_READY);
             ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
             persistence.recordConnector(executionId, connectorResult);
             persistence.updateStatus(executionId, RuntimeExecutionStatus.CONNECTOR_EXECUTED);
             ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+            RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed()
+                ? RuntimeExecutionStatus.RESPONSE_GUARDED
+                : RuntimeExecutionStatus.BLOCKED;
+            persistence.updateStatus(executionId, completedStatus);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
             return new RuntimeExecutionResult(
                 executionId,
-                RuntimeExecutionStatus.CONNECTOR_EXECUTED,
+                completedStatus,
                 decision,
                 transformResult,
                 outboundGuardResult.status(),
@@ -247,6 +269,9 @@ public class RuntimeExecutionService {
                 auditContext
             );
         } catch (AccessDeniedException exception) {
+            throw exception;
+        } catch (DestinationProfileNotFoundException | OutboundGuardException exception) {
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);

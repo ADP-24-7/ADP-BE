@@ -173,7 +173,7 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [ ] Vault 장애 fallback 정책
 - [ ] DA 실제 transform policy artifact loader 연동
 - [x] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
-- [x] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
+- [ ] 실제 provider payload canonical digest는 Pack별 schema mapper 단계에서 구현
 - [ ] Reversible vault가 필요해질 경우 KMS 기반 encrypted mapping 저장소 추가
 
 ## BE-6 Tracking
@@ -193,10 +193,16 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [x] `destination_profile`, `outbound_candidate`, `connector_execution`, `response_guard_result` persistence 추가
 - [x] Runtime trace에 Outbound Guard / Connector / Response Guard stage 반영
 - [x] Guard 거부 및 Connector 우회 방지 테스트 추가
+- [x] ALLOW 경로에서 Canonical Context 기반 OutboundCandidate 조립
+- [x] Field Obligation Source of Truth를 Destination Field Contract로 이동
+- [x] Versioned Destination Profile identity 추가
+- [x] Outbound Guard reject 결과 persistence 후 BLOCK 처리
+- [x] Response Guard가 response metadata 없이 `PASSED`를 기록하지 않도록 수정
 - [ ] Pack별 외부 schema mapper 분리
 - [ ] Destination Profile DB-backed adapter
 - [ ] Response leakage detector adapter
 - [ ] Provider별 connector status 정규화
+- [ ] 실제 provider payload canonical JSON digest 저장
 - [ ] 실제 provider response digest 저장
 
 ## Troubleshooting

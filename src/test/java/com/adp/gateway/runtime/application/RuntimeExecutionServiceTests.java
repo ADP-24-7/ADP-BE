@@ -191,7 +191,7 @@ class RuntimeExecutionServiceTests {
             Map.of()
         );
 
-        verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
+        verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any(), any());
         verify(outboundGuardChain, never()).guard(any(), any(), any(), any());
         verify(connector, never()).execute(any(), any(), any());
     }
