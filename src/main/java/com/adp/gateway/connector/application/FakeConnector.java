@@ -21,8 +21,7 @@ public class FakeConnector implements RuntimeConnectorPort {
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),
-            "fake-response-schema-v1",
-            false
+            "fake-response-schema-v1"
         );
     }
 }

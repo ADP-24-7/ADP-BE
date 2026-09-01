@@ -25,10 +25,12 @@ import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
+import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
@@ -63,6 +65,7 @@ public class RuntimeExecutionService {
     private final SubjectRefHasher subjectRefHasher;
     private final RuntimeInputHasher runtimeInputHasher;
     private final TransformEngine transformEngine;
+    private final DestinationProfilePort destinationProfilePort;
     private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
     private final OutboundGuardChain outboundGuardChain;
     private final ResponseGuardPort responseGuardPort;
@@ -82,6 +85,7 @@ public class RuntimeExecutionService {
         SubjectRefHasher subjectRefHasher,
         RuntimeInputHasher runtimeInputHasher,
         TransformEngine transformEngine,
+        DestinationProfilePort destinationProfilePort,
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
         OutboundGuardChain outboundGuardChain,
         ResponseGuardPort responseGuardPort,
@@ -100,6 +104,7 @@ public class RuntimeExecutionService {
         this.subjectRefHasher = subjectRefHasher;
         this.runtimeInputHasher = runtimeInputHasher;
         this.transformEngine = transformEngine;
+        this.destinationProfilePort = destinationProfilePort;
         this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
         this.outboundGuardChain = outboundGuardChain;
         this.responseGuardPort = responseGuardPort;
@@ -109,7 +114,7 @@ public class RuntimeExecutionService {
     public RuntimeExecutionResult execute(
         RuntimeRequestContext requestContext,
         AuthPrincipal principal,
-        String providerProfileId,
+        String destinationProfileId,
         List<String> processingContexts,
         Map<String, Object> input
     ) {
@@ -125,7 +130,10 @@ public class RuntimeExecutionService {
             requestContext.workloadId(),
             requestContext.purpose(),
             subject == null ? null : subjectRefHasher.hash(subject),
-            providerProfileId,
+            null,
+            destinationProfileId,
+            null,
+            null,
             inputDigest,
             null,
             null,
@@ -148,6 +156,8 @@ public class RuntimeExecutionService {
         ));
 
         try {
+            DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
+            persistence.recordDestinationProfile(executionId, destinationProfile);
             if (!authorizationService.authorize(new AuthorizationRequest(
                 principal,
                 requestContext.workloadId(),
@@ -174,7 +184,7 @@ public class RuntimeExecutionService {
             RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
                 canonicalContext,
                 processingContexts,
-                providerProfileId,
+                destinationProfile.providerProfileId(),
                 inputDigest
             );
             PolicySnapshot snapshot = policySnapshotPort.load(new PolicySelectionContext(
@@ -218,15 +228,16 @@ public class RuntimeExecutionService {
                 );
             }
             var outboundPayload = outboundCandidatePayloadBuilder.build(
-                requestContext,
-                providerProfileId,
+                destinationProfile,
                 canonicalContext,
                 decision,
                 transformResult
             );
             OutboundGuardResult outboundGuardResult = outboundGuardChain.guard(
-                requestContext,
-                providerProfileId,
+                destinationProfile,
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                now,
                 decision,
                 outboundPayload
             );

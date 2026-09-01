@@ -1,5 +1,7 @@
 package com.adp.gateway.egress.infrastructure;
 
+import java.time.OffsetDateTime;
+
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.domain.DestinationProfile;
@@ -11,7 +13,7 @@ import org.springframework.stereotype.Component;
 public class UnconfiguredDestinationProfileAdapter implements DestinationProfilePort {
 
     @Override
-    public DestinationProfile load(String providerProfileId) {
-        throw new DestinationProfileNotFoundException(providerProfileId);
+    public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
+        throw new DestinationProfileNotFoundException(destinationProfileId);
     }
 }

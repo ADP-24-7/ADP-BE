@@ -38,7 +38,7 @@ create table runtime.connector_execution (
     connector_execution_id varchar(80) not null unique,
     execution_id varchar(80) not null references runtime.runtime_execution (execution_id),
     outbound_payload_id varchar(80) not null references runtime.outbound_candidate (outbound_payload_id),
-    outbound_payload_digest varchar(64) not null,
+    outbound_candidate_digest varchar(64) not null,
     connector_id varchar(120) not null,
     status varchar(40) not null,
     response_digest varchar(200),
@@ -59,12 +59,16 @@ create table runtime.response_guard_result (
 );
 
 alter table runtime.runtime_execution
+    alter column provider_profile_id drop not null,
     add column outbound_payload_id varchar(80),
-    add column outbound_payload_digest varchar(64),
+    add column outbound_candidate_digest varchar(64),
     add column outbound_guard_status varchar(40),
     add column connector_execution_id varchar(80),
     add column connector_status varchar(40),
-    add column response_guard_status varchar(40);
+    add column response_guard_status varchar(40),
+    add column destination_profile_id varchar(120),
+    add column destination_profile_version varchar(120),
+    add column destination_profile_digest varchar(200);
 
 create unique index uq_destination_profile_provider_version
     on egress.destination_profile (provider_profile_id, profile_version);

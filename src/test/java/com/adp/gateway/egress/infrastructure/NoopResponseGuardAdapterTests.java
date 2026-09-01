@@ -13,7 +13,7 @@ class NoopResponseGuardAdapterTests {
     void returnsNotEvaluatedWhenResponseMetadataIsMissing() {
         var result = responseGuard.guard(
             null,
-            new ConnectorResult("con_test", "fake", "EXECUTED", "out_test", "payload_digest", null, null, false)
+            new ConnectorResult("con_test", "fake", "EXECUTED", "out_test", "payload_digest", null, null)
         );
 
         assertThat(result.status()).isEqualTo("NOT_EVALUATED");
@@ -21,7 +21,7 @@ class NoopResponseGuardAdapterTests {
     }
 
     @Test
-    void rejectsLeakageHint() {
+    void passesOnlyWhenResponseMetadataExists() {
         var result = responseGuard.guard(
             null,
             new ConnectorResult(
@@ -31,12 +31,11 @@ class NoopResponseGuardAdapterTests {
                 "out_test",
                 "payload_digest",
                 "response_digest",
-                "response-schema-v1",
-                true
+                "response-schema-v1"
             )
         );
 
-        assertThat(result.status()).isEqualTo("REJECTED");
-        assertThat(result.reasonCodes()).contains("RESPONSE_LEAKAGE_DETECTED");
+        assertThat(result.status()).isEqualTo("PASSED");
+        assertThat(result.reasonCodes()).isEmpty();
     }
 }

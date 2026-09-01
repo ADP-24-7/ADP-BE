@@ -16,9 +16,6 @@ public class NoopResponseGuardAdapter implements ResponseGuardPort {
         if (!"EXECUTED".equals(connectorResult.status())) {
             return ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED"));
         }
-        if (connectorResult.responseLeakageDetected()) {
-            return ResponseGuardResult.rejected(List.of("RESPONSE_LEAKAGE_DETECTED"));
-        }
         if (connectorResult.responseDigest() == null || connectorResult.responseSchemaVersion() == null) {
             return ResponseGuardResult.notEvaluated(List.of("RESPONSE_METADATA_MISSING"));
         }

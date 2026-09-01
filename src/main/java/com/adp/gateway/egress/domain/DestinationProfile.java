@@ -24,8 +24,15 @@ public record DestinationProfile(
         fieldContracts = List.copyOf(fieldContracts);
     }
 
-    public boolean allows(String workloadId, String purposeCode) {
+    public boolean isEffectiveAt(OffsetDateTime requestStartedAt) {
         return "ACTIVE".equals(status)
+            && !effectiveAt.isAfter(requestStartedAt)
+            && (expiresAt == null || expiresAt.isAfter(requestStartedAt));
+    }
+
+    public boolean allows(String workloadId, String purposeCode, OffsetDateTime requestStartedAt) {
+        return "ACTIVE".equals(status)
+            && isEffectiveAt(requestStartedAt)
             && allowedBindings.stream()
                 .anyMatch(binding -> binding.workloadId().equals(workloadId) && binding.purposeCode().equals(purposeCode));
     }

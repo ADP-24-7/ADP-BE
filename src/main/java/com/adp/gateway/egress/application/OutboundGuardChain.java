@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.egress.domain.FieldTreatment;
 import com.adp.gateway.egress.domain.OutboundCandidateField;
@@ -19,23 +19,19 @@ import org.springframework.stereotype.Service;
 public class OutboundGuardChain {
 
     private static final Pattern SECRET_PATTERN = Pattern.compile(
-        "(?i).*(api[_-]?key|secret|private[_-]?key|seed|credential|access[_-]?token|refresh[_-]?token).*"
+        "(?i).*(api[_-]?key|secret|private[_-]?key|seed|credential|access[_-]?token|refresh[_-]?token|"
+            + "sk-[a-z0-9_-]{8,}|ghp_[a-z0-9_]{8,}|xox[baprs]-[a-z0-9-]{8,}).*"
     );
 
-    private final DestinationProfilePort destinationProfilePort;
-
-    public OutboundGuardChain(DestinationProfilePort destinationProfilePort) {
-        this.destinationProfilePort = destinationProfilePort;
-    }
-
     public OutboundGuardResult guard(
-        RuntimeRequestContext requestContext,
-        String providerProfileId,
+        DestinationProfile destinationProfile,
+        String workloadId,
+        String purposeCode,
+        java.time.OffsetDateTime requestStartedAt,
         RuntimeDecision decision,
         OutboundCandidatePayload payload
     ) {
         List<String> reasonCodes = new ArrayList<>();
-        var destinationProfile = destinationProfilePort.load(providerProfileId);
         if (!destinationProfile.destinationProfileId().equals(payload.destinationProfileId())) {
             reasonCodes.add("DESTINATION_PROFILE_MISMATCH");
         }
@@ -49,7 +45,10 @@ public class OutboundGuardChain {
         if (!destinationProfile.schemaVersion().equals(payload.schemaVersion())) {
             reasonCodes.add("SCHEMA_VERSION_MISMATCH");
         }
-        if (!destinationProfile.allows(requestContext.workloadId(), requestContext.purpose())) {
+        if (!destinationProfile.isEffectiveAt(requestStartedAt)) {
+            reasonCodes.add("DESTINATION_PROFILE_NOT_EFFECTIVE");
+        }
+        if (!destinationProfile.allows(workloadId, purposeCode, requestStartedAt)) {
             reasonCodes.add("DESTINATION_PROFILE_NOT_ALLOWED");
         }
         if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
@@ -75,12 +74,10 @@ public class OutboundGuardChain {
     ) {
         if (contract == null) {
             reasonCodes.add("DESTINATION_FIELD_CONTRACT_NOT_FOUND");
-            return;
-        }
-        if (contract.dataClass() != field.dataClass()) {
+        } else if (contract.dataClass() != field.dataClass()) {
             reasonCodes.add("FIELD_DATA_CLASS_MISMATCH");
         }
-        if (contract.obligation() != field.obligation()) {
+        if (contract != null && contract.obligation() != field.obligation()) {
             reasonCodes.add("FIELD_OBLIGATION_MISMATCH");
         }
         if (field.dataClass() == DataClass.UNKNOWN || field.obligation() == FieldObligation.PROHIBITED) {
@@ -90,7 +87,7 @@ public class OutboundGuardChain {
             reasonCodes.add("REMOVED_FIELD_PRESENT");
         }
         if (field.treatment() == FieldTreatment.KEEP_EXACT_PROTECTED
-            && !contract.exactAllowed()) {
+            && (contract == null || !contract.exactAllowed())) {
             reasonCodes.add("UNAPPROVED_RAW_FIELD_PRESENT");
         }
         if (field.obligation() == FieldObligation.REQUIRED_EXACT

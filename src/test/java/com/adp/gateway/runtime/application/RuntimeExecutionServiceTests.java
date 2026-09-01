@@ -29,9 +29,13 @@ import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.domain.DestinationBinding;
+import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -70,6 +74,7 @@ class RuntimeExecutionServiceTests {
         SubjectRefHasher subjectRefHasher = mock(SubjectRefHasher.class);
         RuntimeInputHasher runtimeInputHasher = mock(RuntimeInputHasher.class);
         TransformEngine transformEngine = mock(TransformEngine.class);
+        DestinationProfilePort destinationProfilePort = mock(DestinationProfilePort.class);
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
@@ -87,6 +92,7 @@ class RuntimeExecutionServiceTests {
             subjectRefHasher,
             runtimeInputHasher,
             transformEngine,
+            destinationProfilePort,
             outboundCandidatePayloadBuilder,
             outboundGuardChain,
             responseGuardPort,
@@ -111,6 +117,7 @@ class RuntimeExecutionServiceTests {
         RuntimePolicyContext policyContext = policyContext();
         RuntimeDecision decision = mock(RuntimeDecision.class);
         when(authorizationService.authorize(any())).thenReturn(AuthorizationDecision.allow());
+        when(destinationProfilePort.load(any(), any())).thenReturn(destinationProfile());
         when(runtimeInputHasher.hash(any())).thenReturn("input_digest");
         when(subjectRefHasher.hash(any())).thenReturn("subject_digest");
         when(retrievalService.retrieve(any())).thenReturn(retrieval());
@@ -122,7 +129,7 @@ class RuntimeExecutionServiceTests {
         when(transformEngine.transform(any(), any(), any(), any()))
             .thenThrow(new IllegalStateException("vault unavailable"));
 
-        assertThatThrownBy(() -> service.execute(request, principal, "internal-provider", List.of("AI_USE"), Map.of()))
+        assertThatThrownBy(() -> service.execute(request, principal, "dest_internal_provider_project_provisional", List.of("AI_USE"), Map.of()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("vault unavailable");
 
@@ -146,6 +153,7 @@ class RuntimeExecutionServiceTests {
         SubjectRefHasher subjectRefHasher = mock(SubjectRefHasher.class);
         RuntimeInputHasher runtimeInputHasher = mock(RuntimeInputHasher.class);
         TransformEngine transformEngine = mock(TransformEngine.class);
+        DestinationProfilePort destinationProfilePort = mock(DestinationProfilePort.class);
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
@@ -163,6 +171,7 @@ class RuntimeExecutionServiceTests {
             subjectRefHasher,
             runtimeInputHasher,
             transformEngine,
+            destinationProfilePort,
             outboundCandidatePayloadBuilder,
             outboundGuardChain,
             responseGuardPort,
@@ -171,6 +180,7 @@ class RuntimeExecutionServiceTests {
         RuntimeDecision decision = mock(RuntimeDecision.class);
         when(decision.finalAction()).thenReturn(FinalAction.REVIEW);
         when(authorizationService.authorize(any())).thenReturn(AuthorizationDecision.allow());
+        when(destinationProfilePort.load(any(), any())).thenReturn(destinationProfile());
         when(runtimeInputHasher.hash(any())).thenReturn("input_digest");
         when(subjectRefHasher.hash(any())).thenReturn("subject_digest");
         when(retrievalService.retrieve(any())).thenReturn(retrieval());
@@ -186,13 +196,13 @@ class RuntimeExecutionServiceTests {
         service.execute(
             request(),
             principal(),
-            "internal-provider",
+            "dest_internal_provider_project_provisional",
             List.of("AI_USE"),
             Map.of()
         );
 
-        verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any(), any());
-        verify(outboundGuardChain, never()).guard(any(), any(), any(), any());
+        verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
+        verify(outboundGuardChain, never()).guard(any(), any(), any(), any(), any(), any());
         verify(connector, never()).execute(any(), any(), any());
     }
 
@@ -230,6 +240,23 @@ class RuntimeExecutionServiceTests {
             false,
             Set.of("customer_summary"),
             Set.of(AdpRole.RUNTIME_EXECUTOR)
+        );
+    }
+
+    private DestinationProfile destinationProfile() {
+        return new DestinationProfile(
+            "dest_internal_provider_project_provisional",
+            "0.0.0",
+            "local-fixture-destination-profile",
+            "be-egress-contract/0.0.0",
+            "internal-provider",
+            ExecutionPackType.AI,
+            "project-provisional-egress-schema-v1",
+            "ACTIVE",
+            OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+            null,
+            List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            List.of()
         );
     }
 

@@ -29,12 +29,15 @@ import org.junit.jupiter.api.Test;
 class OutboundCandidatePayloadBuilderTests {
 
     private final OutboundCandidatePayloadBuilder builder = new OutboundCandidatePayloadBuilder(
-        providerProfileId -> new DestinationProfile(
+        new CanonicalValueHasher()
+    );
+
+    private final DestinationProfile profile = new DestinationProfile(
             "dest_test",
             "v1",
             "profile_digest",
             "contract-v1",
-            providerProfileId,
+            "internal-provider",
             ExecutionPackType.AI,
             "schema-v1",
             "ACTIVE",
@@ -48,15 +51,12 @@ class OutboundCandidatePayloadBuilderTests {
                 true,
                 true
             ))
-        ),
-        new CanonicalValueHasher()
     );
 
     @Test
     void allowDecisionBuildsCandidateFromCanonicalContextWhenTransformSkipped() {
         var payload = builder.build(
-            request(),
-            "internal-provider",
+            profile,
             canonicalContext(),
             decision(FinalAction.ALLOW),
             TransformResult.skipped("trn_skipped")

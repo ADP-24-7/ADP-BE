@@ -5,14 +5,14 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
-import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.DestinationFieldContract;
+import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.egress.domain.FieldTreatment;
 import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
@@ -24,25 +24,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class OutboundCandidatePayloadBuilder {
 
-    private final DestinationProfilePort destinationProfilePort;
     private final CanonicalValueHasher hasher;
 
     public OutboundCandidatePayloadBuilder(
-        DestinationProfilePort destinationProfilePort,
         CanonicalValueHasher hasher
     ) {
-        this.destinationProfilePort = destinationProfilePort;
         this.hasher = hasher;
     }
 
     public OutboundCandidatePayload build(
-        RuntimeRequestContext requestContext,
-        String providerProfileId,
+        DestinationProfile profile,
         CanonicalContext canonicalContext,
         RuntimeDecision decision,
         TransformResult transformResult
     ) {
-        DestinationProfile profile = destinationProfilePort.load(providerProfileId);
         List<OutboundCandidateField> fields = fields(profile, canonicalContext, decision, transformResult).stream()
             .sorted(Comparator.comparing(OutboundCandidateField::path))
             .toList();
@@ -88,7 +83,7 @@ public class OutboundCandidatePayloadBuilder {
     }
 
     private OutboundCandidateField exactField(DestinationProfile profile, CanonicalContextField field) {
-        DestinationFieldContract contract = contract(profile, field.path());
+        DestinationFieldContract contract = contract(profile, field.path(), field.dataClass());
         return new OutboundCandidateField(
             field.path(),
             field.dataClass(),
@@ -101,7 +96,7 @@ public class OutboundCandidatePayloadBuilder {
     }
 
     private OutboundCandidateField transformedField(DestinationProfile profile, TransformFieldResult field) {
-        DestinationFieldContract contract = contract(profile, field.path());
+        DestinationFieldContract contract = contract(profile, field.path(), field.dataClass());
         return new OutboundCandidateField(
             field.path(),
             field.dataClass(),
@@ -113,12 +108,9 @@ public class OutboundCandidatePayloadBuilder {
         );
     }
 
-    private DestinationFieldContract contract(DestinationProfile profile, String path) {
+    private DestinationFieldContract contract(DestinationProfile profile, String path, com.adp.gateway.retrieval.domain.DataClass dataClass) {
         return profile.fieldContract(path)
-            .orElseThrow(() -> new OutboundGuardException(
-                "Destination field contract is not configured: " + path,
-                List.of("DESTINATION_FIELD_CONTRACT_NOT_FOUND")
-            ));
+            .orElse(new DestinationFieldContract(path, dataClass, FieldObligation.PROHIBITED, false, false));
     }
 
     private FieldTreatment treatment(TransformStrategy strategy) {

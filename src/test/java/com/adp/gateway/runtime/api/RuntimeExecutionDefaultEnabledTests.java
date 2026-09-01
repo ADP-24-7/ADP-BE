@@ -35,7 +35,7 @@ class RuntimeExecutionDefaultEnabledTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem_def_%s",
                       "processingContexts": ["AI_USE"],
                       "input": {

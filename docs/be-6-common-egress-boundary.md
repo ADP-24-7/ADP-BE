@@ -14,6 +14,8 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 
 - `ExecutionPackType`: `COMMON`, `AI`, `DIGITAL_ASSET`, `SAAS`
 - `DestinationProfile`: provider, pack type, schema version, workload/purpose allowlist
+- Runtime request는 `destinationProfileId`를 받고, provider profile은 pinned Destination Profile에서 파생한다.
+- Request 시작 시점의 Destination Profile id/version/digest를 `runtime.runtime_execution`에 고정한다.
 - `DestinationBinding`: workload/purpose pair allowlist
 - `DestinationFieldContract`: field별 obligation, required, exact transmission 허용 여부
 - `FieldObligation`: `PROHIBITED`, `MINIMIZABLE`, `PSEUDONYMIZABLE`, `CONDITIONAL_EXACT`, `REQUIRED_EXACT`
@@ -33,6 +35,7 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 ## Guard Rules
 
 - Destination Profile이 workload/purpose를 허용하지 않으면 reject한다.
+- Destination Profile이 request 시작 시점 기준 effective window 밖이면 reject한다.
 - `ALLOW`, `TRANSFORM`이 아닌 final action은 egress 불가다.
 - `UNKNOWN` 또는 `PROHIBITED` field가 payload에 남아 있으면 reject한다.
 - `REMOVE` 처리된 field가 payload에 남아 있으면 reject한다.

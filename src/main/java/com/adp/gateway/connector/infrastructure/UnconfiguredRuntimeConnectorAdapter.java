@@ -23,8 +23,7 @@ public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             null,
-            null,
-            false
+            null
         );
     }
 }

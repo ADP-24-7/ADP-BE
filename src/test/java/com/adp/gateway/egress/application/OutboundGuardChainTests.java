@@ -24,12 +24,13 @@ import org.junit.jupiter.api.Test;
 
 class OutboundGuardChainTests {
 
-    private final OutboundGuardChain guardChain = new OutboundGuardChain(providerProfileId -> new DestinationProfile(
+    private final OutboundGuardChain guardChain = new OutboundGuardChain();
+    private final DestinationProfile profile = new DestinationProfile(
         "dest_test",
         "v1",
         "profile_digest",
         "contract-v1",
-        providerProfileId,
+        "internal-provider",
         ExecutionPackType.AI,
         "schema-v1",
         "ACTIVE",
@@ -41,11 +42,11 @@ class OutboundGuardChainTests {
             new DestinationFieldContract("customer.segment", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
             new DestinationFieldContract("credential.api_key", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, false, true)
         )
-    ));
+    );
 
     @Test
     void rejectsReviewDecisionBeforeConnectorBoundary() {
-        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.REVIEW), payload(metadataField()));
+        var result = guardChain.guard(profile, "customer_summary", "CUSTOMER_SUPPORT", requestTime(), decision(FinalAction.REVIEW), payload(metadataField()));
 
         assertThat(result.status()).isEqualTo("REJECTED");
         assertThat(result.reasonCodes()).contains("FINAL_ACTION_NOT_EGRESSIBLE");
@@ -63,7 +64,7 @@ class OutboundGuardChainTests {
             "customer-100"
         );
 
-        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), payload(rawSensitive));
+        var result = guardChain.guard(profile, "customer_summary", "CUSTOMER_SUPPORT", requestTime(), decision(FinalAction.TRANSFORM), payload(rawSensitive));
 
         assertThat(result.status()).isEqualTo("REJECTED");
         assertThat(result.reasonCodes()).contains("UNAPPROVED_RAW_FIELD_PRESENT");
@@ -82,7 +83,7 @@ class OutboundGuardChainTests {
             List.of()
         );
 
-        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), invalidPayload);
+        var result = guardChain.guard(profile, "customer_summary", "CUSTOMER_SUPPORT", requestTime(), decision(FinalAction.TRANSFORM), invalidPayload);
 
         assertThat(result.status()).isEqualTo("REJECTED");
         assertThat(result.reasonCodes()).contains("PACK_TYPE_MISMATCH", "SCHEMA_VERSION_MISMATCH", "REQUIRED_FIELD_MISSING");
@@ -91,19 +92,42 @@ class OutboundGuardChainTests {
     @Test
     void rejectsSecretExactPayload() {
         OutboundCandidateField secret = new OutboundCandidateField(
-            "$.records[0].credential.api_key",
+            "$.records[0].prompt.text",
             DataClass.BUSINESS_METADATA,
             TransformStrategy.KEEP,
             FieldObligation.CONDITIONAL_EXACT,
             FieldTreatment.KEEP_EXACT_PROTECTED,
             "digest",
-            "api_key_live_secret"
+            "sk-proj-1234567890abcdef"
         );
 
-        var result = guardChain.guard(request(), "internal-provider", decision(FinalAction.TRANSFORM), payload(secret));
+        var result = guardChain.guard(profile, "customer_summary", "CUSTOMER_SUPPORT", requestTime(), decision(FinalAction.TRANSFORM), payload(secret));
 
         assertThat(result.status()).isEqualTo("REJECTED");
-        assertThat(result.reasonCodes()).contains("SECRET_FIELD_PRESENT");
+        assertThat(result.reasonCodes()).contains("DESTINATION_FIELD_CONTRACT_NOT_FOUND", "SECRET_FIELD_PRESENT");
+    }
+
+    @Test
+    void rejectsExpiredDestinationProfile() {
+        DestinationProfile expiredProfile = new DestinationProfile(
+            "dest_test",
+            "v1",
+            "profile_digest",
+            "contract-v1",
+            "internal-provider",
+            ExecutionPackType.AI,
+            "schema-v1",
+            "ACTIVE",
+            java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+            java.time.OffsetDateTime.parse("2026-02-01T00:00:00Z"),
+            List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            List.of(new DestinationFieldContract("customer.segment", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true))
+        );
+
+        var result = guardChain.guard(expiredProfile, "customer_summary", "CUSTOMER_SUPPORT", requestTime(), decision(FinalAction.TRANSFORM), payload(metadataField()));
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains("DESTINATION_PROFILE_NOT_EFFECTIVE", "DESTINATION_PROFILE_NOT_ALLOWED");
     }
 
     private RuntimeRequestContext request() {
@@ -115,6 +139,10 @@ class OutboundGuardChainTests {
             "CUSTOMER_SUPPORT",
             "customer:customer-100"
         );
+    }
+
+    private java.time.OffsetDateTime requestTime() {
+        return java.time.OffsetDateTime.parse("2026-09-01T00:00:00Z");
     }
 
     private RuntimeDecision decision(FinalAction finalAction) {

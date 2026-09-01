@@ -150,17 +150,20 @@ class FlywayMigrationTests {
                   and table_name = 'runtime_execution'
                   and column_name in (
                     'outbound_payload_id',
-                    'outbound_payload_digest',
+                    'outbound_candidate_digest',
                     'outbound_guard_status',
                     'connector_execution_id',
                     'connector_status',
-                    'response_guard_status'
+                    'response_guard_status',
+                    'destination_profile_id',
+                    'destination_profile_version',
+                    'destination_profile_digest'
                   )
                 """)
             .query(Integer.class)
             .single();
 
-        assertThat(columnCount).isEqualTo(6);
+        assertThat(columnCount).isEqualTo(9);
     }
 
     @Test

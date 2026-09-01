@@ -196,6 +196,9 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [x] ALLOW 경로에서 Canonical Context 기반 OutboundCandidate 조립
 - [x] Field Obligation Source of Truth를 Destination Field Contract로 이동
 - [x] Versioned Destination Profile identity 추가
+- [x] Runtime request 단위 Destination Profile id/version/digest pinning 추가
+- [x] `providerProfileId` 요청 입력을 `destinationProfileId`로 정리
+- [x] Destination Profile `effectiveAt`/`expiresAt` enforcement 추가
 - [x] Outbound Guard reject 결과 persistence 후 BLOCK 처리
 - [x] Response Guard가 response metadata 없이 `PASSED`를 기록하지 않도록 수정
 - [ ] Pack별 외부 schema mapper 분리

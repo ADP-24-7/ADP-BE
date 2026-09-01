@@ -3,6 +3,7 @@ package com.adp.gateway.runtime.application;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
@@ -14,6 +15,8 @@ import com.adp.gateway.transform.domain.TransformResult;
 public interface RuntimeExecutionPersistence {
 
     void recordReceived(RuntimeExecutionTrace trace);
+
+    void recordDestinationProfile(String executionId, DestinationProfile destinationProfile);
 
     void recordPolicyEvaluation(String executionId, PolicySnapshot snapshot);
 

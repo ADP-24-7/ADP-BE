@@ -19,16 +19,16 @@ import org.springframework.stereotype.Component;
 public class ProjectProvisionalDestinationProfileAdapter implements DestinationProfilePort {
 
     @Override
-    public DestinationProfile load(String providerProfileId) {
-        if (!"internal-provider".equals(providerProfileId)) {
-            throw new DestinationProfileNotFoundException(providerProfileId);
+    public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
+        if (!"dest_internal_provider_project_provisional".equals(destinationProfileId)) {
+            throw new DestinationProfileNotFoundException(destinationProfileId);
         }
         return new DestinationProfile(
-            "dest_internal_provider_project_provisional",
+            destinationProfileId,
             "0.0.0",
             "local-fixture-destination-profile",
             "be-egress-contract/0.0.0",
-            providerProfileId,
+            "internal-provider",
             ExecutionPackType.AI,
             "project-provisional-egress-schema-v1",
             "ACTIVE",

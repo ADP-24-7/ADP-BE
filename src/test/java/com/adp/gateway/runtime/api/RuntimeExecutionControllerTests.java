@@ -49,7 +49,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
@@ -80,7 +80,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
-            .andExpect(jsonPath("$.outboundPayloadDigest").exists())
+            .andExpect(jsonPath("$.outboundCandidateDigest").exists())
             .andExpect(jsonPath("$.outboundGuardStatus").value("PASSED"))
             .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
             .andExpect(jsonPath("$.responseGuardStatus").value("PASSED"))
@@ -99,7 +99,10 @@ class RuntimeExecutionControllerTests {
                   and canonical_context_digest is not null
                   and runtime_context_digest is not null
                   and decision_id is not null
-                  and outbound_payload_digest is not null
+                  and outbound_candidate_digest is not null
+                  and destination_profile_id = 'dest_internal_provider_project_provisional'
+                  and destination_profile_version = '0.0.0'
+                  and destination_profile_digest = 'local-fixture-destination-profile'
                   and outbound_guard_status = 'PASSED'
                   and connector_status = 'EXECUTED'
                   and response_guard_status = 'PASSED'
@@ -165,7 +168,7 @@ class RuntimeExecutionControllerTests {
                   and oc.candidate_payload_digest is not null
                   and oc.field_count > 0
                   and ce.status = 'EXECUTED'
-                  and ce.outbound_payload_digest = oc.candidate_payload_digest
+                  and ce.outbound_candidate_digest = oc.candidate_payload_digest
                   and rg.status = 'PASSED'
                   and rg.leakage_detected = false
                 """)
@@ -257,7 +260,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "%s",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-size",
                       "processingContexts": ["AI_USE"],
                       "input": {}
@@ -294,7 +297,7 @@ class RuntimeExecutionControllerTests {
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
-                      "providerProfileId": "internal-provider",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-pc",
                       "processingContexts": ["AI_USE", null],
                       "input": {}
@@ -302,6 +305,44 @@ class RuntimeExecutionControllerTests {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void unknownDestinationProfileIsBlockedAndRecorded() throws Exception {
+        String suffix = token();
+        String requestId = "req_dest_" + suffix;
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", "trace_dest_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "workloadId": "customer_summary",
+                      "purposeCode": "CUSTOMER_SUPPORT",
+                      "subjectScope": "customer:customer-100",
+                      "destinationProfileId": "dest_missing",
+                      "idempotencyKey": "idem_dest_%s",
+                      "processingContexts": ["AI_USE"],
+                      "input": {}
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("DESTINATION_PROFILE_NOT_FOUND"));
+
+        Integer blockedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where request_id = :requestId
+                  and destination_profile_id = 'dest_missing'
+                  and provider_profile_id is null
+                  and status = 'BLOCKED'
+                """)
+            .param("requestId", requestId)
+            .query(Integer.class)
+            .single();
+        assertThat(blockedCount).isEqualTo(1);
     }
 
     private String postRuntimeExecution(
@@ -328,7 +369,7 @@ class RuntimeExecutionControllerTests {
               "workloadId": "customer_summary",
               "purposeCode": "CUSTOMER_SUPPORT",
               "subjectScope": "customer:customer-100",
-              "providerProfileId": "internal-provider",
+              "destinationProfileId": "dest_internal_provider_project_provisional",
               "idempotencyKey": "%s",
               "processingContexts": ["AI_USE"],
               "input": {

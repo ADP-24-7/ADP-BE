@@ -5,17 +5,16 @@ public record ConnectorResult(
     String connectorId,
     String status,
     String outboundPayloadId,
-    String outboundPayloadDigest,
+    String outboundCandidateDigest,
     String responseDigest,
-    String responseSchemaVersion,
-    boolean responseLeakageDetected
+    String responseSchemaVersion
 ) {
 
     public ConnectorResult(String connectorId, String status) {
-        this(null, connectorId, status, null, null, null, null, false);
+        this(null, connectorId, status, null, null, null, null);
     }
 
     public static ConnectorResult notExecuted(String connectorId) {
-        return new ConnectorResult(null, connectorId, "NOT_EXECUTED", null, null, null, null, false);
+        return new ConnectorResult(null, connectorId, "NOT_EXECUTED", null, null, null, null);
     }
 }
