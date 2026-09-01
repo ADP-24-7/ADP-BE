@@ -5,6 +5,7 @@ import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.transform.domain.TransformResult;
 
 public interface RuntimeExecutionPersistence {
 
@@ -13,6 +14,8 @@ public interface RuntimeExecutionPersistence {
     void recordPolicyEvaluation(String executionId, PolicySnapshot snapshot);
 
     void recordRuntimeDecision(String executionId, RuntimeDecision decision);
+
+    void recordTransform(String executionId, RuntimeDecision decision, TransformResult transformResult);
 
     void recordRetrieved(String executionId, CanonicalContext context);
 

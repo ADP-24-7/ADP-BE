@@ -61,9 +61,9 @@ class RuntimeExecutionControllerTests {
             .andExpect(header().string("X-Request-Id", requestId))
             .andExpect(header().string("X-Trace-Id", traceId))
             .andExpect(jsonPath("$.executionId").exists())
-            .andExpect(jsonPath("$.status").value("DECIDED"))
-            .andExpect(jsonPath("$.policyAction").value("ALLOW"))
-            .andExpect(jsonPath("$.finalAction").value("ALLOW"))
+            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
+            .andExpect(jsonPath("$.policyAction").value("TRANSFORM"))
+            .andExpect(jsonPath("$.finalAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
             .andExpect(jsonPath("$.applicabilityResult").value("APPLICABLE"))
             .andExpect(jsonPath("$.runtimeContextDigest").exists())
@@ -73,6 +73,13 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.sourceArtifactVersion").value("0.0.0"))
             .andExpect(jsonPath("$.sourceArtifactDigestAlgorithm").value("sha256"))
             .andExpect(jsonPath("$.sourceArtifactDigestValue").value("local-fixture-policy-evaluation"))
+            .andExpect(jsonPath("$.privacySafeOutput.status").value("APPLIED"))
+            .andExpect(jsonPath("$.privacySafeOutput.outputDigest").exists())
+            .andExpect(jsonPath("$.privacySafeOutput.fieldCount").value(13))
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].strategy").isArray())
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValueDigest").doesNotExist())
+            .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
             .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
             .andReturn()
             .getResponse()
@@ -83,7 +90,7 @@ class RuntimeExecutionControllerTests {
         Integer executionCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_execution
                 where execution_id = :executionId
-                  and status = 'DECIDED'
+                  and status = 'TRANSFORMED'
                   and provider_profile_id = 'internal-provider'
                   and input_digest is not null
                   and canonical_context_digest is not null
@@ -98,7 +105,7 @@ class RuntimeExecutionControllerTests {
         Integer decisionCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_decision
                 where execution_id = :executionId
-                  and final_action = 'ALLOW'
+                  and final_action = 'TRANSFORM'
                   and applicability_result = 'APPLICABLE'
                 """)
             .param("executionId", executionId)
@@ -110,12 +117,46 @@ class RuntimeExecutionControllerTests {
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.executionId").value(executionId))
-            .andExpect(jsonPath("$.status").value("DECIDED"))
+            .andExpect(jsonPath("$.status").value("TRANSFORMED"))
             .andExpect(jsonPath("$.stages[0].stage").value("RECEIVED"))
             .andExpect(jsonPath("$.stages[1].stage").value("AUTHORIZATION"))
             .andExpect(jsonPath("$.stages[2].stage").value("RETRIEVAL"))
             .andExpect(jsonPath("$.stages[3].stage").value("CANONICAL_CONTEXT"))
-            .andExpect(jsonPath("$.stages[4].stage").value("DECISION"));
+            .andExpect(jsonPath("$.stages[4].stage").value("DECISION"))
+            .andExpect(jsonPath("$.stages[5].stage").value("TRANSFORM"));
+
+        Integer transformCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.transform_execution te
+                join runtime.transform_field tf on tf.transform_execution_id = te.transform_execution_id
+                where te.execution_id = :executionId
+                  and te.status = 'APPLIED'
+                  and te.output_digest is not null
+                  and tf.source_value_digest is not null
+                  and tf.transformed_value_digest is not null
+                  and tf.strategy_version is not null
+                  and tf.key_version is not null
+                  and tf.mapping_version is not null
+                  and tf.instruction_digest is not null
+                  and tf.strategy in ('VAULT_TOKEN', 'GENERALIZE', 'KEEP')
+                """)
+            .param("executionId", executionId)
+            .query(Integer.class)
+            .single();
+        assertThat(transformCount).isGreaterThanOrEqualTo(1);
+
+        Integer vaultCount = jdbcClient.sql("""
+                select count(*)
+                from vault.token_mapping
+                where data_class = 'CUSTOMER_IDENTIFIER'
+                  and status = 'ACTIVE'
+                  and length(mapping_scope) = 64
+                  and source_value_digest is not null
+                  and token_ref is not null
+                """)
+            .query(Integer.class)
+            .single();
+        assertThat(vaultCount).isGreaterThanOrEqualTo(1);
     }
 
     @Test

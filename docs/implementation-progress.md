@@ -10,7 +10,8 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-1 | Completed | Authentication & Authorization |
 | BE-2 | Completed | Internal Data Access Core |
 | BE-3 | Completed | Context Builder & Sensitive Detection |
-| BE-4 | In Progress | Policy & Decision Core |
+| BE-4 | Completed | Policy & Decision Core |
+| BE-5 | In Progress | Transform Engine & Vault |
 
 ## BE-0 Completion Criteria
 
@@ -132,3 +133,48 @@ BE-4 상세 구현 기준은 [BE-4 Policy & Decision Core](be-4-policy-decision-
 - [ ] DA Crosswalk Contract 파일 loader 추가
 - [ ] Policy 교체 시 code path 변경 없이 fixture/snapshot 교체 검증
 - [ ] Request ingress 시점 policy catalog revision pinning은 Policy Lifecycle 단계에서 구현
+
+## BE-5 Tracking
+
+BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vault.md)에서 관리한다.
+
+- [x] BE-5 개발 브랜치 `feature/be-5-transform-vault` 분리
+- [x] ADP-DA 최신 `main` 코드와 handoff 문서 확인
+- [x] ADP-FE 최신 `main` Runtime Execution 연동 경계 확인
+- [x] `MASK`, `HMAC-PSEUDO`, `VAULT-TOKEN`, `REMOVE`, `KEEP`, `GENERALIZE`, `FIELD-SEPARATION` strategy 타입 추가
+- [x] DA final mapping 미확정 상태를 고려한 context-aware `TransformStrategyResolver` Port 추가
+- [x] 기본 환경 mapping 미구성 시 fail-closed resolver 적용
+- [x] `HMAC_PSEUDO`를 local-only stable versioned key provider 기반 HMAC-SHA256으로 수정
+- [x] Transform instruction invariant validation 추가
+- [x] Transform instruction digest에 TTL 포함
+- [x] `TransformEngine` baseline 추가
+- [x] `vault.token_mapping` baseline schema와 TTL/key/mapping version 반영
+- [x] Vault token 만료 시 과거 row를 덮어쓰지 않는 lifecycle status와 replacement lineage 반영
+- [x] `runtime.transform_execution` / `runtime.transform_field` persistence 추가
+- [x] Transform field에 strategy/key/mapping version과 instruction digest 저장
+- [x] Transform persistence transaction 경계 추가
+- [x] Runtime Execution 응답에 raw/source/field-level transformed digest 없는 `privacySafeOutput` 추가
+- [x] Transform 성공 후 Runtime Execution status `TRANSFORMED` 반영
+- [x] Runtime trace에 Transform stage 반영
+- [x] Connector 실행 전 Transform 결과 전달
+- [x] Transform/Vault metric baseline 추가
+- [x] Strategy failure metric에 low-cardinality error category 추가
+- [x] Local fixture에서 `TRANSFORM` final action 경로 검증
+- [x] Flyway migration test에 Transform/Vault schema 검증 추가
+- [x] Strategy unit test 추가
+- [x] Vault same-scope/different-scope/expired-token/concurrent-token test 추가
+- [x] Vault failure 시 Runtime FAILED 및 Connector 미실행 test 추가
+- [x] Vault/HMAC transform scope isolation 추가
+- [x] Policy/Snapshot provenance와 token namespace 분리
+- [x] Expired token concurrent replacement lineage test 추가
+- [x] Default/local fixture transform wiring test 추가
+- [ ] Privileged Re-map API
+- [ ] Vault 장애 fallback 정책
+- [ ] DA 실제 transform policy artifact loader 연동
+- [ ] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
+- [ ] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
+- [ ] Reversible vault가 필요해질 경우 KMS 기반 encrypted mapping 저장소 추가
+
+## Troubleshooting
+
+리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.

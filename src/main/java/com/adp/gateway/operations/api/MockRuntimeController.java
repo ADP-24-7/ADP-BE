@@ -25,6 +25,7 @@ import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
+import com.adp.gateway.transform.domain.TransformResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -108,7 +109,7 @@ public class MockRuntimeController {
             RuntimeAuthorizationResult.ALLOWED,
             applicabilityResult
         );
-        ConnectorResult connector = fakeConnector.execute(context, decision);
+        ConnectorResult connector = fakeConnector.execute(context, decision, TransformResult.skipped("trn_mock_skipped"));
         AuditContext audit = auditRecorder.record(context, decision, connector);
 
         return ResponseEntity.ok(new MockRuntimeResponse(

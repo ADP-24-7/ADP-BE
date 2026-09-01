@@ -20,6 +20,9 @@ public record RuntimeExecutionTraceResponse(
     String snapshotDigest,
     String decisionId,
     String finalAction,
+    String transformExecutionId,
+    String transformStatus,
+    String transformOutputDigest,
     String status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
@@ -42,6 +45,9 @@ public record RuntimeExecutionTraceResponse(
             trace.snapshotDigest(),
             trace.decisionId(),
             trace.finalAction(),
+            trace.transformExecutionId(),
+            trace.transformStatus(),
+            trace.transformOutputDigest(),
             trace.status(),
             trace.createdAt(),
             trace.updatedAt()

@@ -25,6 +25,9 @@ public record RuntimeExecutionTraceEventsResponse(
         if (trace.decisionId() != null) {
             stages.add(new RuntimeExecutionStageResponse("DECISION", "COMPLETED", trace.updatedAt()));
         }
+        if ("APPLIED".equals(trace.transformStatus())) {
+            stages.add(new RuntimeExecutionStageResponse("TRANSFORM", "COMPLETED", trace.updatedAt()));
+        }
         if ("FAILED".equals(trace.status())) {
             stages.add(new RuntimeExecutionStageResponse("RUNTIME_EXECUTION", "FAILED", trace.updatedAt()));
         }
