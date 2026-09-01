@@ -206,6 +206,64 @@ class RuntimeExecutionServiceTests {
         verify(connector, never()).execute(any(), any(), any());
     }
 
+    @Test
+    void deniedAuthorizationDoesNotLoadDestinationProfileOrReadData() {
+        AuthorizationService authorizationService = mock(AuthorizationService.class);
+        RetrievalService retrievalService = mock(RetrievalService.class);
+        CanonicalContextBuilder contextBuilder = mock(CanonicalContextBuilder.class);
+        RuntimePolicyContextFactory runtimePolicyContextFactory = mock(RuntimePolicyContextFactory.class);
+        PolicySnapshotPort policySnapshotPort = mock(PolicySnapshotPort.class);
+        PolicyApplicabilityEvaluator applicabilityEvaluator = mock(PolicyApplicabilityEvaluator.class);
+        RuntimeDecisionService decisionService = mock(RuntimeDecisionService.class);
+        RuntimeConnectorPort connector = mock(RuntimeConnectorPort.class);
+        AuditRecorder auditRecorder = mock(AuditRecorder.class);
+        RuntimeExecutionPersistence persistence = mock(RuntimeExecutionPersistence.class);
+        SubjectRefHasher subjectRefHasher = mock(SubjectRefHasher.class);
+        RuntimeInputHasher runtimeInputHasher = mock(RuntimeInputHasher.class);
+        TransformEngine transformEngine = mock(TransformEngine.class);
+        DestinationProfilePort destinationProfilePort = mock(DestinationProfilePort.class);
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
+        OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
+        ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
+        RuntimeExecutionService service = new RuntimeExecutionService(
+            authorizationService,
+            retrievalService,
+            contextBuilder,
+            runtimePolicyContextFactory,
+            policySnapshotPort,
+            applicabilityEvaluator,
+            decisionService,
+            connector,
+            auditRecorder,
+            persistence,
+            subjectRefHasher,
+            runtimeInputHasher,
+            transformEngine,
+            destinationProfilePort,
+            outboundCandidatePayloadBuilder,
+            outboundGuardChain,
+            responseGuardPort,
+            Clock.fixed(java.time.Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC)
+        );
+        when(runtimeInputHasher.hash(any())).thenReturn("input_digest");
+        when(subjectRefHasher.hash(any())).thenReturn("subject_digest");
+        when(authorizationService.authorize(any())).thenReturn(AuthorizationDecision.deny());
+
+        assertThatThrownBy(() -> service.execute(
+            request(),
+            principal(),
+            "dest_internal_provider_project_provisional",
+            List.of("AI_USE"),
+            Map.of()
+        )).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.BLOCKED));
+        verify(destinationProfilePort, never()).load(any(), any());
+        verify(retrievalService, never()).retrieve(any());
+        verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
+        verify(connector, never()).execute(any(), any(), any());
+    }
+
     private RetrievalResult retrieval() {
         return new RetrievalResult(
             "da_test",
@@ -283,7 +341,7 @@ class RuntimeExecutionServiceTests {
             "policy-v1",
             "snapshot_digest",
             "",
-            "NOT_EXECUTED",
+            "NOT_SENT",
             OffsetDateTime.parse("2026-09-01T00:00:00Z")
         );
     }

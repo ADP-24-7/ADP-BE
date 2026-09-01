@@ -9,6 +9,7 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 - BLOCK, REVIEW decision은 Connector Port를 호출하지 않는다.
 - Connector 실행 후 Response Guard Port를 반드시 통과한다.
 - Runtime trace는 Decision, Transform, Outbound Guard, Connector, Response Guard를 같은 executionId로 연결한다.
+- Authorization 전에는 Destination Profile을 포함한 내부 policy/config data를 조회하지 않는다.
 
 ## Baseline Contracts
 
@@ -16,6 +17,8 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 - `DestinationProfile`: provider, pack type, schema version, workload/purpose allowlist
 - Runtime request는 `destinationProfileId`를 받고, provider profile은 pinned Destination Profile에서 파생한다.
 - Request 시작 시점의 Destination Profile id/version/digest를 `runtime.runtime_execution`에 고정한다.
+- Runtime status는 `EGRESSING`/`COMPLETED`까지만 표현하고, Connector/Response Guard 세부 상태는 별도 external status 컬럼에 기록한다.
+- Connector external status baseline은 `NOT_SENT`, `SENT_UNKNOWN`, `ACKNOWLEDGED`, `COMPLETED`, `FAILED`로 둔다.
 - `DestinationBinding`: workload/purpose pair allowlist
 - `DestinationFieldContract`: field별 obligation, required, exact transmission 허용 여부
 - `FieldObligation`: `PROHIBITED`, `MINIMIZABLE`, `PSEUDONYMIZABLE`, `CONDITIONAL_EXACT`, `REQUIRED_EXACT`
@@ -69,3 +72,4 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 - SaaS tenant/subprocessor/retention guard
 - 실제 provider payload canonical JSON digest
 - 실제 provider response canonical digest
+- 실제 response leakage detection은 Pack별 Response Guard adapter에서 구현한다.

@@ -24,7 +24,7 @@ public class ProjectProvisionalResponseGuardAdapter implements ResponseGuardPort
 
     @Override
     public ResponseGuardResult guard(OutboundCandidatePayload payload, ConnectorResult connectorResult) {
-        if (!"EXECUTED".equals(connectorResult.status())) {
+        if (!"ACKNOWLEDGED".equals(connectorResult.status()) && !"COMPLETED".equals(connectorResult.status())) {
             return record(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
         }
         if (connectorResult.responseDigest() == null || connectorResult.responseSchemaVersion() == null) {

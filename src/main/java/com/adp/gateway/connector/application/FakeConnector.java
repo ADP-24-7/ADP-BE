@@ -21,11 +21,11 @@ public class FakeConnector implements RuntimeConnectorPort {
     }
 
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
-        meterRegistry.counter("connector.execution.total", "status", "EXECUTED").increment();
+        meterRegistry.counter("connector.execution.total", "status", "ACKNOWLEDGED").increment();
         return new ConnectorResult(
             "con_" + UUID.randomUUID(),
             "fake-connector",
-            "EXECUTED",
+            "ACKNOWLEDGED",
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),

@@ -156,8 +156,6 @@ public class RuntimeExecutionService {
         ));
 
         try {
-            DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
-            persistence.recordDestinationProfile(executionId, destinationProfile);
             if (!authorizationService.authorize(new AuthorizationRequest(
                 principal,
                 requestContext.workloadId(),
@@ -169,6 +167,8 @@ public class RuntimeExecutionService {
                 throw new AccessDeniedException("Runtime execution is not allowed");
             }
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+            DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
+            persistence.recordDestinationProfile(executionId, destinationProfile);
 
             RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
                 requestContext.requestId(),
@@ -257,14 +257,13 @@ public class RuntimeExecutionService {
                     auditContext
                 );
             }
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.OUTBOUND_READY);
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
             persistence.recordConnector(executionId, connectorResult);
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.CONNECTOR_EXECUTED);
             ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
             RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed()
-                ? RuntimeExecutionStatus.RESPONSE_GUARDED
+                ? RuntimeExecutionStatus.COMPLETED
                 : RuntimeExecutionStatus.BLOCKED;
             persistence.updateStatus(executionId, completedStatus);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);

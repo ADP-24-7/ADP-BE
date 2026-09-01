@@ -14,7 +14,7 @@ class NoopResponseGuardAdapterTests {
     void returnsNotEvaluatedBecauseGuardIsNotConfigured() {
         var result = responseGuard.guard(
             null,
-            new ConnectorResult("con_test", "fake", "EXECUTED", "out_test", "payload_digest", null, null)
+            new ConnectorResult("con_test", "fake", "ACKNOWLEDGED", "out_test", "payload_digest", null, null)
         );
 
         assertThat(result.status()).isEqualTo("NOT_EVALUATED");
@@ -28,7 +28,7 @@ class NoopResponseGuardAdapterTests {
             new ConnectorResult(
                 "con_test",
                 "fake",
-                "EXECUTED",
+                "ACKNOWLEDGED",
                 "out_test",
                 "payload_digest",
                 "response_digest",

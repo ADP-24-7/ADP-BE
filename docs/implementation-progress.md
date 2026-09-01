@@ -200,6 +200,8 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [x] `providerProfileId` 요청 입력을 `destinationProfileId`로 정리
 - [x] Destination Profile `effectiveAt`/`expiresAt` enforcement 추가
 - [x] Outbound Guard reject 결과 persistence 후 BLOCK 처리
+- [x] Authorization 이후 Destination Profile load/pin 순서 보장
+- [x] Runtime status와 Connector/Response Guard external status 분리
 - [x] Response Guard가 response metadata 없이 `PASSED`를 기록하지 않도록 수정
 - [x] No-op Response Guard와 local fixture Response Guard 분리
 - [x] Outbound Sensitive Finding Detector baseline 추가
@@ -211,6 +213,7 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [ ] Provider별 connector status 정규화
 - [ ] 실제 provider payload canonical JSON digest 저장
 - [ ] 실제 provider response digest 저장
+- [ ] Pack별 실제 response leakage detector 연결
 
 ## Troubleshooting
 

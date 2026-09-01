@@ -23,11 +23,11 @@ public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort
 
     @Override
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
-        meterRegistry.counter("connector.execution.total", "status", "PROVIDER_NOT_CONFIGURED").increment();
+        meterRegistry.counter("connector.execution.total", "status", "FAILED").increment();
         return new ConnectorResult(
             "con_" + UUID.randomUUID(),
             "unconfigured-runtime-connector",
-            "PROVIDER_NOT_CONFIGURED",
+            "FAILED",
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             null,

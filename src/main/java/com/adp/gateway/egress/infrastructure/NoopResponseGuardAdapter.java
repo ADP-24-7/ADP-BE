@@ -22,7 +22,7 @@ public class NoopResponseGuardAdapter implements ResponseGuardPort {
 
     @Override
     public ResponseGuardResult guard(OutboundCandidatePayload payload, ConnectorResult connectorResult) {
-        if (!"EXECUTED".equals(connectorResult.status())) {
+        if (!"ACKNOWLEDGED".equals(connectorResult.status()) && !"COMPLETED".equals(connectorResult.status())) {
             return record(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
         }
         return record(ResponseGuardResult.notEvaluated(List.of("RESPONSE_GUARD_NOT_CONFIGURED")));

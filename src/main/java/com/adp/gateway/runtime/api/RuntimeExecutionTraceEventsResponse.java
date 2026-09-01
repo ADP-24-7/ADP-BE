@@ -56,7 +56,7 @@ public record RuntimeExecutionTraceEventsResponse(
     }
 
     private static String connectorStatus(RuntimeExecutionTrace trace) {
-        if ("EXECUTED".equals(trace.connectorStatus())) {
+        if ("ACKNOWLEDGED".equals(trace.connectorStatus()) || "COMPLETED".equals(trace.connectorStatus())) {
             return "COMPLETED";
         }
         return trace.connectorStatus();

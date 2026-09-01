@@ -22,7 +22,7 @@ class ProjectProvisionalResponseGuardAdapterTests {
         var result = responseGuard.guard(payload, new ConnectorResult(
             "con_test",
             "fake",
-            "EXECUTED",
+            "ACKNOWLEDGED",
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),
@@ -40,7 +40,7 @@ class ProjectProvisionalResponseGuardAdapterTests {
         var result = responseGuard.guard(payload, new ConnectorResult(
             "con_test",
             "fake",
-            "EXECUTED",
+            "ACKNOWLEDGED",
             payload.outboundPayloadId(),
             payload.candidatePayloadDigest(),
             "fake-response-digest:" + payload.candidatePayloadDigest(),

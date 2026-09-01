@@ -46,6 +46,6 @@ class RuntimeExecutionDefaultEnabledTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.policyVersion").value("be-runtime-policy/unconfigured/0.0.0"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
-            .andExpect(jsonPath("$.connectorStatus").value("NOT_EXECUTED"));
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"));
     }
 }

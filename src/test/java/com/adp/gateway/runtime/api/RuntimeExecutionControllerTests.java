@@ -61,7 +61,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(header().string("X-Request-Id", requestId))
             .andExpect(header().string("X-Trace-Id", traceId))
             .andExpect(jsonPath("$.executionId").exists())
-            .andExpect(jsonPath("$.status").value("RESPONSE_GUARDED"))
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.policyAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.finalAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.authorizationResult").value("ALLOWED"))
@@ -82,7 +82,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValue").doesNotExist())
             .andExpect(jsonPath("$.outboundCandidateDigest").exists())
             .andExpect(jsonPath("$.outboundGuardStatus").value("PASSED"))
-            .andExpect(jsonPath("$.connectorStatus").value("EXECUTED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
             .andExpect(jsonPath("$.responseGuardStatus").value("PASSED"))
             .andReturn()
             .getResponse()
@@ -93,7 +93,7 @@ class RuntimeExecutionControllerTests {
         Integer executionCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_execution
                 where execution_id = :executionId
-                  and status = 'RESPONSE_GUARDED'
+                  and status = 'COMPLETED'
                   and provider_profile_id = 'internal-provider'
                   and input_digest is not null
                   and canonical_context_digest is not null
@@ -104,7 +104,7 @@ class RuntimeExecutionControllerTests {
                   and destination_profile_version = '0.0.0'
                   and destination_profile_digest = 'local-fixture-destination-profile'
                   and outbound_guard_status = 'PASSED'
-                  and connector_status = 'EXECUTED'
+                  and connector_status = 'ACKNOWLEDGED'
                   and response_guard_status = 'PASSED'
                 """)
             .param("executionId", executionId)
@@ -127,7 +127,7 @@ class RuntimeExecutionControllerTests {
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.executionId").value(executionId))
-            .andExpect(jsonPath("$.status").value("RESPONSE_GUARDED"))
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.stages[0].stage").value("RECEIVED"))
             .andExpect(jsonPath("$.stages[1].stage").value("AUTHORIZATION"))
             .andExpect(jsonPath("$.stages[2].stage").value("RETRIEVAL"))
@@ -167,7 +167,7 @@ class RuntimeExecutionControllerTests {
                   and oc.guard_status = 'PASSED'
                   and oc.candidate_payload_digest is not null
                   and oc.field_count > 0
-                  and ce.status = 'EXECUTED'
+                  and ce.status = 'ACKNOWLEDGED'
                   and ce.outbound_candidate_digest = oc.candidate_payload_digest
                   and rg.status = 'PASSED'
                   and rg.leakage_detected = false

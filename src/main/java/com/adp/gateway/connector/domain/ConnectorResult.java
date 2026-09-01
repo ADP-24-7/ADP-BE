@@ -15,6 +15,6 @@ public record ConnectorResult(
     }
 
     public static ConnectorResult notExecuted(String connectorId) {
-        return new ConnectorResult(null, connectorId, "NOT_EXECUTED", null, null, null, null);
+        return new ConnectorResult(null, connectorId, "NOT_SENT", null, null, null, null);
     }
 }
