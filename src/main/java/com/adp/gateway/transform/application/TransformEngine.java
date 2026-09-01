@@ -66,30 +66,7 @@ public class TransformEngine {
 
             List<TransformFieldResult> fields = new ArrayList<>();
             for (CanonicalContextField field : context.fields()) {
-                TransformInstruction instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
-                validateInstruction(instruction);
-                TransformScope transformScope = TransformScope.from(policyContext, decision, field.dataClass(), hasher);
-                Object transformedValue = transformedValue(field, instruction, transformScope);
-                String instructionDigest = instructionDigest(instruction);
-                String transformedDigest = transformedValue == null
-                    ? null
-                    : hasher.hash(field.path() + ":" + instruction.strategy().name() + ":" + transformedValue);
-                fields.add(new TransformFieldResult(
-                    field.path(),
-                    field.datasetName(),
-                    field.fieldName(),
-                    field.dataClass(),
-                    instruction.strategy(),
-                    instruction.strategyVersion(),
-                    instruction.keyVersion(),
-                    instruction.mappingVersion(),
-                    instructionDigest,
-                    field.valueDigest(),
-                    transformedDigest,
-                    instruction.strategy() == TransformStrategy.VAULT_TOKEN ? String.valueOf(transformedValue) : null,
-                    transformedValue
-                ));
-                recordStrategyMetric(field.dataClass(), instruction.strategy(), "SUCCESS");
+                transformField(policyContext, decision, fields, field);
             }
             fields.sort(Comparator.comparing(TransformFieldResult::path));
             String outputDigest = hasher.hash(fields.stream()
@@ -106,6 +83,49 @@ public class TransformEngine {
             timer.stop(Timer.builder("transform.execution.duration")
                 .description("Transform engine execution duration")
                 .register(meterRegistry));
+        }
+    }
+
+    private void transformField(
+        RuntimePolicyContext policyContext,
+        RuntimeDecision decision,
+        List<TransformFieldResult> fields,
+        CanonicalContextField field
+    ) {
+        TransformInstruction instruction = null;
+        try {
+            instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
+            validateInstruction(instruction);
+            TransformScope transformScope = TransformScope.from(policyContext, decision, field.dataClass(), hasher);
+            Object transformedValue = transformedValue(field, instruction, transformScope);
+            String instructionDigest = instructionDigest(instruction);
+            String transformedDigest = transformedValue == null
+                ? null
+                : hasher.hash(field.path() + ":" + instruction.strategy().name() + ":" + transformedValue);
+            fields.add(new TransformFieldResult(
+                field.path(),
+                field.datasetName(),
+                field.fieldName(),
+                field.dataClass(),
+                instruction.strategy(),
+                instruction.strategyVersion(),
+                instruction.keyVersion(),
+                instruction.mappingVersion(),
+                instructionDigest,
+                field.valueDigest(),
+                transformedDigest,
+                instruction.strategy() == TransformStrategy.VAULT_TOKEN ? String.valueOf(transformedValue) : null,
+                transformedValue
+            ));
+            recordStrategyMetric(field.dataClass(), instruction.strategy().name(), "SUCCESS", "NONE");
+        } catch (RuntimeException exception) {
+            recordStrategyMetric(
+                field.dataClass(),
+                instruction == null ? "UNRESOLVED" : instruction.strategy().name(),
+                "FAILED",
+                errorCategory(exception, instruction)
+            );
+            throw exception;
         }
     }
 
@@ -254,12 +274,29 @@ public class TransformEngine {
         }
     }
 
-    private void recordStrategyMetric(DataClass dataClass, TransformStrategy strategy, String result) {
+    private void recordStrategyMetric(DataClass dataClass, String strategy, String result, String errorCategory) {
         meterRegistry.counter(
             "transform.strategy.total",
-            "strategy", strategy.name(),
+            "strategy", strategy,
             "data_class", dataClass.name(),
-            "result", result
+            "result", result,
+            "error_category", errorCategory
         ).increment();
+    }
+
+    private String errorCategory(RuntimeException exception, TransformInstruction instruction) {
+        if (exception instanceof TransformInputException) {
+            return "INVALID_INPUT";
+        }
+        if (exception instanceof TransformResolutionException) {
+            return "INVALID_INSTRUCTION";
+        }
+        if (instruction != null && instruction.strategy() == TransformStrategy.VAULT_TOKEN) {
+            return "VAULT_FAILURE";
+        }
+        if (instruction != null && instruction.strategy() == TransformStrategy.HMAC_PSEUDO) {
+            return "KEY_FAILURE";
+        }
+        return "UNKNOWN";
     }
 }

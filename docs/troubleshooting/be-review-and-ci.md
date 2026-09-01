@@ -100,6 +100,12 @@ README의 완료 기준과 별도로, 리뷰 과정에서 실제로 문제가 �
 - 조치: expire stale mapping과 active mapping insert를 transaction template으로 묶고, duplicate conflict 시 winner token을 재조회한다.
 - 추가 조치: same scope reuse, different scope isolation, expired token refresh, concurrent same mapping, concurrent expired replacement 테스트를 추가했다.
 
+### Vault boundary
+
+- 문제: 현재 `vault.token_mapping`은 `token_ref`와 `source_value_digest`를 연결하므로 reversible token vault가 아니다.
+- 조치: BE-5 문서에 현재 구현을 scope-aware opaque token registry baseline으로 명시했다.
+- 교훈: 원문 복원이 필요한 reversible vault는 별도 보안 저장소와 KMS 기반 encrypted mapping이 필요하다.
+
 ### Vault/HMAC scope isolation
 
 - 문제: scope가 `snapshotDigest:dataClass`에만 의존하면 workload/purpose/provider가 다른 실행 사이에서 같은 token/HMAC이 나올 수 있다.

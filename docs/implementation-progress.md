@@ -158,6 +158,7 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [x] Runtime trace에 Transform stage 반영
 - [x] Connector 실행 전 Transform 결과 전달
 - [x] Transform/Vault metric baseline 추가
+- [x] Strategy failure metric에 low-cardinality error category 추가
 - [x] Local fixture에서 `TRANSFORM` final action 경로 검증
 - [x] Flyway migration test에 Transform/Vault schema 검증 추가
 - [x] Strategy unit test 추가
@@ -172,6 +173,7 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [ ] DA 실제 transform policy artifact loader 연동
 - [ ] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
 - [ ] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
+- [ ] Reversible vault가 필요해질 경우 KMS 기반 encrypted mapping 저장소 추가
 
 ## Troubleshooting
 

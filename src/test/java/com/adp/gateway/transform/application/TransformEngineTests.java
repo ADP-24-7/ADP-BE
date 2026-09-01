@@ -24,6 +24,7 @@ import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.transform.domain.TransformFieldResult;
 import com.adp.gateway.transform.domain.TransformStrategy;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -204,6 +205,7 @@ class TransformEngineTests {
 
     @Test
     void invalidGeneralizeInputFailsClosed() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         TransformEngine engine = engineWithInstruction(new TransformInstruction(
             TransformStrategy.GENERALIZE,
             "test-strategy-v1",
@@ -211,11 +213,19 @@ class TransformEngineTests {
             "test-mapping-v1",
             Duration.ofHours(1),
             Map.of("bucketSize", "1000")
-        ));
+        ), meterRegistry);
 
         assertThatThrownBy(() -> engine.transform("exec_test", invalidGeneralizeContext(), policyContext(), decision()))
             .isInstanceOf(TransformInputException.class)
             .hasMessageContaining("GENERALIZE input must be numeric");
+        Counter failedStrategy = meterRegistry.find("transform.strategy.total")
+            .tag("strategy", "GENERALIZE")
+            .tag("data_class", "FINANCIAL_AMOUNT")
+            .tag("result", "FAILED")
+            .tag("error_category", "INVALID_INPUT")
+            .counter();
+        assertThat(failedStrategy).isNotNull();
+        assertThat(failedStrategy.count()).isEqualTo(1);
     }
 
     private TransformStrategy strategyFor(String path) {
@@ -254,6 +264,10 @@ class TransformEngineTests {
     }
 
     private TransformEngine engineWithInstruction(TransformInstruction instruction) {
+        return engineWithInstruction(instruction, new SimpleMeterRegistry());
+    }
+
+    private TransformEngine engineWithInstruction(TransformInstruction instruction, SimpleMeterRegistry meterRegistry) {
         return new TransformEngine(
             context -> instruction,
             request -> "vault_tok_" + request.mappingScope(),
@@ -262,7 +276,7 @@ class TransformEngineTests {
                 new SecretKeySpec("test-hmac-key-material-32-bytes".getBytes(), "HmacSHA256")
             ),
             hasher,
-            new SimpleMeterRegistry()
+            meterRegistry
         );
     }
 

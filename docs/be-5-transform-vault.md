@@ -53,3 +53,7 @@ BE-5는 `RuntimeDecision.finalAction=TRANSFORM` 이후 Connector 전달 전에 p
 - Vault 장애 정책
 - DA 실제 transform mapping artifact loader
 - BE-6 Outbound Guard에서 `OutboundCandidatePayload`와 실제 provider payload canonical digest 도입
+
+## Boundary
+
+현재 BE-5 Vault baseline은 reversible token vault가 아니라 scope-aware opaque token registry다. `vault.token_mapping`은 raw 원문을 저장하지 않고 `token_ref`와 `source_value_digest`를 연결한다. 향후 원문 복원이 필요한 reversible vault가 요구되면 별도 보안 저장소와 KMS 기반 encrypted mapping을 추가해야 한다.

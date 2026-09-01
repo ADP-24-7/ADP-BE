@@ -26,6 +26,16 @@
 
 검증: concurrent same mapping, concurrent expired replacement 테스트에서 모든 요청이 하나의 ACTIVE token으로 수렴하고 expired row의 `replaced_by_token_ref`가 실제 winner token을 가리키는지 확인했다.
 
+검증 evidence:
+
+| Invariant | Expected |
+| --- | --- |
+| concurrent request count | 20 |
+| returned token distinct count | 1 |
+| ACTIVE row count | 1 |
+| EXPIRED row count | 1 |
+| `replaced_by_token_ref` | winner token |
+
 ## HMAC Scope Isolation
 
 현상: 단순 `HMAC(key, valueDigest)`는 같은 key version을 공유하는 workload/purpose 사이에서 같은 pseudonym을 만들 수 있었다.
