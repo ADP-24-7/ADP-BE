@@ -201,6 +201,10 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [x] Destination Profile `effectiveAt`/`expiresAt` enforcement 추가
 - [x] Outbound Guard reject 결과 persistence 후 BLOCK 처리
 - [x] Response Guard가 response metadata 없이 `PASSED`를 기록하지 않도록 수정
+- [x] No-op Response Guard와 local fixture Response Guard 분리
+- [x] Outbound Sensitive Finding Detector baseline 추가
+- [x] Secret Guard가 detector finding을 소비하도록 경계 분리
+- [x] BE-6 Guard/Destination/Connector/Response Guard metric baseline 추가
 - [ ] Pack별 외부 schema mapper 분리
 - [ ] Destination Profile DB-backed adapter
 - [ ] Response leakage detector adapter

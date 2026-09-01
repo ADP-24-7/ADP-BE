@@ -3,25 +3,26 @@ package com.adp.gateway.egress.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class NoopResponseGuardAdapterTests {
 
-    private final NoopResponseGuardAdapter responseGuard = new NoopResponseGuardAdapter();
+    private final NoopResponseGuardAdapter responseGuard = new NoopResponseGuardAdapter(new SimpleMeterRegistry());
 
     @Test
-    void returnsNotEvaluatedWhenResponseMetadataIsMissing() {
+    void returnsNotEvaluatedBecauseGuardIsNotConfigured() {
         var result = responseGuard.guard(
             null,
             new ConnectorResult("con_test", "fake", "EXECUTED", "out_test", "payload_digest", null, null)
         );
 
         assertThat(result.status()).isEqualTo("NOT_EVALUATED");
-        assertThat(result.reasonCodes()).contains("RESPONSE_METADATA_MISSING");
+        assertThat(result.reasonCodes()).contains("RESPONSE_GUARD_NOT_CONFIGURED");
     }
 
     @Test
-    void passesOnlyWhenResponseMetadataExists() {
+    void doesNotPassEvenWhenResponseMetadataExists() {
         var result = responseGuard.guard(
             null,
             new ConnectorResult(
@@ -35,7 +36,7 @@ class NoopResponseGuardAdapterTests {
             )
         );
 
-        assertThat(result.status()).isEqualTo("PASSED");
-        assertThat(result.reasonCodes()).isEmpty();
+        assertThat(result.status()).isEqualTo("NOT_EVALUATED");
+        assertThat(result.reasonCodes()).contains("RESPONSE_GUARD_NOT_CONFIGURED");
     }
 }

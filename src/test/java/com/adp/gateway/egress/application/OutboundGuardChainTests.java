@@ -15,6 +15,8 @@ import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.egress.domain.FieldTreatment;
 import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.egress.domain.OutboundSensitiveFinding;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
@@ -24,7 +26,7 @@ import org.junit.jupiter.api.Test;
 
 class OutboundGuardChainTests {
 
-    private final OutboundGuardChain guardChain = new OutboundGuardChain();
+    private final OutboundGuardChain guardChain = new OutboundGuardChain(new SimpleMeterRegistry());
     private final DestinationProfile profile = new DestinationProfile(
         "dest_test",
         "v1",
@@ -61,6 +63,7 @@ class OutboundGuardChainTests {
             FieldObligation.REQUIRED_EXACT,
             FieldTreatment.KEEP_EXACT_PROTECTED,
             "digest",
+            List.of(),
             "customer-100"
         );
 
@@ -98,6 +101,7 @@ class OutboundGuardChainTests {
             FieldObligation.CONDITIONAL_EXACT,
             FieldTreatment.KEEP_EXACT_PROTECTED,
             "digest",
+            List.of(new OutboundSensitiveFinding("SECRET", "test-detector-v1", "finding_digest")),
             "sk-proj-1234567890abcdef"
         );
 
@@ -187,6 +191,7 @@ class OutboundGuardChainTests {
             FieldObligation.CONDITIONAL_EXACT,
             FieldTreatment.KEEP_EXACT_PROTECTED,
             "digest",
+            List.of(),
             "preferred"
         );
     }

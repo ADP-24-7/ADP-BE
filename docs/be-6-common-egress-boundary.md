@@ -23,6 +23,9 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 - `OutboundCandidatePayload`: privacy-safe outbound candidate identity, schema version, payload digest, fields
 - `candidatePayloadDigest`: 실제 provider JSON body digest가 아니라 Outbound Candidate metadata digest
 - `ResponseGuardPort`: connector response를 외부 상태 확정 전에 검사하는 Port
+- 기본 Response Guard는 실제 검증 없이 `PASSED`를 만들지 않고 `NOT_EVALUATED`를 반환한다.
+- Local fixture Response Guard만 fake response schema/digest를 검증한 뒤 `PASSED`를 반환한다.
+- Secret 차단은 Guard 내부 regex가 아니라 `OutboundSensitiveFindingDetector`가 생성한 finding을 Guard가 소비하는 구조다.
 
 ## Persistence
 
@@ -48,11 +51,20 @@ BE-6은 AI, Digital Asset, SaaS Pack이 공유하는 외부 전송 경계를 고
 - guard reject는 `runtime.outbound_candidate`에 `REJECTED`로 남기고 Runtime status는 `BLOCKED`로 기록한다.
 - response metadata가 없으면 Response Guard는 `PASSED`가 아니라 `NOT_EVALUATED`로 기록한다.
 
+## Metrics
+
+- `egress.guard.total{result,reason}`
+- `egress.guard.duration`
+- `destination.profile.lookup.total{result}`
+- `connector.execution.total{status}`
+- `response.guard.total{result,reason}`
+
 ## Deferred
 
 - Pack별 schema mapper
 - DB-backed Destination Profile loader
 - AI response leakage detector
+- BE-3 Detection finding과 Outbound Sensitive Finding의 직접 연결
 - Digital Asset Required Exact field matrix
 - SaaS tenant/subprocessor/retention guard
 - 실제 provider payload canonical JSON digest

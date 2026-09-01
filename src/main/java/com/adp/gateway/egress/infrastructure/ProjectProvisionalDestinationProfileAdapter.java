@@ -11,6 +11,7 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.retrieval.domain.DataClass;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -18,11 +19,19 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
 public class ProjectProvisionalDestinationProfileAdapter implements DestinationProfilePort {
 
+    private final MeterRegistry meterRegistry;
+
+    public ProjectProvisionalDestinationProfileAdapter(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+
     @Override
     public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
         if (!"dest_internal_provider_project_provisional".equals(destinationProfileId)) {
+            meterRegistry.counter("destination.profile.lookup.total", "result", "NOT_FOUND").increment();
             throw new DestinationProfileNotFoundException(destinationProfileId);
         }
+        meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
         return new DestinationProfile(
             destinationProfileId,
             "0.0.0",

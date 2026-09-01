@@ -25,11 +25,14 @@ import org.springframework.stereotype.Service;
 public class OutboundCandidatePayloadBuilder {
 
     private final CanonicalValueHasher hasher;
+    private final OutboundSensitiveFindingDetector sensitiveFindingDetector;
 
     public OutboundCandidatePayloadBuilder(
-        CanonicalValueHasher hasher
+        CanonicalValueHasher hasher,
+        OutboundSensitiveFindingDetector sensitiveFindingDetector
     ) {
         this.hasher = hasher;
+        this.sensitiveFindingDetector = sensitiveFindingDetector;
     }
 
     public OutboundCandidatePayload build(
@@ -84,27 +87,44 @@ public class OutboundCandidatePayloadBuilder {
 
     private OutboundCandidateField exactField(DestinationProfile profile, CanonicalContextField field) {
         DestinationFieldContract contract = contract(profile, field.path(), field.dataClass());
-        return new OutboundCandidateField(
+        OutboundCandidateField candidateField = new OutboundCandidateField(
             field.path(),
             field.dataClass(),
             TransformStrategy.KEEP,
             contract.obligation(),
             FieldTreatment.KEEP_EXACT_PROTECTED,
             field.valueDigest(),
+            List.of(),
             field.value()
         );
+        return withFindings(candidateField);
     }
 
     private OutboundCandidateField transformedField(DestinationProfile profile, TransformFieldResult field) {
         DestinationFieldContract contract = contract(profile, field.path(), field.dataClass());
-        return new OutboundCandidateField(
+        OutboundCandidateField candidateField = new OutboundCandidateField(
             field.path(),
             field.dataClass(),
             field.strategy(),
             contract.obligation(),
             treatment(field.strategy()),
             field.transformedValueDigest(),
+            List.of(),
             field.transformedValue()
+        );
+        return withFindings(candidateField);
+    }
+
+    private OutboundCandidateField withFindings(OutboundCandidateField field) {
+        return new OutboundCandidateField(
+            field.path(),
+            field.dataClass(),
+            field.strategy(),
+            field.obligation(),
+            field.treatment(),
+            field.valueDigest(),
+            sensitiveFindingDetector.detect(field),
+            field.value()
         );
     }
 

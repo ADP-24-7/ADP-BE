@@ -2,7 +2,6 @@ package com.adp.gateway.egress.application;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
@@ -13,15 +12,18 @@ import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.retrieval.domain.DataClass;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
 
 @Service
 public class OutboundGuardChain {
 
-    private static final Pattern SECRET_PATTERN = Pattern.compile(
-        "(?i).*(api[_-]?key|secret|private[_-]?key|seed|credential|access[_-]?token|refresh[_-]?token|"
-            + "sk-[a-z0-9_-]{8,}|ghp_[a-z0-9_]{8,}|xox[baprs]-[a-z0-9-]{8,}).*"
-    );
+    private final MeterRegistry meterRegistry;
+
+    public OutboundGuardChain(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
 
     public OutboundGuardResult guard(
         DestinationProfile destinationProfile,
@@ -31,40 +33,47 @@ public class OutboundGuardChain {
         RuntimeDecision decision,
         OutboundCandidatePayload payload
     ) {
+        Timer.Sample timer = Timer.start(meterRegistry);
         List<String> reasonCodes = new ArrayList<>();
-        if (!destinationProfile.destinationProfileId().equals(payload.destinationProfileId())) {
-            reasonCodes.add("DESTINATION_PROFILE_MISMATCH");
+        try {
+            if (!destinationProfile.destinationProfileId().equals(payload.destinationProfileId())) {
+                reasonCodes.add("DESTINATION_PROFILE_MISMATCH");
+            }
+            if (!destinationProfile.profileVersion().equals(payload.destinationProfileVersion())
+                || !destinationProfile.profileDigest().equals(payload.destinationProfileDigest())) {
+                reasonCodes.add("DESTINATION_PROFILE_VERSION_MISMATCH");
+            }
+            if (destinationProfile.packType() != payload.packType()) {
+                reasonCodes.add("PACK_TYPE_MISMATCH");
+            }
+            if (!destinationProfile.schemaVersion().equals(payload.schemaVersion())) {
+                reasonCodes.add("SCHEMA_VERSION_MISMATCH");
+            }
+            if (!destinationProfile.isEffectiveAt(requestStartedAt)) {
+                reasonCodes.add("DESTINATION_PROFILE_NOT_EFFECTIVE");
+            }
+            if (!destinationProfile.allows(workloadId, purposeCode, requestStartedAt)) {
+                reasonCodes.add("DESTINATION_PROFILE_NOT_ALLOWED");
+            }
+            if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
+                reasonCodes.add("FINAL_ACTION_NOT_EGRESSIBLE");
+            }
+            for (OutboundCandidateField field : payload.fields()) {
+                validateField(destinationProfile.fieldContract(field.path()).orElse(null), field, reasonCodes);
+            }
+            destinationProfile.fieldContracts().stream()
+                .filter(contract -> contract.required()
+                    && payload.fields().stream().noneMatch(field -> matchesContract(field.path(), contract.path())))
+                .forEach(contract -> reasonCodes.add("REQUIRED_FIELD_MISSING"));
+            if (!reasonCodes.isEmpty()) {
+                recordGuardMetric("REJECTED", reasonCodes);
+                return OutboundGuardResult.rejected(reasonCodes);
+            }
+            recordGuardMetric("PASSED", List.of("NONE"));
+            return OutboundGuardResult.passed();
+        } finally {
+            timer.stop(Timer.builder("egress.guard.duration").register(meterRegistry));
         }
-        if (!destinationProfile.profileVersion().equals(payload.destinationProfileVersion())
-            || !destinationProfile.profileDigest().equals(payload.destinationProfileDigest())) {
-            reasonCodes.add("DESTINATION_PROFILE_VERSION_MISMATCH");
-        }
-        if (destinationProfile.packType() != payload.packType()) {
-            reasonCodes.add("PACK_TYPE_MISMATCH");
-        }
-        if (!destinationProfile.schemaVersion().equals(payload.schemaVersion())) {
-            reasonCodes.add("SCHEMA_VERSION_MISMATCH");
-        }
-        if (!destinationProfile.isEffectiveAt(requestStartedAt)) {
-            reasonCodes.add("DESTINATION_PROFILE_NOT_EFFECTIVE");
-        }
-        if (!destinationProfile.allows(workloadId, purposeCode, requestStartedAt)) {
-            reasonCodes.add("DESTINATION_PROFILE_NOT_ALLOWED");
-        }
-        if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
-            reasonCodes.add("FINAL_ACTION_NOT_EGRESSIBLE");
-        }
-        for (OutboundCandidateField field : payload.fields()) {
-            validateField(destinationProfile.fieldContract(field.path()).orElse(null), field, reasonCodes);
-        }
-        destinationProfile.fieldContracts().stream()
-            .filter(contract -> contract.required()
-                && payload.fields().stream().noneMatch(field -> matchesContract(field.path(), contract.path())))
-            .forEach(contract -> reasonCodes.add("REQUIRED_FIELD_MISSING"));
-        if (!reasonCodes.isEmpty()) {
-            return OutboundGuardResult.rejected(reasonCodes);
-        }
-        return OutboundGuardResult.passed();
     }
 
     private void validateField(
@@ -94,7 +103,7 @@ public class OutboundGuardChain {
             && field.treatment() != FieldTreatment.KEEP_EXACT_PROTECTED) {
             reasonCodes.add("REQUIRED_EXACT_NOT_PRESERVED");
         }
-        if ((SECRET_PATTERN.matcher(field.path()).matches() || SECRET_PATTERN.matcher(String.valueOf(field.value())).matches())
+        if (field.sensitiveFindings().stream().anyMatch(finding -> "SECRET".equals(finding.findingType()))
             && field.treatment() == FieldTreatment.KEEP_EXACT_PROTECTED) {
             reasonCodes.add("SECRET_FIELD_PRESENT");
         }
@@ -105,5 +114,13 @@ public class OutboundGuardChain {
 
     private boolean matchesContract(String fieldPath, String contractPath) {
         return fieldPath.equals(contractPath) || fieldPath.endsWith("." + contractPath);
+    }
+
+    private void recordGuardMetric(String result, List<String> reasonCodes) {
+        reasonCodes.forEach(reasonCode -> meterRegistry.counter(
+            "egress.guard.total",
+            "result", result,
+            "reason", reasonCode
+        ).increment());
     }
 }

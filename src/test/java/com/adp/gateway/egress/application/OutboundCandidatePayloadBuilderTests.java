@@ -18,6 +18,7 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.FieldObligation;
 import com.adp.gateway.egress.domain.FieldTreatment;
+import com.adp.gateway.egress.domain.OutboundSensitiveFinding;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.PolicyAction;
@@ -29,7 +30,10 @@ import org.junit.jupiter.api.Test;
 class OutboundCandidatePayloadBuilderTests {
 
     private final OutboundCandidatePayloadBuilder builder = new OutboundCandidatePayloadBuilder(
-        new CanonicalValueHasher()
+        new CanonicalValueHasher(),
+        field -> field.path().contains("secret")
+            ? List.of(new OutboundSensitiveFinding("SECRET", "test-detector-v1", "finding_digest"))
+            : List.of()
     );
 
     private final DestinationProfile profile = new DestinationProfile(
