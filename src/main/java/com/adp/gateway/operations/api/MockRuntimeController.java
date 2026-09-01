@@ -15,8 +15,11 @@ import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.connector.application.FakeConnector;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
+import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.domain.ExecutionPackType;
+import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -25,7 +28,6 @@ import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
-import com.adp.gateway.transform.domain.TransformResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -109,7 +111,16 @@ public class MockRuntimeController {
             RuntimeAuthorizationResult.ALLOWED,
             applicabilityResult
         );
-        ConnectorResult connector = fakeConnector.execute(context, decision, TransformResult.skipped("trn_mock_skipped"));
+        ConnectorResult connector = decision.finalAction() == FinalAction.ALLOW || decision.finalAction() == FinalAction.TRANSFORM
+            ? fakeConnector.execute(context, decision, new OutboundCandidatePayload(
+                "out_mock_skipped",
+                "dest_mock",
+                ExecutionPackType.COMMON,
+                "mock-runtime-egress-schema-v1",
+                "mock-runtime-no-payload",
+                List.of()
+            ))
+            : ConnectorResult.notExecuted("mock-runtime-connector-boundary");
         AuditContext audit = auditRecorder.record(context, decision, connector);
 
         return ResponseEntity.ok(new MockRuntimeResponse(

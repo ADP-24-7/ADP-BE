@@ -11,7 +11,8 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-2 | Completed | Internal Data Access Core |
 | BE-3 | Completed | Context Builder & Sensitive Detection |
 | BE-4 | Completed | Policy & Decision Core |
-| BE-5 | In Progress | Transform Engine & Vault |
+| BE-5 | Baseline Completed | Transform Engine & Vault |
+| BE-6 | In Progress | Common Egress Boundary |
 
 ## BE-0 Completion Criteria
 
@@ -171,9 +172,32 @@ BE-5 상세 구현 기준은 [BE-5 Transform Engine & Vault](be-5-transform-vaul
 - [ ] Privileged Re-map API
 - [ ] Vault 장애 fallback 정책
 - [ ] DA 실제 transform policy artifact loader 연동
-- [ ] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
-- [ ] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
+- [x] Connector boundary를 BE-6 `OutboundCandidatePayload`/Outbound Guard로 분리
+- [x] 실제 provider payload canonical digest는 BE-6 Outbound Guard 단계에서 구현
 - [ ] Reversible vault가 필요해질 경우 KMS 기반 encrypted mapping 저장소 추가
+
+## BE-6 Tracking
+
+BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-boundary.md)에서 관리한다.
+
+- [x] BE-6 개발 브랜치 `feature/be-6-common-egress-boundary` 분리
+- [x] Notion Backend Phase 상태와 main 코드 상태 비교
+- [x] BE-5 Baseline 완료와 BE-6 진행 상태 문서 동기화
+- [x] Execution Pack Type baseline 추가
+- [x] Destination Profile baseline Port 추가
+- [x] Field Obligation / Treatment baseline 추가
+- [x] Transform 결과를 `OutboundCandidatePayload`로 조립하는 Builder 추가
+- [x] Connector Port 입력을 `TransformResult`에서 `OutboundCandidatePayload`로 변경
+- [x] Outbound Guard Chain baseline 추가
+- [x] Response Guard Port baseline 추가
+- [x] `destination_profile`, `outbound_candidate`, `connector_execution`, `response_guard_result` persistence 추가
+- [x] Runtime trace에 Outbound Guard / Connector / Response Guard stage 반영
+- [x] Guard 거부 및 Connector 우회 방지 테스트 추가
+- [ ] Pack별 외부 schema mapper 분리
+- [ ] Destination Profile DB-backed adapter
+- [ ] Response leakage detector adapter
+- [ ] Provider별 connector status 정규화
+- [ ] 실제 provider response digest 저장
 
 ## Troubleshooting
 

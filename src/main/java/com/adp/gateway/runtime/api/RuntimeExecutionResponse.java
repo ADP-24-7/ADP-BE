@@ -18,7 +18,10 @@ public record RuntimeExecutionResponse(
     String sourceArtifactDigestAlgorithm,
     String sourceArtifactDigestValue,
     PrivacySafeOutputResponse privacySafeOutput,
+    String outboundPayloadDigest,
+    String outboundGuardStatus,
     String connectorStatus,
+    String responseGuardStatus,
     String auditId
 ) {
 
@@ -41,7 +44,10 @@ public record RuntimeExecutionResponse(
             source.artifactDigest().algorithm(),
             source.artifactDigest().value(),
             PrivacySafeOutputResponse.from(result.transformResult()),
+            result.connectorResult().outboundPayloadDigest(),
+            result.outboundGuardStatus(),
             result.connectorResult().status(),
+            result.responseGuardStatus(),
             result.auditContext().auditId()
         );
     }

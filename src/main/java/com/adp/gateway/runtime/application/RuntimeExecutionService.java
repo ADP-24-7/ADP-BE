@@ -24,6 +24,11 @@ import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
+import com.adp.gateway.egress.application.OutboundGuardChain;
+import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.domain.OutboundGuardResult;
+import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -56,6 +61,9 @@ public class RuntimeExecutionService {
     private final SubjectRefHasher subjectRefHasher;
     private final RuntimeInputHasher runtimeInputHasher;
     private final TransformEngine transformEngine;
+    private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
+    private final OutboundGuardChain outboundGuardChain;
+    private final ResponseGuardPort responseGuardPort;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -72,6 +80,9 @@ public class RuntimeExecutionService {
         SubjectRefHasher subjectRefHasher,
         RuntimeInputHasher runtimeInputHasher,
         TransformEngine transformEngine,
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
+        OutboundGuardChain outboundGuardChain,
+        ResponseGuardPort responseGuardPort,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -87,6 +98,9 @@ public class RuntimeExecutionService {
         this.subjectRefHasher = subjectRefHasher;
         this.runtimeInputHasher = runtimeInputHasher;
         this.transformEngine = transformEngine;
+        this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
+        this.outboundGuardChain = outboundGuardChain;
+        this.responseGuardPort = responseGuardPort;
         this.clock = clock;
     }
 
@@ -111,6 +125,12 @@ public class RuntimeExecutionService {
             subject == null ? null : subjectRefHasher.hash(subject),
             providerProfileId,
             inputDigest,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -181,10 +201,51 @@ public class RuntimeExecutionService {
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             persistence.updateStatus(executionId, finalStatus);
-            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, transformResult);
+            if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    finalStatus,
+                    decision,
+                    transformResult,
+                    "NOT_EVALUATED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
+            var outboundPayload = outboundCandidatePayloadBuilder.build(
+                requestContext,
+                providerProfileId,
+                decision,
+                transformResult
+            );
+            OutboundGuardResult outboundGuardResult = outboundGuardChain.guard(
+                requestContext,
+                providerProfileId,
+                decision,
+                outboundPayload
+            );
+            persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.OUTBOUND_READY);
+            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
+            persistence.recordConnector(executionId, connectorResult);
+            persistence.updateStatus(executionId, RuntimeExecutionStatus.CONNECTOR_EXECUTED);
+            ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
+            persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
-            return new RuntimeExecutionResult(executionId, finalStatus, decision, transformResult, connectorResult, auditContext);
+            return new RuntimeExecutionResult(
+                executionId,
+                RuntimeExecutionStatus.CONNECTOR_EXECUTED,
+                decision,
+                transformResult,
+                outboundGuardResult.status(),
+                connectorResult,
+                responseGuardResult.status(),
+                auditContext
+            );
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (RuntimeException exception) {

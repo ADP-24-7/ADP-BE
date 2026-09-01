@@ -21,6 +21,12 @@ public record RuntimeExecutionTrace(
     String transformExecutionId,
     String transformStatus,
     String transformOutputDigest,
+    String outboundPayloadId,
+    String outboundPayloadDigest,
+    String outboundGuardStatus,
+    String connectorExecutionId,
+    String connectorStatus,
+    String responseGuardStatus,
     String status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt

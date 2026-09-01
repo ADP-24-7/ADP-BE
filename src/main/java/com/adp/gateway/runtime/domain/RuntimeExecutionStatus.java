@@ -6,6 +6,8 @@ public enum RuntimeExecutionStatus {
     RETRIEVED,
     DECIDED,
     TRANSFORMED,
+    OUTBOUND_READY,
+    CONNECTOR_EXECUTED,
     REVIEW_REQUIRED,
     BLOCKED,
     FAILED

@@ -124,6 +124,46 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesCommonEgressTables() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where (table_schema, table_name) in (
+                  ('egress', 'destination_profile'),
+                  ('runtime', 'outbound_candidate'),
+                  ('runtime', 'connector_execution'),
+                  ('runtime', 'response_guard_result')
+                )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(4);
+    }
+
+    @Test
+    void migrationCreatesRuntimeExecutionEgressColumns() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'outbound_payload_id',
+                    'outbound_payload_digest',
+                    'outbound_guard_status',
+                    'connector_execution_id',
+                    'connector_status',
+                    'response_guard_status'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(6);
+    }
+
+    @Test
     void migrationCreatesTransformInstructionMetadataColumns() {
         Integer columnCount = jdbcClient.sql("""
                 select count(*)
