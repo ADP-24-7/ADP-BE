@@ -35,6 +35,14 @@ server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
 management:
   endpoints:
     web:

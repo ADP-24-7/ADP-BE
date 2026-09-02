@@ -45,6 +45,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/api/internal/info").permitAll()
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
                 .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
                 .requestMatchers("/api/admin/**").hasRole("OPERATOR")

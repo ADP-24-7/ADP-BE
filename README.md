@@ -76,6 +76,15 @@ make check
 
 `make check`는 개발 DB를 오염시키지 않도록 별도 `postgres-test` 컨테이너를 사용합니다.
 
+## API 문서
+
+BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실행할 수 있습니다.
+
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+보호된 API는 Swagger UI의 `Authorize`에서 로컬 개발용 `X-ADP-API-Key`를 설정한 뒤 호출합니다.
+
 ## 문서
 
 - [구현 진행 현황](docs/implementation-progress.md)
