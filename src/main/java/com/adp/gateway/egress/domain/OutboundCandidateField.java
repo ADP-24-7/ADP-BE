@@ -21,4 +21,10 @@ public record OutboundCandidateField(
     public OutboundCandidateField {
         sensitiveFindings = List.copyOf(sensitiveFindings);
     }
+
+    @Override
+    public String toString() {
+        return "OutboundCandidateField[path=%s, dataClass=%s, strategy=%s, obligation=%s, treatment=%s, valueDigest=%s, sensitiveFindings=%s, value=<redacted>]"
+            .formatted(path, dataClass, strategy, obligation, treatment, valueDigest, sensitiveFindings);
+    }
 }

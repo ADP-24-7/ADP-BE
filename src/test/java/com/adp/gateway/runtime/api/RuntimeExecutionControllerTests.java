@@ -46,6 +46,8 @@ class RuntimeExecutionControllerTests {
                 .contentType("application/json")
                 .content("""
                     {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
@@ -53,7 +55,7 @@ class RuntimeExecutionControllerTests {
                       "idempotencyKey": "%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
-                        "ticketId": "ticket-100"
+                        "prompt": "Summarize the approved customer context"
                       }
                     }
                     """.formatted(idempotencyKey)))
@@ -75,7 +77,7 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.sourceArtifactDigestValue").value("local-fixture-policy-evaluation"))
             .andExpect(jsonPath("$.privacySafeOutput.status").value("APPLIED"))
             .andExpect(jsonPath("$.privacySafeOutput.outputDigest").exists())
-            .andExpect(jsonPath("$.privacySafeOutput.fieldCount").value(13))
+            .andExpect(jsonPath("$.privacySafeOutput.fieldCount").value(14))
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].strategy").isArray())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].sourceValueDigest").doesNotExist())
             .andExpect(jsonPath("$.privacySafeOutput.fields[*].transformedValueDigest").doesNotExist())
@@ -133,10 +135,23 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.stages[2].stage").value("RETRIEVAL"))
             .andExpect(jsonPath("$.stages[3].stage").value("CANONICAL_CONTEXT"))
             .andExpect(jsonPath("$.stages[4].stage").value("DECISION"))
-            .andExpect(jsonPath("$.stages[5].stage").value("TRANSFORM"))
-            .andExpect(jsonPath("$.stages[6].stage").value("OUTBOUND_GUARD"))
-            .andExpect(jsonPath("$.stages[7].stage").value("CONNECTOR"))
-            .andExpect(jsonPath("$.stages[8].stage").value("RESPONSE_GUARD"));
+            .andExpect(jsonPath("$.stages[5].stage").value("POLICY_HARNESS"))
+            .andExpect(jsonPath("$.stages[6].stage").value("TRANSFORM"))
+            .andExpect(jsonPath("$.stages[7].stage").value("OUTBOUND_GUARD"))
+            .andExpect(jsonPath("$.stages[8].stage").value("PROVIDER_REQUEST"))
+            .andExpect(jsonPath("$.stages[9].stage").value("CONNECTOR"))
+            .andExpect(jsonPath("$.stages[10].stage").value("RESPONSE_GUARD"))
+            .andExpect(jsonPath("$.evidence.approvalReuseStatus").value("TRANSFORM_REQUIRED"))
+            .andExpect(jsonPath("$.evidence.requested.count").value(10))
+            .andExpect(jsonPath("$.evidence.requested.fields[?(@ == 'request.prompt')]").exists())
+            .andExpect(jsonPath("$.evidence.released.count").value(10))
+            .andExpect(jsonPath("$.evidence.policyLayers.length()").value(3))
+            .andExpect(jsonPath("$.evidence.destinationTenantId").value("tenant_local_ai"))
+            .andExpect(jsonPath("$.evidence.destinationRegion").value("KR"))
+            .andExpect(jsonPath("$.evidence.destinationRetentionPolicy").value("NO_RETENTION"))
+            .andExpect(jsonPath("$.evidence.destinationTrainingUseAllowed").value(false))
+            .andExpect(jsonPath("$.evidence.providerRequestDigest").exists())
+            .andExpect(jsonPath("$.evidence.providerResponseDigest").exists());
 
         Integer transformCount = jdbcClient.sql("""
                 select count(*)
@@ -161,16 +176,26 @@ class RuntimeExecutionControllerTests {
         Integer egressCount = jdbcClient.sql("""
                 select count(*)
                 from runtime.outbound_candidate oc
+                join runtime.policy_harness_binding phb on phb.execution_id = oc.execution_id
+                join runtime.provider_request pr on pr.outbound_payload_id = oc.outbound_payload_id
                 join runtime.connector_execution ce on ce.outbound_payload_id = oc.outbound_payload_id
                 join runtime.response_guard_result rg on rg.execution_id = oc.execution_id
                 where oc.execution_id = :executionId
                   and oc.guard_status = 'PASSED'
                   and oc.candidate_payload_digest is not null
                   and oc.field_count > 0
+                  and phb.approval_reuse_status = 'TRANSFORM_REQUIRED'
+                  and phb.requested_fields like '%request.prompt%'
+                  and pr.canonical_payload_digest is not null
+                  and pr.tenant_id = 'tenant_local_ai'
+                  and pr.region = 'KR'
+                  and pr.retention_policy = 'NO_RETENTION'
+                  and pr.training_use_allowed = false
                   and ce.status = 'ACKNOWLEDGED'
                   and ce.outbound_candidate_digest = oc.candidate_payload_digest
                   and rg.status = 'PASSED'
                   and rg.leakage_detected = false
+                  and rg.detector_version = 'ai-response-regex-v1'
                 """)
             .param("executionId", executionId)
             .query(Integer.class)
@@ -257,13 +282,15 @@ class RuntimeExecutionControllerTests {
                 .contentType("application/json")
                 .content("""
                     {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
                       "workloadId": "%s",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
                       "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-size",
                       "processingContexts": ["AI_USE"],
-                      "input": {}
+                      "input": {"prompt": "safe question"}
                     }
                     """.formatted("x".repeat(121))))
             .andExpect(status().isBadRequest())
@@ -294,13 +321,15 @@ class RuntimeExecutionControllerTests {
                 .contentType("application/json")
                 .content("""
                     {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
                       "destinationProfileId": "dest_internal_provider_project_provisional",
                       "idempotencyKey": "idem-pc",
                       "processingContexts": ["AI_USE", null],
-                      "input": {}
+                      "input": {"prompt": "safe question"}
                     }
                     """))
             .andExpect(status().isBadRequest())
@@ -319,13 +348,15 @@ class RuntimeExecutionControllerTests {
                 .contentType("application/json")
                 .content("""
                     {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
                       "destinationProfileId": "dest_missing",
                       "idempotencyKey": "idem_dest_%s",
                       "processingContexts": ["AI_USE"],
-                      "input": {}
+                      "input": {"prompt": "safe question"}
                     }
                     """.formatted(suffix)))
             .andExpect(status().isUnprocessableEntity())
@@ -343,6 +374,62 @@ class RuntimeExecutionControllerTests {
             .query(Integer.class)
             .single();
         assertThat(blockedCount).isEqualTo(1);
+    }
+
+    @Test
+    void missingApprovalFailsClosedBeforeDestinationAndRetrievalEvidence() throws Exception {
+        String suffix = token();
+        String requestId = "req_approval_" + suffix;
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", "trace_approval_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content(runtimeRequest(
+                    "idem_approval_" + suffix,
+                    "safe question"
+                ).replace("approval_ai_customer_support_v1", "approval_missing")))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("APPROVAL_SCOPE_NOT_FOUND"));
+
+        Integer blockedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where request_id = :requestId
+                  and approval_reference = 'approval_missing'
+                  and canonical_context_digest is null
+                  and status = 'BLOCKED'
+                """)
+            .param("requestId", requestId)
+            .query(Integer.class)
+            .single();
+        assertThat(blockedCount).isEqualTo(1);
+    }
+
+    @Test
+    void sensitivePromptRequiresReviewAndNeverCreatesProviderRequest() throws Exception {
+        String suffix = token();
+        String requestId = "req_sensitive_prompt_" + suffix;
+        String response = postRuntimeExecution(
+            requestId,
+            "trace_sensitive_prompt_" + suffix,
+            "idem_sensitive_prompt_" + suffix,
+            "Call 010-1234-5678"
+        );
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        assertThat(response).contains("\"status\":\"REVIEW_REQUIRED\"");
+        assertThat(response).doesNotContain("010-1234-5678");
+        Integer providerRequestCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.provider_request
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(Integer.class)
+            .single();
+        assertThat(providerRequestCount).isZero();
     }
 
     private String postRuntimeExecution(
@@ -366,6 +453,8 @@ class RuntimeExecutionControllerTests {
     private String runtimeRequest(String idempotencyKey, String ticketId) {
         return """
             {
+              "institutionId": "institution_local",
+              "approvalReference": "approval_ai_customer_support_v1",
               "workloadId": "customer_summary",
               "purposeCode": "CUSTOMER_SUPPORT",
               "subjectScope": "customer:customer-100",
@@ -373,7 +462,7 @@ class RuntimeExecutionControllerTests {
               "idempotencyKey": "%s",
               "processingContexts": ["AI_USE"],
               "input": {
-                "ticketId": "%s"
+                "prompt": "%s"
               }
             }
             """.formatted(idempotencyKey, ticketId);

@@ -7,7 +7,9 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.policy.domain.PolicySnapshot;
+import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
 import com.adp.gateway.transform.domain.TransformResult;
@@ -25,6 +27,14 @@ public interface RuntimeExecutionPersistence {
     void recordTransform(String executionId, RuntimeDecision decision, TransformResult transformResult);
 
     void recordOutbound(String executionId, OutboundCandidatePayload payload, OutboundGuardResult guardResult);
+
+    void recordPolicyHarness(String executionId, PolicyHarnessBinding binding);
+
+    void recordProviderRequest(
+        String executionId,
+        DestinationProfile destinationProfile,
+        ProviderRequestPayload providerRequest
+    );
 
     void recordConnector(String executionId, ConnectorResult connectorResult);
 

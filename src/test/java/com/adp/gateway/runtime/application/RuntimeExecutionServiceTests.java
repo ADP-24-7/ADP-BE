@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Set;
 
 import com.adp.gateway.audit.application.AuditRecorder;
+import com.adp.gateway.ai.application.AiCanonicalContextBuilder;
+import com.adp.gateway.ai.infrastructure.AiExternalSchemaMapper;
 import com.adp.gateway.auth.application.AuthorizationDecision;
 import com.adp.gateway.auth.application.AuthorizationService;
 import com.adp.gateway.auth.domain.AdpRole;
@@ -25,6 +27,7 @@ import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
+import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
@@ -41,6 +44,11 @@ import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
+import com.adp.gateway.detection.infrastructure.RegexSensitiveDataDetector;
+import com.adp.gateway.policyharness.application.FieldLineageFactory;
+import com.adp.gateway.policyharness.application.PolicyHarnessEvaluator;
+import com.adp.gateway.policyharness.infrastructure.ProjectProvisionalApprovalScopeAdapter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -64,6 +72,54 @@ import org.junit.jupiter.api.Test;
 
 class RuntimeExecutionServiceTests {
 
+    private RuntimeExecutionService service(
+        AuthorizationService authorizationService,
+        RetrievalService retrievalService,
+        CanonicalContextBuilder contextBuilder,
+        RuntimePolicyContextFactory runtimePolicyContextFactory,
+        PolicySnapshotPort policySnapshotPort,
+        PolicyApplicabilityEvaluator applicabilityEvaluator,
+        RuntimeDecisionService decisionService,
+        RuntimeConnectorPort connector,
+        AuditRecorder auditRecorder,
+        RuntimeExecutionPersistence persistence,
+        SubjectRefHasher subjectRefHasher,
+        RuntimeInputHasher runtimeInputHasher,
+        TransformEngine transformEngine,
+        DestinationProfilePort destinationProfilePort,
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
+        OutboundGuardChain outboundGuardChain,
+        ResponseGuardPort responseGuardPort,
+        Clock clock
+    ) {
+        CanonicalValueHasher hasher = new CanonicalValueHasher();
+        return new RuntimeExecutionService(
+            authorizationService,
+            retrievalService,
+            contextBuilder,
+            runtimePolicyContextFactory,
+            policySnapshotPort,
+            applicabilityEvaluator,
+            decisionService,
+            connector,
+            auditRecorder,
+            persistence,
+            subjectRefHasher,
+            runtimeInputHasher,
+            transformEngine,
+            destinationProfilePort,
+            outboundCandidatePayloadBuilder,
+            outboundGuardChain,
+            responseGuardPort,
+            new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher)),
+            new ProjectProvisionalApprovalScopeAdapter(),
+            new FieldLineageFactory(hasher),
+            new PolicyHarnessEvaluator(hasher),
+            new AiExternalSchemaMapper(new ObjectMapper(), hasher),
+            clock
+        );
+    }
+
     @Test
     void transformFailureMarksRuntimeFailedAndDoesNotExecuteConnector() {
         AuthorizationService authorizationService = mock(AuthorizationService.class);
@@ -83,7 +139,7 @@ class RuntimeExecutionServiceTests {
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
-        RuntimeExecutionService service = new RuntimeExecutionService(
+        RuntimeExecutionService service = service(
             authorizationService,
             retrievalService,
             contextBuilder,
@@ -134,12 +190,20 @@ class RuntimeExecutionServiceTests {
         when(transformEngine.transform(any(), any(), any(), any()))
             .thenThrow(new IllegalStateException("vault unavailable"));
 
-        assertThatThrownBy(() -> service.execute(request, principal, "dest_internal_provider_project_provisional", List.of("AI_USE"), Map.of()))
+        assertThatThrownBy(() -> service.execute(
+            request,
+            principal,
+            "institution_local",
+            ProjectProvisionalApprovalScopeAdapter.APPROVAL_REFERENCE,
+            "dest_internal_provider_project_provisional",
+            List.of("AI_USE"),
+            Map.of("prompt", "safe question")
+        ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("vault unavailable");
 
         verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.FAILED));
-        verify(connector, never()).execute(any(), any(), any());
+        verify(connector, never()).execute(any(), any(), any(), any());
         verify(auditRecorder, never()).record(any(), any(), any());
     }
 
@@ -162,7 +226,7 @@ class RuntimeExecutionServiceTests {
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
-        RuntimeExecutionService service = new RuntimeExecutionService(
+        RuntimeExecutionService service = service(
             authorizationService,
             retrievalService,
             contextBuilder,
@@ -201,14 +265,16 @@ class RuntimeExecutionServiceTests {
         service.execute(
             request(),
             principal(),
+            "institution_local",
+            ProjectProvisionalApprovalScopeAdapter.APPROVAL_REFERENCE,
             "dest_internal_provider_project_provisional",
             List.of("AI_USE"),
-            Map.of()
+            Map.of("prompt", "safe question")
         );
 
         verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
         verify(outboundGuardChain, never()).guard(any(), any(), any(), any(), any(), any());
-        verify(connector, never()).execute(any(), any(), any());
+        verify(connector, never()).execute(any(), any(), any(), any());
     }
 
     @Test
@@ -230,7 +296,7 @@ class RuntimeExecutionServiceTests {
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
-        RuntimeExecutionService service = new RuntimeExecutionService(
+        RuntimeExecutionService service = service(
             authorizationService,
             retrievalService,
             contextBuilder,
@@ -257,16 +323,18 @@ class RuntimeExecutionServiceTests {
         assertThatThrownBy(() -> service.execute(
             request(),
             principal(),
+            "institution_local",
+            ProjectProvisionalApprovalScopeAdapter.APPROVAL_REFERENCE,
             "dest_internal_provider_project_provisional",
             List.of("AI_USE"),
-            Map.of()
+            Map.of("prompt", "safe question")
         )).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.BLOCKED));
         verify(destinationProfilePort, never()).load(any(), any());
         verify(retrievalService, never()).retrieve(any());
         verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
-        verify(connector, never()).execute(any(), any(), any());
+        verify(connector, never()).execute(any(), any(), any(), any());
     }
 
     @Test
@@ -288,7 +356,7 @@ class RuntimeExecutionServiceTests {
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
         OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
         ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
-        RuntimeExecutionService service = new RuntimeExecutionService(
+        RuntimeExecutionService service = service(
             authorizationService,
             retrievalService,
             contextBuilder,
@@ -341,16 +409,18 @@ class RuntimeExecutionServiceTests {
         when(outboundCandidatePayloadBuilder.build(any(), any(), any(), any())).thenReturn(payload);
         when(outboundGuardChain.guard(any(), any(), any(), any(), any(), any()))
             .thenReturn(OutboundGuardResult.passed());
-        when(connector.execute(any(), any(), any())).thenReturn(connectorResult);
+        when(connector.execute(any(), any(), any(), any())).thenReturn(connectorResult);
         when(responseGuardPort.guard(any(), any())).thenReturn(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
         when(auditRecorder.record(any(), any(), any())).thenReturn(auditContext());
 
         RuntimeExecutionResult result = service.execute(
             request(),
             principal(),
+            "institution_local",
+            ProjectProvisionalApprovalScopeAdapter.APPROVAL_REFERENCE,
             "dest_internal_provider_project_provisional",
             List.of("AI_USE"),
-            Map.of()
+            Map.of("prompt", "safe question")
         );
 
         org.assertj.core.api.Assertions.assertThat(result.status()).isEqualTo(RuntimeExecutionStatus.FAILED);

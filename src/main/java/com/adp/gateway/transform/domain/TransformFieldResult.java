@@ -19,4 +19,23 @@ public record TransformFieldResult(
     @JsonIgnore
     Object transformedValue
 ) {
+
+    @Override
+    public String toString() {
+        return "TransformFieldResult[path=%s, datasetName=%s, fieldName=%s, dataClass=%s, strategy=%s, strategyVersion=%s, keyVersion=%s, mappingVersion=%s, instructionDigest=%s, sourceValueDigest=%s, transformedValueDigest=%s, tokenRef=%s, transformedValue=<redacted>]"
+            .formatted(
+                path,
+                datasetName,
+                fieldName,
+                dataClass,
+                strategy,
+                strategyVersion,
+                keyVersion,
+                mappingVersion,
+                instructionDigest,
+                sourceValueDigest,
+                transformedValueDigest,
+                tokenRef
+            );
+    }
 }

@@ -9,7 +9,8 @@ public record RuntimeExecutionTraceEventsResponse(
     String executionId,
     String traceId,
     String status,
-    List<RuntimeExecutionStageResponse> stages
+    List<RuntimeExecutionStageResponse> stages,
+    RuntimeExecutionEvidenceResponse evidence
 ) {
 
     public static RuntimeExecutionTraceEventsResponse from(RuntimeExecutionTrace trace) {
@@ -25,6 +26,13 @@ public record RuntimeExecutionTraceEventsResponse(
         if (trace.decisionId() != null) {
             stages.add(new RuntimeExecutionStageResponse("DECISION", "COMPLETED", trace.updatedAt()));
         }
+        if (trace.approvalReuseStatus() != null) {
+            stages.add(new RuntimeExecutionStageResponse(
+                "POLICY_HARNESS",
+                trace.approvalReuseStatus(),
+                trace.updatedAt()
+            ));
+        }
         if ("APPLIED".equals(trace.transformStatus())) {
             stages.add(new RuntimeExecutionStageResponse("TRANSFORM", "COMPLETED", trace.updatedAt()));
         }
@@ -32,10 +40,15 @@ public record RuntimeExecutionTraceEventsResponse(
             stages.add(new RuntimeExecutionStageResponse("OUTBOUND_GUARD", "COMPLETED", trace.updatedAt()));
         }
         if (trace.connectorExecutionId() != null) {
+            stages.add(new RuntimeExecutionStageResponse("PROVIDER_REQUEST", "COMPLETED", trace.updatedAt()));
             stages.add(new RuntimeExecutionStageResponse("CONNECTOR", connectorStatus(trace), trace.updatedAt()));
         }
-        if ("PASSED".equals(trace.responseGuardStatus())) {
-            stages.add(new RuntimeExecutionStageResponse("RESPONSE_GUARD", "COMPLETED", trace.updatedAt()));
+        if (trace.responseGuardStatus() != null) {
+            stages.add(new RuntimeExecutionStageResponse(
+                "RESPONSE_GUARD",
+                "PASSED".equals(trace.responseGuardStatus()) ? "COMPLETED" : trace.responseGuardStatus(),
+                trace.updatedAt()
+            ));
         }
         if ("FAILED".equals(trace.status())) {
             stages.add(new RuntimeExecutionStageResponse("RUNTIME_EXECUTION", "FAILED", trace.updatedAt()));
@@ -44,7 +57,8 @@ public record RuntimeExecutionTraceEventsResponse(
             trace.executionId(),
             trace.traceId(),
             trace.status(),
-            List.copyOf(stages)
+            List.copyOf(stages),
+            RuntimeExecutionEvidenceResponse.from(trace)
         );
     }
 

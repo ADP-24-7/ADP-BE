@@ -49,6 +49,8 @@ public class RuntimeExecutionController {
         var result = runtimeExecutionService.execute(
             context,
             (AuthPrincipal) authentication.getPrincipal(),
+            request.institutionId(),
+            request.approvalReference(),
             request.destinationProfileId(),
             request.processingContexts() == null ? List.of() : request.processingContexts(),
             request.input()

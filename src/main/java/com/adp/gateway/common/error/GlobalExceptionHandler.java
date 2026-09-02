@@ -4,11 +4,13 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
+import com.adp.gateway.ai.application.AiInputRejectedException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
+import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,6 +144,32 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.DESTINATION_PROFILE_NOT_FOUND,
             "Destination profile not found",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            request
+        );
+    }
+
+    @ExceptionHandler(ApprovalScopeNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleApprovalScopeNotFound(
+        ApprovalScopeNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.APPROVAL_SCOPE_NOT_FOUND,
+            "Approval scope not found",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            request
+        );
+    }
+
+    @ExceptionHandler(AiInputRejectedException.class)
+    ResponseEntity<ErrorResponse> handleAiInputRejected(
+        AiInputRejectedException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.AI_INPUT_REJECTED,
+            "AI input rejected",
             HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );

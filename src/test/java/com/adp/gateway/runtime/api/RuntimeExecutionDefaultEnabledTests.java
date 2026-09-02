@@ -32,6 +32,8 @@ class RuntimeExecutionDefaultEnabledTests {
                 .contentType("application/json")
                 .content("""
                     {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
                       "workloadId": "customer_summary",
                       "purposeCode": "CUSTOMER_SUPPORT",
                       "subjectScope": "customer:customer-100",
@@ -39,7 +41,7 @@ class RuntimeExecutionDefaultEnabledTests {
                       "idempotencyKey": "idem_def_%s",
                       "processingContexts": ["AI_USE"],
                       "input": {
-                        "ticketId": "ticket-100"
+                        "prompt": "Summarize the approved customer context"
                       }
                     }
                     """.formatted(suffix)))

@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.adp.gateway.audit.application.AuditRecorder;
+import com.adp.gateway.ai.application.AiCanonicalContextBuilder;
+import com.adp.gateway.ai.application.AiInputRejectedException;
 import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.auth.application.AuthorizationRequest;
 import com.adp.gateway.auth.application.AuthorizationService;
@@ -26,12 +28,14 @@ import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
+import com.adp.gateway.egress.application.ExternalSchemaMapper;
 import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
@@ -41,6 +45,11 @@ import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
+import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
+import com.adp.gateway.policyharness.application.ApprovalScopePort;
+import com.adp.gateway.policyharness.application.FieldLineageFactory;
+import com.adp.gateway.policyharness.application.PolicyHarnessEvaluator;
+import com.adp.gateway.policyharness.domain.ApprovalReuseStatus;
 import com.adp.gateway.retrieval.application.RetrievalService;
 import com.adp.gateway.retrieval.domain.RetrievalResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
@@ -70,6 +79,11 @@ public class RuntimeExecutionService {
     private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
     private final OutboundGuardChain outboundGuardChain;
     private final ResponseGuardPort responseGuardPort;
+    private final AiCanonicalContextBuilder aiCanonicalContextBuilder;
+    private final ApprovalScopePort approvalScopePort;
+    private final FieldLineageFactory fieldLineageFactory;
+    private final PolicyHarnessEvaluator policyHarnessEvaluator;
+    private final ExternalSchemaMapper externalSchemaMapper;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -90,6 +104,11 @@ public class RuntimeExecutionService {
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
         OutboundGuardChain outboundGuardChain,
         ResponseGuardPort responseGuardPort,
+        AiCanonicalContextBuilder aiCanonicalContextBuilder,
+        ApprovalScopePort approvalScopePort,
+        FieldLineageFactory fieldLineageFactory,
+        PolicyHarnessEvaluator policyHarnessEvaluator,
+        ExternalSchemaMapper externalSchemaMapper,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -109,12 +128,19 @@ public class RuntimeExecutionService {
         this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
         this.outboundGuardChain = outboundGuardChain;
         this.responseGuardPort = responseGuardPort;
+        this.aiCanonicalContextBuilder = aiCanonicalContextBuilder;
+        this.approvalScopePort = approvalScopePort;
+        this.fieldLineageFactory = fieldLineageFactory;
+        this.policyHarnessEvaluator = policyHarnessEvaluator;
+        this.externalSchemaMapper = externalSchemaMapper;
         this.clock = clock;
     }
 
     public RuntimeExecutionResult execute(
         RuntimeRequestContext requestContext,
         AuthPrincipal principal,
+        String institutionId,
+        String approvalReference,
         String destinationProfileId,
         List<String> processingContexts,
         Map<String, Object> input
@@ -135,7 +161,35 @@ public class RuntimeExecutionService {
             destinationProfileId,
             null,
             null,
+            null,
+            null,
+            null,
+            null,
+            institutionId,
+            approvalReference,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             inputDigest,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -168,8 +222,12 @@ public class RuntimeExecutionService {
                 throw new AccessDeniedException("Runtime execution is not allowed");
             }
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+            var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
             persistence.recordDestinationProfile(executionId, destinationProfile);
+            if (destinationProfile.packType() == ExecutionPackType.AI) {
+                aiCanonicalContextBuilder.validate(input);
+            }
 
             RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
                 requestContext.requestId(),
@@ -179,6 +237,9 @@ public class RuntimeExecutionService {
                 subject
             ));
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
+            if (destinationProfile.packType() == ExecutionPackType.AI) {
+                canonicalContext = aiCanonicalContextBuilder.merge(canonicalContext, input);
+            }
             persistence.recordRetrieved(executionId, canonicalContext);
             persistence.updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
 
@@ -214,6 +275,23 @@ public class RuntimeExecutionService {
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             persistence.updateStatus(executionId, finalStatus);
+            if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
+                var fieldLineage = fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null);
+                var policyHarnessBinding = policyHarnessEvaluator.evaluate(
+                    approvalScope,
+                    institutionId,
+                    principal,
+                    requestContext.workloadId(),
+                    requestContext.purpose(),
+                    processingContexts,
+                    destinationProfile,
+                    snapshot,
+                    decision,
+                    fieldLineage,
+                    now
+                );
+                persistence.recordPolicyHarness(executionId, policyHarnessBinding);
+            }
             if (finalStatus == RuntimeExecutionStatus.FAILED) {
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
@@ -248,6 +326,50 @@ public class RuntimeExecutionService {
                 decision,
                 transformResult
             );
+            var fieldLineage = fieldLineageFactory.create(
+                retrieval,
+                canonicalContext,
+                transformResult,
+                outboundPayload
+            );
+            var policyHarnessBinding = policyHarnessEvaluator.evaluate(
+                approvalScope,
+                institutionId,
+                principal,
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                processingContexts,
+                destinationProfile,
+                snapshot,
+                decision,
+                fieldLineage,
+                now
+            );
+            if (!policyHarnessBinding.permitsEgress()) {
+                persistence.recordPolicyHarness(
+                    executionId,
+                    policyHarnessBinding.withFieldLineage(
+                        fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null)
+                    )
+                );
+                RuntimeExecutionStatus harnessStatus = policyHarnessBinding.approvalReuseStatus()
+                    == ApprovalReuseStatus.REVIEW_REQUIRED
+                    ? RuntimeExecutionStatus.REVIEW_REQUIRED
+                    : RuntimeExecutionStatus.BLOCKED;
+                persistence.updateStatus(executionId, harnessStatus);
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    harnessStatus,
+                    decision,
+                    transformResult,
+                    "NOT_EVALUATED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    auditContext
+                );
+            }
             OutboundGuardResult outboundGuardResult = outboundGuardChain.guard(
                 destinationProfile,
                 requestContext.workloadId(),
@@ -258,6 +380,12 @@ public class RuntimeExecutionService {
             );
             persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
             if (!outboundGuardResult.isPassed()) {
+                persistence.recordPolicyHarness(
+                    executionId,
+                    policyHarnessBinding.withFieldLineage(
+                        fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null)
+                    )
+                );
                 persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
@@ -272,8 +400,16 @@ public class RuntimeExecutionService {
                     auditContext
                 );
             }
+            persistence.recordPolicyHarness(executionId, policyHarnessBinding);
+            var providerRequest = externalSchemaMapper.map(destinationProfile, outboundPayload);
+            persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
             persistence.updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
-            ConnectorResult connectorResult = runtimeConnector.execute(requestContext, decision, outboundPayload);
+            ConnectorResult connectorResult = runtimeConnector.execute(
+                requestContext,
+                decision,
+                outboundPayload,
+                providerRequest
+            );
             persistence.recordConnector(executionId, connectorResult);
             if (connectorResult.status() == ConnectorStatus.FAILED) {
                 ResponseGuardResult responseGuardResult =
@@ -328,7 +464,8 @@ public class RuntimeExecutionService {
             );
         } catch (AccessDeniedException exception) {
             throw exception;
-        } catch (DestinationProfileNotFoundException | OutboundGuardException exception) {
+        } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
+            | AiInputRejectedException | OutboundGuardException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {

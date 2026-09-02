@@ -194,6 +194,42 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v9MigrationCreatesAiPolicyHarnessEvidenceTablesAndColumns() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where (table_schema, table_name) in (
+                  ('runtime', 'policy_harness_binding'),
+                  ('runtime', 'provider_request'),
+                  ('runtime', 'response_sensitive_finding')
+                )
+                """)
+            .query(Integer.class)
+            .single();
+        Integer evidenceColumnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'institution_id',
+                    'approval_reference',
+                    'approval_reuse_status',
+                    'policy_layers_digest',
+                    'requested_fields_digest',
+                    'released_fields_digest',
+                    'provider_request_digest',
+                    'provider_response_digest'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(3);
+        assertThat(evidenceColumnCount).isEqualTo(8);
+    }
+
+    @Test
     void v8MigrationPreservesLegacyAuditConnectorStatusRows() throws Exception {
         String databaseName = "adp_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
