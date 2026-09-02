@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Set;
 
 import com.adp.gateway.auth.domain.AdpRole;
+import com.adp.gateway.auth.domain.SubjectRef;
+import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import com.adp.gateway.policyharness.application.ApprovalScopePort;
 import com.adp.gateway.policyharness.domain.ApprovalScope;
@@ -16,6 +18,11 @@ import org.springframework.stereotype.Component;
 public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort {
 
     public static final String APPROVAL_REFERENCE = "approval_ai_customer_support_v1";
+    private final SubjectRefHasher subjectRefHasher;
+
+    public ProjectProvisionalApprovalScopeAdapter(SubjectRefHasher subjectRefHasher) {
+        this.subjectRefHasher = subjectRefHasher;
+    }
 
     @Override
     public ApprovalScope load(String approvalReference, OffsetDateTime requestStartedAt) {
@@ -31,6 +38,10 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
             "local-institution-policy-digest-v1",
             "customer_summary",
             "CUSTOMER_SUPPORT",
+            "EXACT_DIGEST",
+            subjectRefHasher.hash(SubjectRef.from("customer:customer-100")),
+            "be-runtime-policy/0.0.0",
+            "be-snapshot-local-fixture:customer-summary:customer-support:internal-provider",
             Set.of(AdpRole.RUNTIME_EXECUTOR),
             Set.of("AI_USE", "CUSTOMER_SUPPORT"),
             Set.of(

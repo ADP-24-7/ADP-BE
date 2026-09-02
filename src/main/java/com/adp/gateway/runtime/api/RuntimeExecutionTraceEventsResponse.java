@@ -26,15 +26,15 @@ public record RuntimeExecutionTraceEventsResponse(
         if (trace.decisionId() != null) {
             stages.add(new RuntimeExecutionStageResponse("DECISION", "COMPLETED", trace.updatedAt()));
         }
+        if ("APPLIED".equals(trace.transformStatus())) {
+            stages.add(new RuntimeExecutionStageResponse("TRANSFORM", "COMPLETED", trace.updatedAt()));
+        }
         if (trace.approvalReuseStatus() != null) {
             stages.add(new RuntimeExecutionStageResponse(
                 "POLICY_HARNESS",
                 trace.approvalReuseStatus(),
                 trace.updatedAt()
             ));
-        }
-        if ("APPLIED".equals(trace.transformStatus())) {
-            stages.add(new RuntimeExecutionStageResponse("TRANSFORM", "COMPLETED", trace.updatedAt()));
         }
         if ("PASSED".equals(trace.outboundGuardStatus())) {
             stages.add(new RuntimeExecutionStageResponse("OUTBOUND_GUARD", "COMPLETED", trace.updatedAt()));
@@ -63,7 +63,9 @@ public record RuntimeExecutionTraceEventsResponse(
     }
 
     private static String authorizationStatus(RuntimeExecutionTrace trace) {
-        if ("BLOCKED".equals(trace.status())) {
+        if ("BLOCKED".equals(trace.status())
+            && trace.destinationProfileVersion() == null
+            && trace.canonicalContextDigest() == null) {
             return "DENIED";
         }
         return "COMPLETED";

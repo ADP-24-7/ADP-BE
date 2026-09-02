@@ -112,7 +112,7 @@ class RuntimeExecutionServiceTests {
             outboundGuardChain,
             responseGuardPort,
             new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher)),
-            new ProjectProvisionalApprovalScopeAdapter(),
+            new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher),
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
             new AiExternalSchemaMapper(new ObjectMapper(), hasher),
@@ -568,8 +568,8 @@ class RuntimeExecutionServiceTests {
 
     private PolicySnapshot snapshot() {
         return new PolicySnapshot(
-            "policy-v1",
-            "snapshot_digest",
+            "be-runtime-policy/0.0.0",
+            "be-snapshot-local-fixture:customer-summary:customer-support:internal-provider",
             OffsetDateTime.parse("2026-09-01T00:00:00Z"),
             PolicyLifecycleStage.ACTIVE,
             new SourcePolicyEvaluationArtifactRef("artifact", "v1", new ArtifactDigest("sha256", "digest")),

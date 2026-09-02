@@ -34,6 +34,7 @@ public class PolicyHarnessEvaluator {
         AuthPrincipal principal,
         String workloadId,
         String purposeCode,
+        String subjectRefDigest,
         List<String> processingContexts,
         DestinationProfile destinationProfile,
         PolicySnapshot policySnapshot,
@@ -53,6 +54,16 @@ public class PolicyHarnessEvaluator {
         }
         if (!approval.purposeCode().equals(purposeCode)) {
             reasons.add("PURPOSE_SCOPE_MISMATCH");
+        }
+        if (!"EXACT_DIGEST".equals(approval.subjectScopeType())
+            || !approval.subjectScopeDigest().equals(subjectRefDigest)) {
+            reasons.add("SUBJECT_SCOPE_MISMATCH");
+        }
+        if (!approval.workloadPolicyVersion().equals(policySnapshot.policyVersion())) {
+            reasons.add("POLICY_VERSION_SCOPE_MISMATCH");
+        }
+        if (!approval.workloadPolicySnapshotDigest().equals(policySnapshot.snapshotDigest())) {
+            reasons.add("POLICY_SNAPSHOT_SCOPE_MISMATCH");
         }
         if (principal.roles().stream().noneMatch(approval.allowedRoles()::contains)) {
             reasons.add("ROLE_SCOPE_MISMATCH");
@@ -119,10 +130,16 @@ public class PolicyHarnessEvaluator {
     }
 
     private ApprovalReuseStatus status(List<String> reasons, FinalAction finalAction) {
+        if (finalAction == FinalAction.BLOCK) {
+            return ApprovalReuseStatus.BLOCKED;
+        }
         if (reasons.stream().anyMatch(reason -> reason.equals("APPROVAL_NOT_EFFECTIVE")
             || reason.equals("INSTITUTION_SCOPE_MISMATCH")
             || reason.equals("WORKLOAD_SCOPE_MISMATCH")
             || reason.equals("PURPOSE_SCOPE_MISMATCH")
+            || reason.equals("SUBJECT_SCOPE_MISMATCH")
+            || reason.equals("POLICY_VERSION_SCOPE_MISMATCH")
+            || reason.equals("POLICY_SNAPSHOT_SCOPE_MISMATCH")
             || reason.equals("ROLE_SCOPE_MISMATCH")
             || reason.equals("PROCESSING_CONTEXT_SCOPE_MISMATCH")
             || reason.equals("DESTINATION_SCOPE_MISMATCH")
@@ -131,9 +148,6 @@ public class PolicyHarnessEvaluator {
         }
         if (!reasons.isEmpty() || finalAction == FinalAction.REVIEW) {
             return ApprovalReuseStatus.REVIEW_REQUIRED;
-        }
-        if (finalAction == FinalAction.BLOCK) {
-            return ApprovalReuseStatus.BLOCKED;
         }
         return finalAction == FinalAction.TRANSFORM
             ? ApprovalReuseStatus.TRANSFORM_REQUIRED

@@ -149,6 +149,7 @@ public class RuntimeExecutionService {
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
+        String subjectRefDigest = subject == null ? null : subjectRefHasher.hash(subject);
         persistence.recordReceived(new RuntimeExecutionTrace(
             executionId,
             requestContext.requestId(),
@@ -156,7 +157,7 @@ public class RuntimeExecutionService {
             requestContext.idempotencyKey(),
             requestContext.workloadId(),
             requestContext.purpose(),
-            subject == null ? null : subjectRefHasher.hash(subject),
+            subjectRefDigest,
             null,
             destinationProfileId,
             null,
@@ -283,6 +284,7 @@ public class RuntimeExecutionService {
                     principal,
                     requestContext.workloadId(),
                     requestContext.purpose(),
+                    subjectRefDigest,
                     processingContexts,
                     destinationProfile,
                     snapshot,
@@ -338,6 +340,7 @@ public class RuntimeExecutionService {
                 principal,
                 requestContext.workloadId(),
                 requestContext.purpose(),
+                subjectRefDigest,
                 processingContexts,
                 destinationProfile,
                 snapshot,

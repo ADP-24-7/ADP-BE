@@ -512,6 +512,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    @Transactional
     public void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult) {
         jdbcClient.sql("""
             insert into runtime.response_guard_result (

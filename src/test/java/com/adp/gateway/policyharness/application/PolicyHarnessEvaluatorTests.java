@@ -49,6 +49,7 @@ class PolicyHarnessEvaluatorTests {
             principal(),
             "customer_summary",
             "CUSTOMER_SUPPORT",
+            "subject-digest",
             List.of("AI_USE"),
             destination(),
             snapshot,
@@ -63,6 +64,58 @@ class PolicyHarnessEvaluatorTests {
             .containsExactly("INSTITUTION_POLICY", "WORKLOAD_POLICY", "DESTINATION_PROFILE");
     }
 
+    @Test
+    void blocksWhenSubjectOrPinnedPolicySnapshotDoesNotMatch() {
+        RuntimeDecision decision = mock(RuntimeDecision.class);
+        when(decision.finalAction()).thenReturn(FinalAction.ALLOW);
+        PolicySnapshot snapshot = snapshot("policy-v2", "snapshot-v2");
+
+        var result = evaluator.evaluate(
+            approval(),
+            "institution_local",
+            principal(),
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "another-subject-digest",
+            List.of("AI_USE"),
+            destination(),
+            snapshot,
+            decision,
+            lineage(Set.of("request.prompt")),
+            OffsetDateTime.parse("2026-09-02T00:00:00Z")
+        );
+
+        assertThat(result.approvalReuseStatus()).isEqualTo(ApprovalReuseStatus.BLOCKED);
+        assertThat(result.reasonCodes()).containsExactlyInAnyOrder(
+            "SUBJECT_SCOPE_MISMATCH",
+            "POLICY_VERSION_SCOPE_MISMATCH",
+            "POLICY_SNAPSHOT_SCOPE_MISMATCH"
+        );
+    }
+
+    @Test
+    void finalBlockActionAlwaysProducesBlockedApprovalStatus() {
+        RuntimeDecision decision = mock(RuntimeDecision.class);
+        when(decision.finalAction()).thenReturn(FinalAction.BLOCK);
+
+        var result = evaluator.evaluate(
+            approval(),
+            "institution_local",
+            principal(),
+            "customer_summary",
+            "CUSTOMER_SUPPORT",
+            "subject-digest",
+            List.of("AI_USE"),
+            destination(),
+            snapshot("policy-v1", "snapshot-digest"),
+            decision,
+            lineage(Set.of("request.prompt")),
+            OffsetDateTime.parse("2026-09-02T00:00:00Z")
+        );
+
+        assertThat(result.approvalReuseStatus()).isEqualTo(ApprovalReuseStatus.BLOCKED);
+    }
+
     private ApprovalScope approval() {
         return new ApprovalScope(
             "approval-v1",
@@ -73,6 +126,10 @@ class PolicyHarnessEvaluatorTests {
             "institution-policy-digest",
             "customer_summary",
             "CUSTOMER_SUPPORT",
+            "EXACT_DIGEST",
+            "subject-digest",
+            "policy-v1",
+            "snapshot-digest",
             Set.of(AdpRole.RUNTIME_EXECUTOR),
             Set.of("AI_USE"),
             Set.of("request.prompt"),
@@ -82,6 +139,18 @@ class PolicyHarnessEvaluatorTests {
             null,
             List.of("evidence-v1")
         );
+    }
+
+    private PolicySnapshot snapshot(String policyVersion, String snapshotDigest) {
+        PolicySnapshot snapshot = mock(PolicySnapshot.class);
+        when(snapshot.sourcePolicyEvaluationArtifactRef()).thenReturn(new SourcePolicyEvaluationArtifactRef(
+            "artifact",
+            "v1",
+            new ArtifactDigest("sha256", "artifact-digest")
+        ));
+        when(snapshot.policyVersion()).thenReturn(policyVersion);
+        when(snapshot.snapshotDigest()).thenReturn(snapshotDigest);
+        return snapshot;
     }
 
     private AuthPrincipal principal() {
