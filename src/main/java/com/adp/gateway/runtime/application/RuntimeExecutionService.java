@@ -163,7 +163,7 @@ public class RuntimeExecutionService {
             requestContext.purpose(),
             subjectRefDigest,
             destinationProfileId,
-            institutionId,
+            principal.institutionId(),
             approvalReference,
             inputDigest,
             now
@@ -270,7 +270,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
-                    ControlledDeliveryResult.withheld(null),
+                    ControlledDeliveryResult.withheld(null, "NOT_REACHED"),
                     auditContext
                 );
             }
@@ -285,7 +285,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
-                    ControlledDeliveryResult.withheld(null),
+                    ControlledDeliveryResult.withheld(null, "NOT_REACHED"),
                     auditContext
                 );
             }
@@ -337,7 +337,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
-                    ControlledDeliveryResult.withheld(null),
+                    ControlledDeliveryResult.withheld(null, "NOT_REACHED"),
                     auditContext
                 );
             }
@@ -368,7 +368,7 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     "NOT_EVALUATED",
-                    ControlledDeliveryResult.withheld(null),
+                    ControlledDeliveryResult.withheld(null, "NOT_REACHED"),
                     auditContext
                 );
             }
@@ -387,6 +387,9 @@ public class RuntimeExecutionService {
                 ResponseGuardResult responseGuardResult =
                     responseGuardPort.guard(outboundPayload, connectorResult);
                 persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                ControlledDeliveryResult controlledDelivery =
+                    controlledDeliveryService.deliver(connectorResult, responseGuardResult);
+                persistence.recordControlledDelivery(executionId, controlledDelivery);
                 persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
@@ -397,7 +400,7 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     responseGuardResult.status(),
-                    controlledDeliveryService.deliver(connectorResult, responseGuardResult),
+                    controlledDelivery,
                     auditContext
                 );
             }
@@ -405,6 +408,9 @@ public class RuntimeExecutionService {
                 ResponseGuardResult responseGuardResult =
                     responseGuardPort.guard(outboundPayload, connectorResult);
                 persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+                ControlledDeliveryResult controlledDelivery =
+                    controlledDeliveryService.deliver(connectorResult, responseGuardResult);
+                persistence.recordControlledDelivery(executionId, controlledDelivery);
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
@@ -414,7 +420,7 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     responseGuardResult.status(),
-                    controlledDeliveryService.deliver(connectorResult, responseGuardResult),
+                    controlledDelivery,
                     auditContext
                 );
             }
@@ -422,6 +428,7 @@ public class RuntimeExecutionService {
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
             ControlledDeliveryResult controlledDelivery =
                 controlledDeliveryService.deliver(connectorResult, responseGuardResult);
+            persistence.recordControlledDelivery(executionId, controlledDelivery);
             RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed() && controlledDelivery.isDelivered()
                 ? RuntimeExecutionStatus.COMPLETED
                 : RuntimeExecutionStatus.BLOCKED;

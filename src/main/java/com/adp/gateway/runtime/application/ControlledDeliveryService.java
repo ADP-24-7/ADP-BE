@@ -16,11 +16,14 @@ public class ControlledDeliveryService {
         ResponseGuardResult responseGuardResult
     ) {
         if (!responseGuardResult.isPassed()) {
-            return ControlledDeliveryResult.withheld(connectorResult.responseDigest());
+            return ControlledDeliveryResult.withheld(
+                connectorResult.responseDigest(),
+                "RESPONSE_GUARD_" + responseGuardResult.status()
+            );
         }
         String content = extractContent(connectorResult.responsePayload());
         if (content == null || content.isBlank()) {
-            return ControlledDeliveryResult.withheld(connectorResult.responseDigest());
+            return ControlledDeliveryResult.withheld(connectorResult.responseDigest(), "UNSUPPORTED_RESPONSE_SCHEMA");
         }
         return ControlledDeliveryResult.delivered(content, connectorResult.responseDigest());
     }

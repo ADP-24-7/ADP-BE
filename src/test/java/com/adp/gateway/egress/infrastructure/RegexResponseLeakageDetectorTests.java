@@ -25,6 +25,21 @@ class RegexResponseLeakageDetectorTests {
         assertThat(findings.getFirst().toString()).doesNotContain("010-1234-5678");
     }
 
+    @Test
+    void detectsSecretAndCredentialFamiliesInProviderResponse() {
+        var findings = detector.detect(payload(), """
+            access=AKIAABCDEFGHIJKLMNOP
+            refresh_token=refresh-token-value-1234
+            client_secret=client-secret-value
+            -----BEGIN PRIVATE KEY-----
+            seed phrase=alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima
+            """);
+
+        assertThat(findings).extracting("findingType")
+            .contains("ACCESS_TOKEN", "REFRESH_TOKEN", "CREDENTIAL", "PRIVATE_KEY", "SEED");
+        assertThat(findings).allSatisfy(finding -> assertThat(finding.evidenceDigest()).hasSize(64));
+    }
+
     private OutboundCandidatePayload payload() {
         return new OutboundCandidatePayload(
             "out_test",

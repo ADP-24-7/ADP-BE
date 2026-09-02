@@ -111,6 +111,9 @@ class RuntimeExecutionControllerTests {
                   and outbound_guard_status = 'PASSED'
                   and connector_status = 'ACKNOWLEDGED'
                   and response_guard_status = 'PASSED'
+                  and controlled_delivery_status = 'DELIVERED'
+                  and controlled_delivery_response_digest is not null
+                  and controlled_delivered_at is not null
                 """)
             .param("executionId", executionId)
             .query(Integer.class)
@@ -144,6 +147,8 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.stages[8].stage").value("PROVIDER_REQUEST"))
             .andExpect(jsonPath("$.stages[9].stage").value("CONNECTOR"))
             .andExpect(jsonPath("$.stages[10].stage").value("RESPONSE_GUARD"))
+            .andExpect(jsonPath("$.stages[11].stage").value("CONTROLLED_DELIVERY"))
+            .andExpect(jsonPath("$.stages[11].status").value("DELIVERED"))
             .andExpect(jsonPath("$.evidence.approvalReuseStatus").value("TRANSFORM_REQUIRED"))
             .andExpect(jsonPath("$.evidence.requested.count").value(10))
             .andExpect(jsonPath("$.evidence.requested.fields[?(@ == 'request.prompt')]").exists())
@@ -198,7 +203,7 @@ class RuntimeExecutionControllerTests {
                   and ce.outbound_candidate_digest = oc.candidate_payload_digest
                   and rg.status = 'PASSED'
                   and rg.leakage_detected = false
-                  and rg.detector_version = 'ai-response-regex-v1'
+                  and rg.detector_version = 'ai-response-regex-v2'
                 """)
             .param("executionId", executionId)
             .query(Integer.class)
@@ -410,6 +415,7 @@ class RuntimeExecutionControllerTests {
                 select count(*) from runtime.runtime_execution
                 where request_id = :requestId
                   and authorization_status = 'DENIED'
+                  and institution_id = 'institution_local'
                   and canonical_context_digest is null
                   and destination_profile_version is null
                 """)

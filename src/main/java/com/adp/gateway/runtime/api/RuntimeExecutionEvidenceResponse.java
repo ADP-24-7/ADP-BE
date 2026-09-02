@@ -29,7 +29,11 @@ public record RuntimeExecutionEvidenceResponse(
     String providerRequestDigest,
     String providerResponseDigest,
     String responseGuardStatus,
-    List<String> responseGuardReasonCodes
+    List<String> responseGuardReasonCodes,
+    String controlledDeliveryStatus,
+    String controlledDeliveryResponseDigest,
+    String controlledDeliveryReasonCode,
+    java.time.OffsetDateTime controlledDeliveredAt
 ) {
 
     public static RuntimeExecutionEvidenceResponse from(RuntimeExecutionTrace trace) {
@@ -57,7 +61,11 @@ public record RuntimeExecutionEvidenceResponse(
             trace.providerRequestDigest(),
             trace.providerResponseDigest(),
             trace.responseGuardStatus(),
-            values(trace.responseGuardReasonCodes())
+            values(trace.responseGuardReasonCodes()),
+            trace.controlledDeliveryStatus(),
+            trace.controlledDeliveryResponseDigest(),
+            trace.controlledDeliveryReasonCode(),
+            trace.controlledDeliveredAt()
         );
     }
 

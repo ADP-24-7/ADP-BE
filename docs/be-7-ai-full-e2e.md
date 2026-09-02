@@ -17,7 +17,7 @@ DA `PolicyEvaluation Artifact`는 검증된 분석 handoff이며 활성 Runtime 
 - `processingContexts`
 - `input.prompt`
 
-`institutionId`는 단독으로 신뢰하지 않는다. 인증된 Principal에 서버 측으로 바인딩된 Institution과 요청 Institution이 일치해야 하며, 실행 및 Trace 조회 모두 같은 기관 경계를 적용한다.
+`institutionId`는 단독으로 신뢰하지 않는다. 인증된 Principal에 서버 측으로 바인딩된 Institution과 요청 Institution이 일치해야 하며, Runtime의 authoritative Institution과 Trace 소유권은 항상 Principal 값으로 기록한다. 실행 및 Trace 조회 모두 같은 기관 경계를 적용한다.
 
 AI 입력은 `prompt` 이외의 임의 키를 허용하지 않는다. Prompt에서 민감정보가 탐지되면 `UNKNOWN` Data Class로 승격해 Policy Decision이 `REVIEW_REQUIRED`로 귀결되며 Provider Request를 생성하지 않는다.
 
@@ -58,7 +58,7 @@ Docker 개발 환경은 `mock-ai` HTTP Provider를 사용한다. HTTP Connector�
 - Provider HTTP 오류: `FAILED`
 - 전송 결과를 확정할 수 없는 Timeout: `SENT_UNKNOWN`
 
-Response Guard는 실제 응답 Payload를 메모리에서 검사하고 응답 Digest, Detector Version, Finding Type/Offset/Evidence Digest만 저장한다. 응답에 개인정보 또는 Outbound Raw Value가 재생성되면 `REJECTED`로 차단한다. `PASSED` 응답만 Controlled Delivery가 허용된 content를 API `output`으로 반환하며, `REJECTED`와 `NOT_EVALUATED`에서는 content를 노출하지 않는다.
+Response Guard는 실제 응답 Payload를 메모리에서 검사하고 응답 Digest, Detector Version, Finding Type/Offset/Evidence Digest만 저장한다. 응답에 개인정보, Secret/Credential 또는 Outbound Raw Value가 재생성되면 `REJECTED`로 차단한다. `PASSED` 응답만 Controlled Delivery가 허용된 content를 API `output`으로 반환하며, `REJECTED`와 `NOT_EVALUATED`에서는 content를 노출하지 않는다.
 
 ## Migration
 
@@ -74,6 +74,8 @@ Response Guard는 실제 응답 Payload를 메모리에서 검사하고 응답 D
 
 `V10__bind_principal_institution_and_authorization_evidence.sql`은 Principal의 Institution binding과 Runtime의 명시적 `authorization_status` 증적을 추가한다. 기존 Principal은 자동으로 특정 기관에 귀속하지 않으며 Institution 미설정 상태에서는 Runtime 실행을 차단한다.
 
+`V11__add_controlled_delivery_evidence.sql`은 content 원문 없이 Delivery 상태, Response Digest, Reason Code, 전달 시각을 저장한다. Trace는 Response Guard 이후 `CONTROLLED_DELIVERY` 단계를 제공한다.
+
 ## 검증 범위
 
 - 안전한 Prompt + RAG Context Full E2E
@@ -82,10 +84,11 @@ Response Guard는 실제 응답 Payload를 메모리에서 검사하고 응답 D
 - 승인 범위 밖 released Field 차단
 - Response PII 및 Raw Value Reflection 탐지
 - HTTP Provider 성공, 오류, Timeout 상태 정규화
-- V1~V10 Flyway 및 기존 V8 upgrade safety 회귀
+- V1~V11 Flyway 및 기존 V8 upgrade safety 회귀
 - Principal Institution 불일치의 Retrieval 이전 차단
 - Approval/Destination 초기 실패 후 Authorization Trace 사실성
 - Response Guard 통과 응답만 Controlled Delivery로 반환
+- Secret, Credential, Private Key, Seed, Access/Refresh Token 탐지
 - API/Trace에서 Raw Prompt, Context, Response 비노출
 
 ## 후속 범위

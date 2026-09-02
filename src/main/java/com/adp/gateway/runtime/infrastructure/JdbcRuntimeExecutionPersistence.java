@@ -20,6 +20,7 @@ import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.policyharness.domain.PolicyLayerReference;
 import com.adp.gateway.transform.domain.TransformFieldResult;
@@ -602,6 +603,27 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void recordControlledDelivery(String executionId, ControlledDeliveryResult result) {
+        OffsetDateTime recordedAt = OffsetDateTime.now(clock);
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set controlled_delivery_status = :deliveryStatus,
+                controlled_delivery_response_digest = :responseDigest,
+                controlled_delivery_reason_code = :reasonCode,
+                controlled_delivered_at = :deliveredAt,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("deliveryStatus", result.deliveryStatus())
+            .param("responseDigest", result.responseDigest())
+            .param("reasonCode", result.reasonCode())
+            .param("deliveredAt", result.isDelivered() ? recordedAt : null)
+            .param("updatedAt", recordedAt)
+            .update();
+    }
+
+    @Override
     public void updateStatus(String executionId, RuntimeExecutionStatus status) {
         jdbcClient.sql("""
             update runtime.runtime_execution
@@ -651,6 +673,8 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                    released_fields_digest, released_field_count,
                    provider_request_id, provider_request_digest, provider_response_digest,
                    authorization_status,
+                   controlled_delivery_status, controlled_delivery_response_digest,
+                   controlled_delivery_reason_code, controlled_delivered_at,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

@@ -50,6 +50,13 @@ public record RuntimeExecutionTraceEventsResponse(
                 trace.updatedAt()
             ));
         }
+        if (trace.controlledDeliveryStatus() != null) {
+            stages.add(new RuntimeExecutionStageResponse(
+                "CONTROLLED_DELIVERY",
+                trace.controlledDeliveryStatus(),
+                trace.controlledDeliveredAt() == null ? trace.updatedAt() : trace.controlledDeliveredAt()
+            ));
+        }
         if ("FAILED".equals(trace.status())) {
             stages.add(new RuntimeExecutionStageResponse("RUNTIME_EXECUTION", "FAILED", trace.updatedAt()));
         }

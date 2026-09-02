@@ -253,6 +253,33 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v11MigrationCreatesControlledDeliveryEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'controlled_delivery_status',
+                    'controlled_delivery_response_digest',
+                    'controlled_delivery_reason_code',
+                    'controlled_delivered_at'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and constraint_name = 'chk_runtime_execution_controlled_delivery_status'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(4);
+        assertThat(constraintCount).isEqualTo(1);
+    }
+
+    @Test
     void v8MigrationPreservesLegacyAuditConnectorStatusRows() throws Exception {
         String databaseName = "adp_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

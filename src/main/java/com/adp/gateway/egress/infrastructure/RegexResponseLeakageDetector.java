@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RegexResponseLeakageDetector implements ResponseLeakageDetector {
 
-    private static final String VERSION = "ai-response-regex-v1";
+    private static final String VERSION = "ai-response-regex-v2";
     private static final List<Rule> RULES = List.of(
         new Rule("EMAIL", Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")),
         new Rule("PHONE_NUMBER", Pattern.compile("\\b01[016789]-?\\d{3,4}-?\\d{4}\\b")),
@@ -21,7 +21,21 @@ public class RegexResponseLeakageDetector implements ResponseLeakageDetector {
             "ACCOUNT_NUMBER",
             Pattern.compile("\\b(?!01[016789]-?\\d{3,4}-?\\d{4}\\b)\\d{2,6}-\\d{2,6}-\\d{3,8}\\b")
         ),
-        new Rule("RESIDENT_REGISTRATION_NUMBER", Pattern.compile("\\b\\d{6}-[1-4]\\d{6}\\b"))
+        new Rule("RESIDENT_REGISTRATION_NUMBER", Pattern.compile("\\b\\d{6}-[1-4]\\d{6}\\b")),
+        new Rule("PRIVATE_KEY", Pattern.compile("-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+        new Rule("ACCESS_TOKEN", Pattern.compile("\\b(?:AKIA[0-9A-Z]{16}|sk-(?:proj-)?[A-Za-z0-9_-]{20,})\\b")),
+        new Rule("REFRESH_TOKEN", Pattern.compile(
+            "(?i)\\brefresh[_-]?token\\s*[:=]\\s*[A-Za-z0-9._-]{12,}"
+        )),
+        new Rule("CREDENTIAL", Pattern.compile(
+            "(?i)\\b(?:password|passwd|client_secret)\\s*[:=]\\s*[^\\s,;]{8,}"
+        )),
+        new Rule("SECRET", Pattern.compile(
+            "(?i)\\b(?:api[_-]?secret|secret[_-]?key)\\s*[:=]\\s*[A-Za-z0-9._-]{12,}"
+        )),
+        new Rule("SEED", Pattern.compile(
+            "(?i)\\b(?:seed phrase|mnemonic)\\s*[:=]\\s*(?:[a-z]+\\s+){11,23}[a-z]+\\b"
+        ))
     );
 
     private final CanonicalValueHasher hasher;

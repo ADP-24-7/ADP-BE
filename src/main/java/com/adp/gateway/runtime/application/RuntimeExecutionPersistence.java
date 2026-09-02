@@ -12,6 +12,7 @@ import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.transform.domain.TransformResult;
 
 public interface RuntimeExecutionPersistence {
@@ -43,6 +44,8 @@ public interface RuntimeExecutionPersistence {
     void recordRetrieved(String executionId, CanonicalContext context);
 
     void recordAuthorization(String executionId, String authorizationStatus);
+
+    void recordControlledDelivery(String executionId, ControlledDeliveryResult result);
 
     void updateStatus(String executionId, RuntimeExecutionStatus status);
 
