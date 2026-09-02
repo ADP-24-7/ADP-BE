@@ -12,6 +12,7 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
@@ -19,6 +20,9 @@ import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
+import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
+import com.adp.gateway.policyharness.domain.PolicyLayerReference;
 import com.adp.gateway.transform.domain.TransformFieldResult;
 import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.dao.DuplicateKeyException;
@@ -45,6 +49,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     execution_id, request_id, trace_id, idempotency_key, workload_id,
                     purpose_code, subject_ref_digest, provider_profile_id,
                     destination_profile_id, destination_profile_version, destination_profile_digest,
+                    institution_id, approval_reference,
                     input_digest, status,
                     created_at, updated_at
                 )
@@ -52,6 +57,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
                     :purposeCode, :subjectRefDigest, :providerProfileId,
                     :destinationProfileId, :destinationProfileVersion, :destinationProfileDigest,
+                    :institutionId, :approvalReference,
                     :inputDigest, :status,
                     :createdAt, :updatedAt
                 )
@@ -67,6 +73,8 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 .param("destinationProfileId", trace.destinationProfileId())
                 .param("destinationProfileVersion", trace.destinationProfileVersion())
                 .param("destinationProfileDigest", trace.destinationProfileDigest())
+                .param("institutionId", trace.institutionId())
+                .param("approvalReference", trace.approvalReference())
                 .param("inputDigest", trace.inputDigest())
                 .param("status", trace.status())
                 .param("createdAt", trace.createdAt())
@@ -85,6 +93,10 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 destination_profile_id = :destinationProfileId,
                 destination_profile_version = :destinationProfileVersion,
                 destination_profile_digest = :destinationProfileDigest,
+                destination_tenant_id = :destinationTenantId,
+                destination_region = :destinationRegion,
+                destination_retention_policy = :destinationRetentionPolicy,
+                destination_training_use_allowed = :destinationTrainingUseAllowed,
                 updated_at = :updatedAt
             where execution_id = :executionId
             """)
@@ -93,6 +105,10 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("destinationProfileId", destinationProfile.destinationProfileId())
             .param("destinationProfileVersion", destinationProfile.profileVersion())
             .param("destinationProfileDigest", destinationProfile.profileDigest())
+            .param("destinationTenantId", destinationProfile.tenantId())
+            .param("destinationRegion", destinationProfile.region())
+            .param("destinationRetentionPolicy", destinationProfile.retentionPolicy())
+            .param("destinationTrainingUseAllowed", destinationProfile.trainingUseAllowed())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
     }
@@ -328,6 +344,137 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    @Transactional
+    public void recordPolicyHarness(String executionId, PolicyHarnessBinding binding) {
+        var lineage = binding.fieldLineage();
+        jdbcClient.sql("""
+            insert into runtime.policy_harness_binding (
+                execution_id, institution_id, approval_reference, approval_version,
+                approval_scope_digest, approval_reuse_status, reason_codes,
+                policy_layers, policy_layers_digest,
+                requested_fields, requested_fields_digest,
+                retrieved_fields, retrieved_fields_digest,
+                transformed_fields, transformed_fields_digest,
+                released_fields, released_fields_digest, created_at
+            ) values (
+                :executionId, :institutionId, :approvalReference, :approvalVersion,
+                :approvalScopeDigest, :approvalReuseStatus, :reasonCodes,
+                :policyLayers, :policyLayersDigest,
+                :requestedFields, :requestedFieldsDigest,
+                :retrievedFields, :retrievedFieldsDigest,
+                :transformedFields, :transformedFieldsDigest,
+                :releasedFields, :releasedFieldsDigest, :createdAt
+            )
+            """)
+            .param("executionId", executionId)
+            .param("institutionId", binding.institutionId())
+            .param("approvalReference", binding.approvalReference())
+            .param("approvalVersion", binding.approvalVersion())
+            .param("approvalScopeDigest", binding.approvalScopeDigest())
+            .param("approvalReuseStatus", binding.approvalReuseStatus().name())
+            .param("reasonCodes", String.join(",", binding.reasonCodes()))
+            .param("policyLayers", binding.policyLayers().stream()
+                .map(this::policyLayerAuditValue)
+                .collect(Collectors.joining(",")))
+            .param("policyLayersDigest", binding.policyLayersDigest())
+            .param("requestedFields", auditFields(lineage.requestedFields()))
+            .param("requestedFieldsDigest", lineage.requestedFieldsDigest())
+            .param("retrievedFields", auditFields(lineage.retrievedFields()))
+            .param("retrievedFieldsDigest", lineage.retrievedFieldsDigest())
+            .param("transformedFields", auditFields(lineage.transformedFields()))
+            .param("transformedFieldsDigest", lineage.transformedFieldsDigest())
+            .param("releasedFields", auditFields(lineage.releasedFields()))
+            .param("releasedFieldsDigest", lineage.releasedFieldsDigest())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set institution_id = :institutionId,
+                approval_reference = :approvalReference,
+                approval_version = :approvalVersion,
+                approval_scope_digest = :approvalScopeDigest,
+                approval_reuse_status = :approvalReuseStatus,
+                policy_layers_digest = :policyLayersDigest,
+                requested_fields_digest = :requestedFieldsDigest,
+                requested_field_count = :requestedFieldCount,
+                retrieved_fields_digest = :retrievedFieldsDigest,
+                retrieved_field_count = :retrievedFieldCount,
+                transformed_fields_digest = :transformedFieldsDigest,
+                transformed_field_count = :transformedFieldCount,
+                released_fields_digest = :releasedFieldsDigest,
+                released_field_count = :releasedFieldCount,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("institutionId", binding.institutionId())
+            .param("approvalReference", binding.approvalReference())
+            .param("approvalVersion", binding.approvalVersion())
+            .param("approvalScopeDigest", binding.approvalScopeDigest())
+            .param("approvalReuseStatus", binding.approvalReuseStatus().name())
+            .param("policyLayersDigest", binding.policyLayersDigest())
+            .param("requestedFieldsDigest", lineage.requestedFieldsDigest())
+            .param("requestedFieldCount", lineage.requestedFields().size())
+            .param("retrievedFieldsDigest", lineage.retrievedFieldsDigest())
+            .param("retrievedFieldCount", lineage.retrievedFields().size())
+            .param("transformedFieldsDigest", lineage.transformedFieldsDigest())
+            .param("transformedFieldCount", lineage.transformedFields().size())
+            .param("releasedFieldsDigest", lineage.releasedFieldsDigest())
+            .param("releasedFieldCount", lineage.releasedFields().size())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    @Transactional
+    public void recordProviderRequest(
+        String executionId,
+        DestinationProfile destinationProfile,
+        ProviderRequestPayload providerRequest
+    ) {
+        jdbcClient.sql("""
+            insert into runtime.provider_request (
+                provider_request_id, execution_id, outbound_payload_id,
+                provider_profile_id, destination_profile_id, destination_profile_version,
+                tenant_id, region, retention_policy, training_use_allowed,
+                schema_version, canonical_payload_digest, field_count, created_at
+            ) values (
+                :providerRequestId, :executionId, :outboundPayloadId,
+                :providerProfileId, :destinationProfileId, :destinationProfileVersion,
+                :tenantId, :region, :retentionPolicy, :trainingUseAllowed,
+                :schemaVersion, :canonicalPayloadDigest, :fieldCount, :createdAt
+            )
+            """)
+            .param("providerRequestId", providerRequest.providerRequestId())
+            .param("executionId", executionId)
+            .param("outboundPayloadId", providerRequest.outboundPayloadId())
+            .param("providerProfileId", providerRequest.providerProfileId())
+            .param("destinationProfileId", destinationProfile.destinationProfileId())
+            .param("destinationProfileVersion", destinationProfile.profileVersion())
+            .param("tenantId", destinationProfile.tenantId())
+            .param("region", destinationProfile.region())
+            .param("retentionPolicy", destinationProfile.retentionPolicy())
+            .param("trainingUseAllowed", destinationProfile.trainingUseAllowed())
+            .param("schemaVersion", providerRequest.schemaVersion())
+            .param("canonicalPayloadDigest", providerRequest.canonicalPayloadDigest())
+            .param("fieldCount", providerRequest.fieldCount())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set provider_request_id = :providerRequestId,
+                provider_request_digest = :providerRequestDigest,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("providerRequestId", providerRequest.providerRequestId())
+            .param("providerRequestDigest", providerRequest.canonicalPayloadDigest())
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
     public void recordConnector(String executionId, ConnectorResult connectorResult) {
         jdbcClient.sql("""
             insert into runtime.connector_execution (
@@ -366,15 +513,18 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    @Transactional
     public void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult) {
         jdbcClient.sql("""
             insert into runtime.response_guard_result (
                 connector_execution_id, execution_id, connector_id, connector_status,
-                status, leakage_detected, reason_codes, created_at
+                status, leakage_detected, reason_codes, response_digest,
+                detector_version, finding_count, created_at
             )
             values (
                 :connectorExecutionId, :executionId, :connectorId, :connectorStatus,
-                :status, :leakageDetected, :reasonCodes, :createdAt
+                :status, :leakageDetected, :reasonCodes, :responseDigest,
+                :detectorVersion, :findingCount, :createdAt
             )
             """)
             .param("connectorExecutionId", connectorResult.connectorExecutionId())
@@ -384,16 +534,42 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("status", responseGuardResult.status())
             .param("leakageDetected", responseGuardResult.leakageDetected())
             .param("reasonCodes", String.join(",", responseGuardResult.reasonCodes()))
+            .param("responseDigest", connectorResult.responseDigest())
+            .param("detectorVersion", responseGuardResult.detectorVersion())
+            .param("findingCount", responseGuardResult.findings().size())
             .param("createdAt", OffsetDateTime.now(clock))
             .update();
+        responseGuardResult.findings().forEach(finding -> jdbcClient.sql("""
+            insert into runtime.response_sensitive_finding (
+                connector_execution_id, execution_id, finding_type, location,
+                start_offset, end_offset, detector_version, evidence_digest, created_at
+            ) values (
+                :connectorExecutionId, :executionId, :findingType, :location,
+                :startOffset, :endOffset, :detectorVersion, :evidenceDigest, :createdAt
+            )
+            """)
+            .param("connectorExecutionId", connectorResult.connectorExecutionId())
+            .param("executionId", executionId)
+            .param("findingType", finding.findingType())
+            .param("location", finding.location())
+            .param("startOffset", finding.startOffset())
+            .param("endOffset", finding.endOffset())
+            .param("detectorVersion", finding.detectorVersion())
+            .param("evidenceDigest", finding.evidenceDigest())
+            .param("createdAt", OffsetDateTime.now(clock))
+            .update());
         jdbcClient.sql("""
             update runtime.runtime_execution
             set response_guard_status = :responseGuardStatus,
+                provider_response_digest = :providerResponseDigest,
+                response_guard_reason_codes = :responseGuardReasonCodes,
                 updated_at = :updatedAt
             where execution_id = :executionId
             """)
             .param("executionId", executionId)
             .param("responseGuardStatus", responseGuardResult.status())
+            .param("providerResponseDigest", connectorResult.responseDigest())
+            .param("responseGuardReasonCodes", String.join(",", responseGuardResult.reasonCodes()))
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
     }
@@ -409,6 +585,41 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("executionId", executionId)
             .param("canonicalContextDigest", context.contextDigest())
             .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    public void recordAuthorization(String executionId, String authorizationStatus) {
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set authorization_status = :authorizationStatus,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("authorizationStatus", authorizationStatus)
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    public void recordControlledDelivery(String executionId, ControlledDeliveryResult result) {
+        OffsetDateTime recordedAt = OffsetDateTime.now(clock);
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set controlled_delivery_status = :deliveryStatus,
+                controlled_delivery_response_digest = :responseDigest,
+                controlled_delivery_reason_code = :reasonCode,
+                controlled_delivered_at = :deliveredAt,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("deliveryStatus", result.deliveryStatus())
+            .param("responseDigest", result.responseDigest())
+            .param("reasonCode", result.reasonCode())
+            .param("deliveredAt", result.isDelivered() ? recordedAt : null)
+            .param("updatedAt", recordedAt)
             .update();
     }
 
@@ -432,12 +643,38 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             select execution_id, request_id, trace_id, idempotency_key, workload_id,
                    purpose_code, subject_ref_digest, provider_profile_id,
                    destination_profile_id, destination_profile_version, destination_profile_digest,
+                   destination_tenant_id, destination_region, destination_retention_policy,
+                   destination_training_use_allowed,
+                   institution_id, approval_reference, approval_version, approval_scope_digest,
+                   approval_reuse_status,
+                   (select reason_codes from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as approval_reason_codes,
+                   (select policy_layers from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as policy_layers,
+                   policy_layers_digest,
                    input_digest,
                    canonical_context_digest, runtime_context_digest,
                    policy_version, snapshot_digest, decision_id, final_action,
                    transform_execution_id, transform_status, transform_output_digest,
                    outbound_payload_id, outbound_candidate_digest, outbound_guard_status,
                    connector_execution_id, connector_status, response_guard_status,
+                   response_guard_reason_codes,
+                   (select requested_fields from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as requested_fields,
+                   requested_fields_digest, requested_field_count,
+                   (select retrieved_fields from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as retrieved_fields,
+                   retrieved_fields_digest, retrieved_field_count,
+                   (select transformed_fields from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as transformed_fields,
+                   transformed_fields_digest, transformed_field_count,
+                   (select released_fields from runtime.policy_harness_binding phb
+                    where phb.execution_id = runtime_execution.execution_id) as released_fields,
+                   released_fields_digest, released_field_count,
+                   provider_request_id, provider_request_digest, provider_response_digest,
+                   authorization_status,
+                   controlled_delivery_status, controlled_delivery_response_digest,
+                   controlled_delivery_reason_code, controlled_delivered_at,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId
@@ -452,5 +689,13 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         return references.stream()
             .map(ArtifactReference::auditValue)
             .collect(Collectors.joining(","));
+    }
+
+    private String policyLayerAuditValue(PolicyLayerReference layer) {
+        return String.join(":", layer.layer(), layer.referenceId(), layer.version(), layer.digest());
+    }
+
+    private String auditFields(java.util.Set<String> fields) {
+        return fields.stream().sorted().collect(Collectors.joining(","));
     }
 }

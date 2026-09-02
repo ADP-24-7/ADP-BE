@@ -194,6 +194,92 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v9MigrationCreatesAiPolicyHarnessEvidenceTablesAndColumns() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where (table_schema, table_name) in (
+                  ('runtime', 'policy_harness_binding'),
+                  ('runtime', 'provider_request'),
+                  ('runtime', 'response_sensitive_finding')
+                )
+                """)
+            .query(Integer.class)
+            .single();
+        Integer evidenceColumnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'institution_id',
+                    'approval_reference',
+                    'approval_reuse_status',
+                    'policy_layers_digest',
+                    'requested_fields_digest',
+                    'released_fields_digest',
+                    'provider_request_digest',
+                    'provider_response_digest'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(3);
+        assertThat(evidenceColumnCount).isEqualTo(8);
+    }
+
+    @Test
+    void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
+        Integer principalColumnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'auth_principal'
+                  and column_name = 'institution_id'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer authorizationColumnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'authorization_status'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(principalColumnCount).isEqualTo(1);
+        assertThat(authorizationColumnCount).isEqualTo(1);
+    }
+
+    @Test
+    void v11MigrationCreatesControlledDeliveryEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'controlled_delivery_status',
+                    'controlled_delivery_response_digest',
+                    'controlled_delivery_reason_code',
+                    'controlled_delivered_at'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and constraint_name = 'chk_runtime_execution_controlled_delivery_status'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(4);
+        assertThat(constraintCount).isEqualTo(1);
+    }
+
+    @Test
     void v8MigrationPreservesLegacyAuditConnectorStatusRows() throws Exception {
         String databaseName = "adp_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

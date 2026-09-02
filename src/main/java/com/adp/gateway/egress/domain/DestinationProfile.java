@@ -12,6 +12,10 @@ public record DestinationProfile(
     String providerProfileId,
     ExecutionPackType packType,
     String schemaVersion,
+    String tenantId,
+    String region,
+    String retentionPolicy,
+    boolean trainingUseAllowed,
     String status,
     OffsetDateTime effectiveAt,
     OffsetDateTime expiresAt,
@@ -22,6 +26,40 @@ public record DestinationProfile(
     public DestinationProfile {
         allowedBindings = List.copyOf(allowedBindings);
         fieldContracts = List.copyOf(fieldContracts);
+    }
+
+    public DestinationProfile(
+        String destinationProfileId,
+        String profileVersion,
+        String profileDigest,
+        String contractVersion,
+        String providerProfileId,
+        ExecutionPackType packType,
+        String schemaVersion,
+        String status,
+        OffsetDateTime effectiveAt,
+        OffsetDateTime expiresAt,
+        List<DestinationBinding> allowedBindings,
+        List<DestinationFieldContract> fieldContracts
+    ) {
+        this(
+            destinationProfileId,
+            profileVersion,
+            profileDigest,
+            contractVersion,
+            providerProfileId,
+            packType,
+            schemaVersion,
+            "UNSPECIFIED",
+            "UNSPECIFIED",
+            "UNSPECIFIED",
+            false,
+            status,
+            effectiveAt,
+            expiresAt,
+            allowedBindings,
+            fieldContracts
+        );
     }
 
     public boolean isEffectiveAt(OffsetDateTime requestStartedAt) {

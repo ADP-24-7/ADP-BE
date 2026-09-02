@@ -153,6 +153,7 @@ class AuthorizationServiceTests {
             "principal",
             PrincipalType.SERVICE,
             "Principal",
+            "institution_local",
             subjectAuthorizationRequired,
             workloadIds,
             Set.of(role)

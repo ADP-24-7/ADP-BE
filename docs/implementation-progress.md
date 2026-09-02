@@ -12,7 +12,8 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-3 | Completed | Context Builder & Sensitive Detection |
 | BE-4 | Completed | Policy & Decision Core |
 | BE-5 | Baseline Completed | Transform Engine & Vault |
-| BE-6 | In Progress | Common Egress Boundary |
+| BE-6 | Baseline Completed | Common Egress Boundary |
+| BE-7 | In Progress | AI Full E2E & Policy Harness Binding |
 
 ## BE-0 Completion Criteria
 
@@ -216,6 +217,34 @@ BE-6 상세 구현 기준은 [BE-6 Common Egress Boundary](be-6-common-egress-bo
 - [ ] 실제 provider payload canonical JSON digest 저장
 - [ ] 실제 provider response digest 저장
 - [ ] Pack별 실제 response leakage detector 연결
+
+## BE-7 Tracking
+
+BE-7 상세 구현 기준은 [BE-7 AI Full E2E](be-7-ai-full-e2e.md)에서 관리한다.
+
+- [x] BE-7 개발 브랜치 `feature/be-7-ai-full-e2e` 분리
+- [x] ADP-DA 최신 PolicyEvaluation Handoff 계약과 책임 경계 확인
+- [x] ADP-FE 최신 Runtime Execution/Gateway Lab 계약 확인
+- [x] AI 고객상담 Workload 요청 계약에 Institution/Approval Reference 추가
+- [x] Prompt와 RAG Context를 동일 Canonical Context로 합성
+- [x] Prompt 허용 키 검증 및 민감 Prompt Fail Closed
+- [x] Approval Scope Port와 local fixture adapter 추가
+- [x] Institution/Role/Workload/Purpose/Processing Context/Destination scope 비교
+- [x] `REUSE_ALLOWED`/`TRANSFORM_REQUIRED`/`REVIEW_REQUIRED`/`BLOCKED` 계산
+- [x] Institution Policy/Workload Policy/Destination Profile Layer 고정
+- [x] requested/retrieved/transformed/released Field lineage 저장
+- [x] AI Destination의 Tenant/Region/Retention/Training Use 고정
+- [x] AI External Schema Mapper와 실제 Provider Request Canonical JSON Digest 저장
+- [x] HTTP AI Connector와 ACKNOWLEDGED/FAILED/SENT_UNKNOWN 정규화
+- [x] Mock AI HTTP Provider Docker service 추가
+- [x] Response Leakage Detector 및 Finding metadata persistence 추가
+- [x] 실제 Provider Response Digest와 Response Guard 결과 저장
+- [x] AI Lab용 privacy-safe Runtime Trace Read Model 확장
+- [x] V9 Migration 및 Flyway 검증 추가
+- [x] 정상/승인 실패/민감 Prompt/Scope mismatch/Timeout/Response leakage 테스트 추가
+- [ ] Production DB-backed Approval Scope Adapter
+- [ ] DA Versioned Artifact/Workload Binding/Crosswalk file loader
+- [ ] 실제 Provider credential과 Secret Manager 연동
 
 ## Troubleshooting
 

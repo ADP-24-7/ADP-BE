@@ -49,6 +49,8 @@ public class RuntimeExecutionController {
         var result = runtimeExecutionService.execute(
             context,
             (AuthPrincipal) authentication.getPrincipal(),
+            request.institutionId(),
+            request.approvalReference(),
             request.destinationProfileId(),
             request.processingContexts() == null ? List.of() : request.processingContexts(),
             request.input()
@@ -62,7 +64,7 @@ public class RuntimeExecutionController {
         Authentication authentication
     ) {
         var trace = runtimeExecutionService.load(executionId);
-        authorizeRead(authentication, trace.workloadId());
+        authorizeRead(authentication, trace.workloadId(), trace.institutionId());
         return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(trace));
     }
 
@@ -72,13 +74,15 @@ public class RuntimeExecutionController {
         Authentication authentication
     ) {
         var trace = runtimeExecutionService.load(executionId);
-        authorizeRead(authentication, trace.workloadId());
+        authorizeRead(authentication, trace.workloadId(), trace.institutionId());
         return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(trace));
     }
 
-    private void authorizeRead(Authentication authentication, String workloadId) {
+    private void authorizeRead(Authentication authentication, String workloadId, String institutionId) {
         AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
-        if (!principal.canAccessWorkload(workloadId)) {
+        if (!principal.canAccessWorkload(workloadId)
+            || principal.institutionId() == null
+            || !principal.institutionId().equals(institutionId)) {
             throw new AccessDeniedException("Runtime execution is not visible to this principal");
         }
     }

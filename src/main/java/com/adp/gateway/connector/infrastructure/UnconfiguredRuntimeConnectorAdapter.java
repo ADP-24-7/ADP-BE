@@ -8,12 +8,13 @@ import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnExpression("'${adp.mock-runtime.enabled:false}' != 'true' && '${adp.ai-connector.enabled:false}' != 'true'")
 public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort {
 
     private final MeterRegistry meterRegistry;
@@ -23,7 +24,12 @@ public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort
     }
 
     @Override
-    public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision, OutboundCandidatePayload payload) {
+    public ConnectorResult execute(
+        RuntimeRequestContext context,
+        RuntimeDecision decision,
+        OutboundCandidatePayload payload,
+        ProviderRequestPayload providerRequest
+    ) {
         meterRegistry.counter("connector.execution.total", "status", ConnectorStatus.FAILED.name()).increment();
         return new ConnectorResult(
             "con_" + UUID.randomUUID(),

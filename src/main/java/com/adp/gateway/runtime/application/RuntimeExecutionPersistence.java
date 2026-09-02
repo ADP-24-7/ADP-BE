@@ -7,9 +7,12 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.policy.domain.PolicySnapshot;
+import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.transform.domain.TransformResult;
 
 public interface RuntimeExecutionPersistence {
@@ -26,11 +29,23 @@ public interface RuntimeExecutionPersistence {
 
     void recordOutbound(String executionId, OutboundCandidatePayload payload, OutboundGuardResult guardResult);
 
+    void recordPolicyHarness(String executionId, PolicyHarnessBinding binding);
+
+    void recordProviderRequest(
+        String executionId,
+        DestinationProfile destinationProfile,
+        ProviderRequestPayload providerRequest
+    );
+
     void recordConnector(String executionId, ConnectorResult connectorResult);
 
     void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult);
 
     void recordRetrieved(String executionId, CanonicalContext context);
+
+    void recordAuthorization(String executionId, String authorizationStatus);
+
+    void recordControlledDelivery(String executionId, ControlledDeliveryResult result);
 
     void updateStatus(String executionId, RuntimeExecutionStatus status);
 

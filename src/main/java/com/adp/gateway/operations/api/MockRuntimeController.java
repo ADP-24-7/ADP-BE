@@ -30,7 +30,7 @@ import com.adp.gateway.policy.domain.PolicySnapshotPort;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/runtime")
-@ConditionalOnProperty(name = "adp.mock-runtime.enabled", havingValue = "true")
+@ConditionalOnExpression("'${adp.mock-runtime.enabled:false}' == 'true' && '${adp.ai-connector.enabled:false}' != 'true'")
 public class MockRuntimeController {
 
     private final RuntimeContextFactory runtimeContextFactory;

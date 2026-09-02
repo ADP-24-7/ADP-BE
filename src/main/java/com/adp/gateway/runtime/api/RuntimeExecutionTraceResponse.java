@@ -34,7 +34,8 @@ public record RuntimeExecutionTraceResponse(
     String responseGuardStatus,
     String status,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    RuntimeExecutionEvidenceResponse evidence
 ) {
 
     public static RuntimeExecutionTraceResponse from(RuntimeExecutionTrace trace) {
@@ -68,7 +69,8 @@ public record RuntimeExecutionTraceResponse(
             trace.responseGuardStatus(),
             trace.status(),
             trace.createdAt(),
-            trace.updatedAt()
+            trace.updatedAt(),
+            RuntimeExecutionEvidenceResponse.from(trace)
         );
     }
 }

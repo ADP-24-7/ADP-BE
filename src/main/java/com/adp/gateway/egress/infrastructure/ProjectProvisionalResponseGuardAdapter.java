@@ -5,6 +5,7 @@ import java.util.List;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.application.ResponseLeakageDetector;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -15,12 +16,17 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
 public class ProjectProvisionalResponseGuardAdapter implements ResponseGuardPort {
 
-    private static final String EXPECTED_RESPONSE_SCHEMA_VERSION = "fake-response-schema-v1";
+    private static final String EXPECTED_RESPONSE_SCHEMA_VERSION = "ai-provider-response/v1";
 
     private final MeterRegistry meterRegistry;
+    private final ResponseLeakageDetector leakageDetector;
 
-    public ProjectProvisionalResponseGuardAdapter(MeterRegistry meterRegistry) {
+    public ProjectProvisionalResponseGuardAdapter(
+        MeterRegistry meterRegistry,
+        ResponseLeakageDetector leakageDetector
+    ) {
         this.meterRegistry = meterRegistry;
+        this.leakageDetector = leakageDetector;
     }
 
     @Override
@@ -35,10 +41,18 @@ public class ProjectProvisionalResponseGuardAdapter implements ResponseGuardPort
         if (!EXPECTED_RESPONSE_SCHEMA_VERSION.equals(connectorResult.responseSchemaVersion())) {
             return record(ResponseGuardResult.rejected(List.of("RESPONSE_SCHEMA_VERSION_MISMATCH")));
         }
-        if (!("fake-response-digest:" + payload.candidatePayloadDigest()).equals(connectorResult.responseDigest())) {
-            return record(ResponseGuardResult.rejected(List.of("RESPONSE_DIGEST_MISMATCH")));
+        if (connectorResult.responsePayload() == null) {
+            return record(ResponseGuardResult.notEvaluated(List.of("RESPONSE_PAYLOAD_MISSING")));
         }
-        return record(ResponseGuardResult.passed());
+        var findings = leakageDetector.detect(payload, connectorResult.responsePayload());
+        if (!findings.isEmpty()) {
+            return record(ResponseGuardResult.rejected(
+                List.of("RESPONSE_SENSITIVE_DATA_DETECTED"),
+                leakageDetector.detectorVersion(),
+                findings
+            ));
+        }
+        return record(ResponseGuardResult.passed(leakageDetector.detectorVersion()));
     }
 
     private ResponseGuardResult record(ResponseGuardResult result) {

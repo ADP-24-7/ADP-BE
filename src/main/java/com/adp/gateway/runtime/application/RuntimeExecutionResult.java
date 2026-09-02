@@ -4,6 +4,7 @@ import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.transform.domain.TransformResult;
 
 public record RuntimeExecutionResult(
@@ -14,6 +15,7 @@ public record RuntimeExecutionResult(
     String outboundGuardStatus,
     ConnectorResult connectorResult,
     String responseGuardStatus,
+    ControlledDeliveryResult controlledDelivery,
     AuditContext auditContext
 ) {
 }

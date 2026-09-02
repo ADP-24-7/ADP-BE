@@ -40,6 +40,10 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             "internal-provider",
             ExecutionPackType.AI,
             "project-provisional-egress-schema-v1",
+            "tenant_local_ai",
+            "KR",
+            "NO_RETENTION",
+            false,
             "ACTIVE",
             OffsetDateTime.parse("2026-01-01T00:00:00Z"),
             null,
@@ -50,6 +54,7 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
 
     private List<DestinationFieldContract> fieldContracts() {
         return List.of(
+            new DestinationFieldContract("input.prompt", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
             new DestinationFieldContract("customer.customer_id", DataClass.CUSTOMER_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
             new DestinationFieldContract("customer.segment", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
             new DestinationFieldContract("account.account_id", DataClass.ACCOUNT_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),

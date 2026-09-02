@@ -6,6 +6,7 @@ public record AuthPrincipal(
     String principalId,
     PrincipalType principalType,
     String displayName,
+    String institutionId,
     boolean subjectAuthorizationRequired,
     Set<String> workloadIds,
     Set<AdpRole> roles

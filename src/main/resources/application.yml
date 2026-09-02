@@ -21,6 +21,11 @@ adp:
     enabled: ${ADP_LOCAL_FIXTURES_ENABLED:false}
   mock-runtime:
     enabled: ${ADP_MOCK_RUNTIME_ENABLED:false}
+  ai-connector:
+    enabled: ${ADP_AI_CONNECTOR_ENABLED:false}
+    base-url: ${ADP_AI_CONNECTOR_BASE_URL:http://localhost:8090}
+    connect-timeout: ${ADP_AI_CONNECTOR_CONNECT_TIMEOUT:2s}
+    read-timeout: ${ADP_AI_CONNECTOR_READ_TIMEOUT:5s}
   data-access-preview:
     enabled: ${ADP_DATA_ACCESS_PREVIEW_ENABLED:false}
   context-preview:
@@ -29,6 +34,14 @@ adp:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
 
 management:
   endpoints:
