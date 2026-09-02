@@ -58,6 +58,7 @@ public record RuntimeExecutionTrace(
     String providerRequestId,
     String providerRequestDigest,
     String providerResponseDigest,
+    String authorizationStatus,
     String status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
@@ -102,6 +103,7 @@ public record RuntimeExecutionTrace(
             null,
             null,
             inputDigest,
+            null,
             null,
             null,
             null,

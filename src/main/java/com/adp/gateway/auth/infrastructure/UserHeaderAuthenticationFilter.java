@@ -47,6 +47,7 @@ public class UserHeaderAuthenticationFilter extends OncePerRequestFilter {
             userId.trim(),
             PrincipalType.USER,
             userId.trim(),
+            "institution_local",
             false,
             Set.of("*"),
             roles

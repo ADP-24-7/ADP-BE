@@ -63,12 +63,7 @@ public record RuntimeExecutionTraceEventsResponse(
     }
 
     private static String authorizationStatus(RuntimeExecutionTrace trace) {
-        if ("BLOCKED".equals(trace.status())
-            && trace.destinationProfileVersion() == null
-            && trace.canonicalContextDigest() == null) {
-            return "DENIED";
-        }
-        return "COMPLETED";
+        return "PASSED".equals(trace.authorizationStatus()) ? "COMPLETED" : trace.authorizationStatus();
     }
 
     private static String connectorStatus(RuntimeExecutionTrace trace) {

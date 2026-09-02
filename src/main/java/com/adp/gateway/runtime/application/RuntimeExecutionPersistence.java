@@ -42,6 +42,8 @@ public interface RuntimeExecutionPersistence {
 
     void recordRetrieved(String executionId, CanonicalContext context);
 
+    void recordAuthorization(String executionId, String authorizationStatus);
+
     void updateStatus(String executionId, RuntimeExecutionStatus status);
 
     RuntimeExecutionTrace load(String executionId);

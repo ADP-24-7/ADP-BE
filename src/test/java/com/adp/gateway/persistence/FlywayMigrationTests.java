@@ -230,6 +230,29 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
+        Integer principalColumnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'auth_principal'
+                  and column_name = 'institution_id'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer authorizationColumnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'authorization_status'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(principalColumnCount).isEqualTo(1);
+        assertThat(authorizationColumnCount).isEqualTo(1);
+    }
+
+    @Test
     void v8MigrationPreservesLegacyAuditConnectorStatusRows() throws Exception {
         String databaseName = "adp_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

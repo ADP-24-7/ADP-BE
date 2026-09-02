@@ -54,6 +54,7 @@ import com.adp.gateway.retrieval.application.RetrievalService;
 import com.adp.gateway.retrieval.domain.RetrievalResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
+import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.transform.application.TransformEngine;
 import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.security.access.AccessDeniedException;
@@ -84,6 +85,7 @@ public class RuntimeExecutionService {
     private final FieldLineageFactory fieldLineageFactory;
     private final PolicyHarnessEvaluator policyHarnessEvaluator;
     private final ExternalSchemaMapper externalSchemaMapper;
+    private final ControlledDeliveryService controlledDeliveryService;
     private final Clock clock;
 
     public RuntimeExecutionService(
@@ -109,6 +111,7 @@ public class RuntimeExecutionService {
         FieldLineageFactory fieldLineageFactory,
         PolicyHarnessEvaluator policyHarnessEvaluator,
         ExternalSchemaMapper externalSchemaMapper,
+        ControlledDeliveryService controlledDeliveryService,
         Clock clock
     ) {
         this.authorizationService = authorizationService;
@@ -133,6 +136,7 @@ public class RuntimeExecutionService {
         this.fieldLineageFactory = fieldLineageFactory;
         this.policyHarnessEvaluator = policyHarnessEvaluator;
         this.externalSchemaMapper = externalSchemaMapper;
+        this.controlledDeliveryService = controlledDeliveryService;
         this.clock = clock;
     }
 
@@ -150,7 +154,7 @@ public class RuntimeExecutionService {
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
         String subjectRefDigest = subject == null ? null : subjectRefHasher.hash(subject);
-        persistence.recordReceived(new RuntimeExecutionTrace(
+        persistence.recordReceived(RuntimeExecutionTrace.received(
             executionId,
             requestContext.requestId(),
             requestContext.traceId(),
@@ -158,60 +162,19 @@ public class RuntimeExecutionService {
             requestContext.workloadId(),
             requestContext.purpose(),
             subjectRefDigest,
-            null,
             destinationProfileId,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
             institutionId,
             approvalReference,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
             inputDigest,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            RuntimeExecutionStatus.RECEIVED.name(),
-            now,
             now
         ));
 
         try {
+            if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
+                persistence.recordAuthorization(executionId, "DENIED");
+                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+                throw new AccessDeniedException("Runtime institution is not allowed");
+            }
             if (!authorizationService.authorize(new AuthorizationRequest(
                 principal,
                 requestContext.workloadId(),
@@ -219,9 +182,11 @@ public class RuntimeExecutionService {
                 requestContext.purpose(),
                 subject
             )).allowed()) {
+                persistence.recordAuthorization(executionId, "DENIED");
                 persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
                 throw new AccessDeniedException("Runtime execution is not allowed");
             }
+            persistence.recordAuthorization(executionId, "PASSED");
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
             var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
@@ -305,6 +270,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
+                    ControlledDeliveryResult.withheld(null),
                     auditContext
                 );
             }
@@ -319,6 +285,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
+                    ControlledDeliveryResult.withheld(null),
                     auditContext
                 );
             }
@@ -370,6 +337,7 @@ public class RuntimeExecutionService {
                     "NOT_EVALUATED",
                     connectorResult,
                     "NOT_EVALUATED",
+                    ControlledDeliveryResult.withheld(null),
                     auditContext
                 );
             }
@@ -400,6 +368,7 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     "NOT_EVALUATED",
+                    ControlledDeliveryResult.withheld(null),
                     auditContext
                 );
             }
@@ -428,6 +397,7 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     responseGuardResult.status(),
+                    controlledDeliveryService.deliver(connectorResult, responseGuardResult),
                     auditContext
                 );
             }
@@ -444,12 +414,15 @@ public class RuntimeExecutionService {
                     outboundGuardResult.status(),
                     connectorResult,
                     responseGuardResult.status(),
+                    controlledDeliveryService.deliver(connectorResult, responseGuardResult),
                     auditContext
                 );
             }
             ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
-            RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed()
+            ControlledDeliveryResult controlledDelivery =
+                controlledDeliveryService.deliver(connectorResult, responseGuardResult);
+            RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed() && controlledDelivery.isDelivered()
                 ? RuntimeExecutionStatus.COMPLETED
                 : RuntimeExecutionStatus.BLOCKED;
             persistence.updateStatus(executionId, completedStatus);
@@ -463,6 +436,7 @@ public class RuntimeExecutionService {
                 outboundGuardResult.status(),
                 connectorResult,
                 responseGuardResult.status(),
+                controlledDelivery,
                 auditContext
             );
         } catch (AccessDeniedException exception) {

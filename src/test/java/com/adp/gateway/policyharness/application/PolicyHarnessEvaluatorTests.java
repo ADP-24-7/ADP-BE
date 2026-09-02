@@ -158,6 +158,7 @@ class PolicyHarnessEvaluatorTests {
             "principal",
             PrincipalType.SERVICE,
             "Runtime",
+            "institution_local",
             false,
             Set.of("customer_summary"),
             Set.of(AdpRole.RUNTIME_EXECUTOR)

@@ -23,7 +23,8 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
     @Override
     public Optional<AuthPrincipal> findByApiKeyHash(String apiKeyHash) {
         return jdbcClient.sql("""
-                select p.principal_id, p.principal_type, p.display_name, p.subject_authorization_required
+                select p.principal_id, p.principal_type, p.display_name, p.institution_id,
+                       p.subject_authorization_required
                 from auth_api_key k
                 join auth_principal p on p.principal_id = k.principal_id
                 where k.key_hash = :apiKeyHash
@@ -35,6 +36,7 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
                 rs.getString("principal_id"),
                 PrincipalType.valueOf(rs.getString("principal_type")),
                 rs.getString("display_name"),
+                rs.getString("institution_id"),
                 rs.getBoolean("subject_authorization_required"),
                 workloadIds(rs.getString("principal_id")),
                 roles(rs.getString("principal_id"))

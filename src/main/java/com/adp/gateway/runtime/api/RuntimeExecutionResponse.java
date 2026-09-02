@@ -22,6 +22,7 @@ public record RuntimeExecutionResponse(
     String outboundGuardStatus,
     String connectorStatus,
     String responseGuardStatus,
+    ControlledDeliveryResponse output,
     String auditId
 ) {
 
@@ -48,6 +49,7 @@ public record RuntimeExecutionResponse(
             result.outboundGuardStatus(),
             result.connectorResult().status().name(),
             result.responseGuardStatus(),
+            ControlledDeliveryResponse.from(result.controlledDelivery()),
             result.auditContext().auditId()
         );
     }

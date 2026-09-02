@@ -116,6 +116,7 @@ class RuntimeExecutionServiceTests {
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
             new AiExternalSchemaMapper(new ObjectMapper(), hasher),
+            new ControlledDeliveryService(),
             clock
         );
     }
@@ -171,6 +172,7 @@ class RuntimeExecutionServiceTests {
             "principal_test",
             PrincipalType.SERVICE,
             "Runtime Service",
+            "institution_local",
             false,
             Set.of("customer_summary"),
             Set.of(AdpRole.RUNTIME_EXECUTOR)
@@ -466,6 +468,7 @@ class RuntimeExecutionServiceTests {
             "principal_test",
             PrincipalType.SERVICE,
             "Runtime Service",
+            "institution_local",
             false,
             Set.of("customer_summary"),
             Set.of(AdpRole.RUNTIME_EXECUTOR)

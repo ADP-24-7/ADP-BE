@@ -2,12 +2,14 @@ insert into auth_principal (
     principal_id,
     principal_type,
     display_name,
+    institution_id,
     subject_authorization_required,
     enabled
 ) values (
     'svc_local_runtime',
     'SERVICE',
     'Local Runtime Harness',
+    'institution_local',
     true,
     true
 ) on conflict (principal_id) do nothing;

@@ -588,6 +588,20 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void recordAuthorization(String executionId, String authorizationStatus) {
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set authorization_status = :authorizationStatus,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("authorizationStatus", authorizationStatus)
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
     public void updateStatus(String executionId, RuntimeExecutionStatus status) {
         jdbcClient.sql("""
             update runtime.runtime_execution
@@ -636,6 +650,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where phb.execution_id = runtime_execution.execution_id) as released_fields,
                    released_fields_digest, released_field_count,
                    provider_request_id, provider_request_digest, provider_response_digest,
+                   authorization_status,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

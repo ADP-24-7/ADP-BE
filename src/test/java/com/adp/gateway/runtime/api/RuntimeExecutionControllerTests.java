@@ -86,6 +86,9 @@ class RuntimeExecutionControllerTests {
             .andExpect(jsonPath("$.outboundGuardStatus").value("PASSED"))
             .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
             .andExpect(jsonPath("$.responseGuardStatus").value("PASSED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("DELIVERED"))
+            .andExpect(jsonPath("$.output.content").value("Approved context processed"))
+            .andExpect(jsonPath("$.output.responseDigest").exists())
             .andReturn()
             .getResponse()
             .getContentAsString();
@@ -374,6 +377,46 @@ class RuntimeExecutionControllerTests {
             .query(Integer.class)
             .single();
         assertThat(blockedCount).isEqualTo(1);
+
+        String executionId = jdbcClient.sql("""
+                select execution_id from runtime.runtime_execution where request_id = :requestId
+                """)
+            .param("requestId", requestId)
+            .query(String.class)
+            .single();
+        mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stages[1].stage").value("AUTHORIZATION"))
+            .andExpect(jsonPath("$.stages[1].status").value("COMPLETED"));
+    }
+
+    @Test
+    void rejectsInstitutionThatDoesNotMatchAuthenticatedPrincipalBeforeRetrieval() throws Exception {
+        String suffix = token();
+        String requestId = "req_institution_" + suffix;
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", "trace_institution_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content(runtimeRequest("idem_institution_" + suffix, "safe question")
+                    .replace("institution_local", "institution_other")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"));
+
+        Integer deniedCount = jdbcClient.sql("""
+                select count(*) from runtime.runtime_execution
+                where request_id = :requestId
+                  and authorization_status = 'DENIED'
+                  and canonical_context_digest is null
+                  and destination_profile_version is null
+                """)
+            .param("requestId", requestId)
+            .query(Integer.class)
+            .single();
+        assertThat(deniedCount).isEqualTo(1);
     }
 
     @Test
