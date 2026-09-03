@@ -264,6 +264,19 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] 기존 AI Full E2E 회귀 테스트 유지
 - [ ] BE-8 Digital Asset Adapter 연결
 
+### BE-9A Idempotency Core
+
+상세 계약은 [BE-9A Idempotency Core](be-9a-idempotency-core.md)에서 관리한다. 이 선행 Slice는 BE-9 전체 완료와 분리한다.
+
+- [x] Institution + Workload + Idempotency Key namespace
+- [x] Canonical request SHA-256 hash 저장
+- [x] 동일 Key·동일 hash의 기존 execution replay
+- [x] 동일 Key·상이한 hash의 409 conflict
+- [x] 진행 중 동시 요청의 재실행 차단
+- [x] Replay 전 호출자 인가 재검증
+- [x] V12 legacy backfill과 upgrade test
+- [ ] BE-9B SENT_UNKNOWN Recovery Framework
+
 ## Troubleshooting
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.

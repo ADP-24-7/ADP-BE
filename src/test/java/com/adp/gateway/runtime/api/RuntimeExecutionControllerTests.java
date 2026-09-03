@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 
 import com.adp.gateway.auth.application.ApiKeyHasher;
 import org.junit.jupiter.api.Test;
@@ -242,7 +245,48 @@ class RuntimeExecutionControllerTests {
     }
 
     @Test
-    void duplicateIdempotencyKeyForSameWorkloadIsRejected() throws Exception {
+    void sameIdempotencyKeyAndRequestReplaysExistingExecutionWithoutDuplicateEgress() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_replay_" + suffix;
+        String first = postRuntimeExecution(
+            "req_replay_a_" + suffix,
+            "trace_replay_a_" + suffix,
+            idempotencyKey,
+            "ticket-100"
+        );
+        String firstExecutionId = first.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        String replay = postRuntimeExecution(
+            "req_replay_b_" + suffix,
+            "trace_replay_b_" + suffix,
+            idempotencyKey,
+            "ticket-100"
+        );
+        String replayExecutionId = replay.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        assertThat(replayExecutionId).isEqualTo(firstExecutionId);
+        assertThat(replay).contains("\"replayed\":true");
+        Integer executionCount = jdbcClient.sql("""
+                select count(*) from runtime.runtime_execution
+                where idempotency_institution_id = 'institution_local'
+                  and workload_id = 'customer_summary'
+                  and idempotency_key = :idempotencyKey
+                """)
+            .param("idempotencyKey", idempotencyKey)
+            .query(Integer.class)
+            .single();
+        Integer connectorCount = jdbcClient.sql("""
+                select count(*) from runtime.connector_execution where execution_id = :executionId
+                """)
+            .param("executionId", firstExecutionId)
+            .query(Integer.class)
+            .single();
+        assertThat(executionCount).isEqualTo(1);
+        assertThat(connectorCount).isEqualTo(1);
+    }
+
+    @Test
+    void sameIdempotencyKeyWithDifferentRequestIsRejectedAsConflict() throws Exception {
         String suffix = token();
         String idempotencyKey = "idem_dup_" + suffix;
         postRuntimeExecution("req_dup_a_" + suffix, "trace_dup_a_" + suffix, idempotencyKey, "ticket-100");
@@ -254,8 +298,71 @@ class RuntimeExecutionControllerTests {
                 .contentType("application/json")
                 .content(runtimeRequest(idempotencyKey, "ticket-999")))
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"))
-            .andExpect(jsonPath("$.reasonCode").value("IDEMPOTENCY_KEY_REUSED"));
+            .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_CONFLICT"))
+            .andExpect(jsonPath("$.reasonCode").value("IDEMPOTENCY_KEY_CONFLICT"));
+    }
+
+    @Test
+    void concurrentIdenticalRequestsCreateOneExecutionAndOneConnectorCall() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_concurrent_" + suffix;
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var futures = List.of(0, 1).stream()
+                .map(index -> executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return mockMvc.perform(post("/v1/runtime/executions")
+                            .header("X-Request-Id", "req_concurrent_" + index + "_" + suffix)
+                            .header("X-Trace-Id", "trace_concurrent_" + index + "_" + suffix)
+                            .header("X-ADP-API-Key", "local-dev-api-key")
+                            .contentType("application/json")
+                            .content(runtimeRequest(idempotencyKey, "ticket-100")))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus();
+                }))
+                .toList();
+            ready.await();
+            start.countDown();
+
+            List<Integer> statuses = futures.stream().map(future -> {
+                try {
+                    return future.get();
+                } catch (Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            }).toList();
+            assertThat(statuses).allMatch(status -> status == 200 || status == 409);
+            assertThat(statuses).contains(200);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Integer executionCount = jdbcClient.sql("""
+                select count(*) from runtime.runtime_execution
+                where idempotency_institution_id = 'institution_local'
+                  and workload_id = 'customer_summary'
+                  and idempotency_key = :idempotencyKey
+                """)
+            .param("idempotencyKey", idempotencyKey)
+            .query(Integer.class)
+            .single();
+        Integer connectorCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.connector_execution ce
+                join runtime.runtime_execution re on re.execution_id = ce.execution_id
+                where re.idempotency_institution_id = 'institution_local'
+                  and re.workload_id = 'customer_summary'
+                  and re.idempotency_key = :idempotencyKey
+                """)
+            .param("idempotencyKey", idempotencyKey)
+            .query(Integer.class)
+            .single();
+        assertThat(executionCount).isEqualTo(1);
+        assertThat(connectorCount).isEqualTo(1);
     }
 
     @Test

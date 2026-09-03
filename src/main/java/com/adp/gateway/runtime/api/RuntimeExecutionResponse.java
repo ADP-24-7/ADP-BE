@@ -1,6 +1,9 @@
 package com.adp.gateway.runtime.api;
 
 import com.adp.gateway.runtime.application.RuntimeExecutionResult;
+import com.adp.gateway.runtime.application.IdempotentExecutionReplay;
+
+import java.util.List;
 
 public record RuntimeExecutionResponse(
     String executionId,
@@ -23,7 +26,8 @@ public record RuntimeExecutionResponse(
     String connectorStatus,
     String responseGuardStatus,
     ControlledDeliveryResponse output,
-    String auditId
+    String auditId,
+    boolean replayed
 ) {
 
     public static RuntimeExecutionResponse from(RuntimeExecutionResult result) {
@@ -50,7 +54,51 @@ public record RuntimeExecutionResponse(
             result.connectorResult().status().name(),
             result.responseGuardStatus(),
             ControlledDeliveryResponse.from(result.controlledDelivery()),
-            result.auditContext().auditId()
+            result.auditContext().auditId(),
+            false
+        );
+    }
+
+    public static RuntimeExecutionResponse from(IdempotentExecutionReplay replay) {
+        PrivacySafeOutputResponse privacySafeOutput = replay.transformExecutionId() == null
+            ? null
+            : new PrivacySafeOutputResponse(
+                replay.transformExecutionId(),
+                replay.transformStatus(),
+                replay.transformOutputDigest(),
+                replay.transformedFieldCount() == null ? 0 : replay.transformedFieldCount(),
+                List.of()
+            );
+        ControlledDeliveryResponse output = replay.controlledDeliveryStatus() == null
+            ? null
+            : new ControlledDeliveryResponse(
+                replay.controlledDeliveryStatus(),
+                null,
+                replay.controlledDeliveryResponseDigest()
+            );
+        return new RuntimeExecutionResponse(
+            replay.executionId(),
+            replay.status(),
+            replay.decisionId(),
+            replay.policyAction(),
+            replay.finalAction(),
+            replay.authorizationResult(),
+            replay.applicabilityResult(),
+            replay.runtimeContextDigest(),
+            replay.policyVersion(),
+            replay.snapshotDigest(),
+            replay.sourceArtifactId(),
+            replay.sourceArtifactVersion(),
+            replay.sourceArtifactDigestAlgorithm(),
+            replay.sourceArtifactDigestValue(),
+            privacySafeOutput,
+            replay.outboundCandidateDigest(),
+            replay.outboundGuardStatus(),
+            replay.connectorStatus(),
+            replay.responseGuardStatus(),
+            output,
+            replay.auditId(),
+            true
         );
     }
 }

@@ -3,6 +3,7 @@ package com.adp.gateway.runtime.infrastructure;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
@@ -16,6 +17,7 @@ import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
+import com.adp.gateway.runtime.application.IdempotentExecutionReplay;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
@@ -43,10 +45,20 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     @Override
     public void recordReceived(RuntimeExecutionTrace trace) {
+        recordReceived(trace, trace.institutionId(), trace.inputDigest());
+    }
+
+    @Override
+    public void recordReceived(
+        RuntimeExecutionTrace trace,
+        String idempotencyInstitutionId,
+        String requestHash
+    ) {
         try {
             jdbcClient.sql("""
                 insert into runtime.runtime_execution (
                     execution_id, request_id, trace_id, idempotency_key, workload_id,
+                    idempotency_institution_id, request_hash,
                     purpose_code, subject_ref_digest, provider_profile_id,
                     destination_profile_id, destination_profile_version, destination_profile_digest,
                     institution_id, approval_reference,
@@ -55,6 +67,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 )
                 values (
                     :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
+                    :idempotencyInstitutionId, :requestHash,
                     :purposeCode, :subjectRefDigest, :providerProfileId,
                     :destinationProfileId, :destinationProfileVersion, :destinationProfileDigest,
                     :institutionId, :approvalReference,
@@ -67,6 +80,8 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 .param("traceId", trace.traceId())
                 .param("idempotencyKey", trace.idempotencyKey())
                 .param("workloadId", trace.workloadId())
+                .param("idempotencyInstitutionId", idempotencyInstitutionId)
+                .param("requestHash", requestHash)
                 .param("purposeCode", trace.purposeCode())
                 .param("subjectRefDigest", trace.subjectRefDigest())
                 .param("providerProfileId", trace.providerProfileId())
@@ -81,8 +96,61 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 .param("updatedAt", trace.updatedAt())
                 .update();
         } catch (DuplicateKeyException exception) {
-            throw new DuplicateRuntimeExecutionException("Idempotency key already used for workload");
+            throw new DuplicateRuntimeExecutionException("Idempotency key already used for institution and workload");
         }
+    }
+
+    @Override
+    public Optional<IdempotentExecutionReplay> findIdempotentExecution(
+        String institutionId,
+        String workloadId,
+        String idempotencyKey
+    ) {
+        return jdbcClient.sql("""
+            select re.execution_id,
+                   re.request_hash,
+                   re.status,
+                   rd.decision_id,
+                   rd.policy_action,
+                   rd.final_action,
+                   rd.authorization_result,
+                   rd.applicability_result,
+                   rd.runtime_context_digest,
+                   re.policy_version,
+                   re.snapshot_digest,
+                   pe.source_artifact_id,
+                   pe.source_artifact_version,
+                   pe.source_artifact_digest_algorithm,
+                   pe.source_artifact_digest_value,
+                   re.transform_execution_id,
+                   re.transform_status,
+                   re.transform_output_digest,
+                   re.transformed_field_count,
+                   re.outbound_candidate_digest,
+                   re.outbound_guard_status,
+                   re.connector_status,
+                   re.response_guard_status,
+                   re.controlled_delivery_status,
+                   re.controlled_delivery_response_digest,
+                   (select ae.audit_id
+                    from audit_event ae
+                    where ae.request_id = re.request_id
+                      and ae.workload_id = re.workload_id
+                      and ae.idempotency_key = re.idempotency_key
+                    order by ae.created_at desc
+                    limit 1) as audit_id
+            from runtime.runtime_execution re
+            left join runtime.runtime_decision rd on rd.execution_id = re.execution_id
+            left join runtime.policy_evaluation pe on pe.execution_id = re.execution_id
+            where re.idempotency_institution_id = :institutionId
+              and re.workload_id = :workloadId
+              and re.idempotency_key = :idempotencyKey
+            """)
+            .param("institutionId", institutionId)
+            .param("workloadId", workloadId)
+            .param("idempotencyKey", idempotencyKey)
+            .query(IdempotentExecutionReplay.class)
+            .optional();
     }
 
     @Override

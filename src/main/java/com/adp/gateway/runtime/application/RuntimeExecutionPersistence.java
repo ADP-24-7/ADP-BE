@@ -1,5 +1,7 @@
 package com.adp.gateway.runtime.application;
 
+import java.util.Optional;
+
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
@@ -18,6 +20,22 @@ import com.adp.gateway.transform.domain.TransformResult;
 public interface RuntimeExecutionPersistence {
 
     void recordReceived(RuntimeExecutionTrace trace);
+
+    default void recordReceived(
+        RuntimeExecutionTrace trace,
+        String idempotencyInstitutionId,
+        String requestHash
+    ) {
+        recordReceived(trace);
+    }
+
+    default Optional<IdempotentExecutionReplay> findIdempotentExecution(
+        String institutionId,
+        String workloadId,
+        String idempotencyKey
+    ) {
+        return Optional.empty();
+    }
 
     void recordDestinationProfile(String executionId, DestinationProfile destinationProfile);
 

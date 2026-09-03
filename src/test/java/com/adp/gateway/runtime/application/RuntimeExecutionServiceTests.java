@@ -112,6 +112,7 @@ class RuntimeExecutionServiceTests {
             persistence,
             subjectRefHasher,
             runtimeInputHasher,
+            new RuntimeRequestHasher(new ObjectMapper()),
             transformEngine,
             destinationProfilePort,
             outboundCandidatePayloadBuilder,
