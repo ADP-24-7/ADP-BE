@@ -260,7 +260,7 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Pack 전용 Connector 우선 및 `COMMON` fallback Resolver
 - [x] Pack 전용 Response Guard 우선 및 `COMMON` fallback Resolver
 - [x] 중복 Adapter 등록 시 Application Context 시작 실패
-- [x] 필수 Pack Adapter 미등록 시 Connector 호출 전 Fail Closed
+- [x] 필수 Pack Adapter 미등록 시 Connector 호출 전 `FAILED` 처리
 - [x] 기존 AI Full E2E 회귀 테스트 유지
 - [ ] BE-8 Digital Asset Adapter 연결
 

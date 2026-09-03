@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.application.ExecutionPackContextBuilder;
+import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.detection.application.SensitiveDataDetector;
@@ -51,11 +52,11 @@ public class AiCanonicalContextBuilder implements ExecutionPackContextBuilder {
     @Override
     public void validate(Map<String, Object> input) {
         if (input == null || !ALLOWED_INPUT_KEYS.containsAll(input.keySet())) {
-            throw new AiInputRejectedException("AI_INPUT_SCHEMA_MISMATCH");
+            throw new ExecutionPackInputRejectedException(ExecutionPackType.AI, "AI_INPUT_SCHEMA_MISMATCH");
         }
         Object promptValue = input.get("prompt");
         if (!(promptValue instanceof String prompt) || prompt.isBlank() || prompt.length() > MAX_PROMPT_LENGTH) {
-            throw new AiInputRejectedException("AI_PROMPT_INVALID");
+            throw new ExecutionPackInputRejectedException(ExecutionPackType.AI, "AI_PROMPT_INVALID");
         }
     }
 

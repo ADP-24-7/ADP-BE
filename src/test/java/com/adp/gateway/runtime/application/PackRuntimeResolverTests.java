@@ -9,6 +9,8 @@ import java.util.List;
 
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.application.RuntimeConnectorResolver;
+import com.adp.gateway.connector.application.FakeConnector;
+import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.application.ExecutionPackContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackContextBuilderResolver;
 import com.adp.gateway.egress.application.ExternalSchemaMapper;
@@ -17,6 +19,7 @@ import com.adp.gateway.egress.application.PackRuntimeAdapterNotFoundException;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.ExecutionPackType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class PackRuntimeResolverTests {
@@ -80,6 +83,38 @@ class PackRuntimeResolverTests {
         )))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("Duplicate connector for pack AI");
+
+        assertThatThrownBy(() -> new ExecutionPackContextBuilderResolver(List.of(
+            contextBuilder(ExecutionPackType.AI),
+            contextBuilder(ExecutionPackType.AI)
+        )))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Duplicate context builder for pack AI");
+
+        assertThatThrownBy(() -> new ExternalSchemaMapperResolver(List.of(
+            schemaMapper(ExecutionPackType.AI),
+            schemaMapper(ExecutionPackType.AI)
+        )))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Duplicate schema mapper for pack AI");
+
+        assertThatThrownBy(() -> new ResponseGuardResolver(List.of(
+            responseGuard(ExecutionPackType.AI),
+            responseGuard(ExecutionPackType.AI)
+        )))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Duplicate response guard for pack AI");
+    }
+
+    @Test
+    void fakeAiConnectorCannotActAsDigitalAssetFallback() {
+        FakeConnector fakeAiConnector = new FakeConnector(new SimpleMeterRegistry(), new CanonicalValueHasher());
+        RuntimeConnectorResolver resolver = new RuntimeConnectorResolver(List.of(fakeAiConnector));
+
+        assertThat(fakeAiConnector.supportedPack()).isEqualTo(ExecutionPackType.AI);
+        assertThatThrownBy(() -> resolver.resolve(ExecutionPackType.DIGITAL_ASSET))
+            .isInstanceOf(PackRuntimeAdapterNotFoundException.class)
+            .hasMessageContaining("DIGITAL_ASSET");
     }
 
     private ExecutionPackContextBuilder contextBuilder(ExecutionPackType packType) {

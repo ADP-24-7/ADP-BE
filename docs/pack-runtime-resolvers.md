@@ -19,7 +19,7 @@ Destination Profile을 요청 시작 시점에 고정한 뒤 해당 `ExecutionPa
 - Connector와 Response Guard는 Pack 전용 구현을 우선한다.
 - Pack 전용 Connector 또는 Response Guard가 없으면 `COMMON` 구현을 fallback으로 사용할 수 있다.
 - 같은 Pack을 지원하는 Adapter가 둘 이상 등록되면 Application Context 시작을 거부한다.
-- 필수 Adapter가 없으면 외부 전송 전에 실행을 차단한다.
+- 필수 Adapter가 없으면 외부 전송 전에 실행을 실패 처리한다.
 - DA Artifact의 정책값이나 Threshold는 Resolver에 포함하지 않는다.
 
 ## Current Bindings
@@ -30,7 +30,7 @@ Destination Profile을 요청 시작 시점에 고정한 뒤 해당 `ExecutionPa
 | `AiExternalSchemaMapper` | `AI` |
 | `HttpAiConnector` | `AI` |
 | `ProjectProvisionalResponseGuardAdapter` | `AI` |
-| `FakeConnector` | `COMMON` fallback |
+| `FakeConnector` | `AI` |
 | `UnconfiguredRuntimeConnectorAdapter` | `COMMON` fallback |
 | `NoopResponseGuardAdapter` | `COMMON` fallback |
 

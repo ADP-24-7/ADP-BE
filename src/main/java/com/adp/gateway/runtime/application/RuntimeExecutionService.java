@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.adp.gateway.audit.application.AuditRecorder;
-import com.adp.gateway.ai.application.AiInputRejectedException;
 import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.auth.application.AuthorizationRequest;
 import com.adp.gateway.auth.application.AuthorizationService;
@@ -20,6 +19,7 @@ import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackContextBuilderResolver;
+import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
@@ -33,7 +33,6 @@ import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.OutboundGuardException;
-import com.adp.gateway.egress.application.PackRuntimeAdapterNotFoundException;
 import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
@@ -449,7 +448,7 @@ public class RuntimeExecutionService {
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
-            | AiInputRejectedException | OutboundGuardException | PackRuntimeAdapterNotFoundException exception) {
+            | ExecutionPackInputRejectedException | OutboundGuardException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {

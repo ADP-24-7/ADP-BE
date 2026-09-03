@@ -29,7 +29,7 @@ public class FakeConnector implements RuntimeConnectorPort {
 
     @Override
     public ExecutionPackType supportedPack() {
-        return ExecutionPackType.COMMON;
+        return ExecutionPackType.AI;
     }
 
     public ConnectorResult execute(

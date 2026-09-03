@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.detection.infrastructure.RegexSensitiveDataDetector;
 import com.adp.gateway.retrieval.domain.DataClass;
@@ -41,7 +42,7 @@ class AiCanonicalContextBuilderTests {
     @Test
     void rejectsUnapprovedInputKeysWithoutEchoingValues() {
         assertThatThrownBy(() -> builder.merge(context(), Map.of("prompt", "safe", "rawCustomer", "secret")))
-            .isInstanceOf(AiInputRejectedException.class)
+            .isInstanceOf(ExecutionPackInputRejectedException.class)
             .hasMessageNotContaining("secret");
     }
 
