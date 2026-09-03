@@ -37,6 +37,8 @@ import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.observability.GatewayObservability;
+import com.adp.gateway.observability.GatewayObservability.IdempotencyOutcome;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
 import com.adp.gateway.policy.application.RuntimePolicyContextFactory;
 import com.adp.gateway.policy.domain.ApplicabilityResult;
@@ -58,9 +60,13 @@ import com.adp.gateway.transform.application.TransformEngine;
 import com.adp.gateway.transform.domain.TransformResult;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class RuntimeExecutionService {
+
+    private static final Logger log = LoggerFactory.getLogger(RuntimeExecutionService.class);
 
     private final AuthorizationService authorizationService;
     private final RetrievalService retrievalService;
@@ -87,6 +93,7 @@ public class RuntimeExecutionService {
     private final ExternalSchemaMapperResolver externalSchemaMapperResolver;
     private final ControlledDeliveryService controlledDeliveryService;
     private final Clock clock;
+    private final GatewayObservability observability;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -113,7 +120,8 @@ public class RuntimeExecutionService {
         PolicyHarnessEvaluator policyHarnessEvaluator,
         ExternalSchemaMapperResolver externalSchemaMapperResolver,
         ControlledDeliveryService controlledDeliveryService,
-        Clock clock
+        Clock clock,
+        GatewayObservability observability
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -140,6 +148,7 @@ public class RuntimeExecutionService {
         this.externalSchemaMapperResolver = externalSchemaMapperResolver;
         this.controlledDeliveryService = controlledDeliveryService;
         this.clock = clock;
+        this.observability = observability;
     }
 
     public RuntimeExecutionResult execute(
@@ -181,10 +190,11 @@ public class RuntimeExecutionService {
             inputDigest,
             now
         ), principal.institutionId(), requestHash);
+        recordIdempotency(IdempotencyOutcome.NEW);
 
         try {
             persistence.recordAuthorization(executionId, "PASSED");
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+            updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
             var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
             persistence.recordDestinationProfile(executionId, destinationProfile);
@@ -204,7 +214,7 @@ public class RuntimeExecutionService {
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
             canonicalContext = packContextBuilder.merge(canonicalContext, input);
             persistence.recordRetrieved(executionId, canonicalContext);
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
+            updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
 
             RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
                 canonicalContext,
@@ -237,7 +247,7 @@ public class RuntimeExecutionService {
             );
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
-            persistence.updateStatus(executionId, finalStatus);
+            updateStatus(executionId, finalStatus);
             if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
                 var fieldLineage = fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null);
                 var policyHarnessBinding = policyHarnessEvaluator.evaluate(
@@ -323,7 +333,7 @@ public class RuntimeExecutionService {
                     == ApprovalReuseStatus.REVIEW_REQUIRED
                     ? RuntimeExecutionStatus.REVIEW_REQUIRED
                     : RuntimeExecutionStatus.BLOCKED;
-                persistence.updateStatus(executionId, harnessStatus);
+                updateStatus(executionId, harnessStatus);
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
@@ -354,7 +364,7 @@ public class RuntimeExecutionService {
                         fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null)
                     )
                 );
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+                updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
@@ -372,7 +382,7 @@ public class RuntimeExecutionService {
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
             var providerRequest = externalSchemaMapper.map(destinationProfile, outboundPayload);
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
+            updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(
                 requestContext,
                 decision,
@@ -387,7 +397,7 @@ public class RuntimeExecutionService {
                 ControlledDeliveryResult controlledDelivery =
                     controlledDeliveryService.deliver(connectorResult, responseGuardResult);
                 persistence.recordControlledDelivery(executionId, controlledDelivery);
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
+                updateStatus(executionId, RuntimeExecutionStatus.FAILED);
                 AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
@@ -429,7 +439,7 @@ public class RuntimeExecutionService {
             RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed() && controlledDelivery.isDelivered()
                 ? RuntimeExecutionStatus.COMPLETED
                 : RuntimeExecutionStatus.BLOCKED;
-            persistence.updateStatus(executionId, completedStatus);
+            updateStatus(executionId, completedStatus);
             AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
 
             return new RuntimeExecutionResult(
@@ -447,10 +457,10 @@ public class RuntimeExecutionService {
             throw exception;
         } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
             | ExecutionPackInputRejectedException | OutboundGuardException exception) {
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
+            updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {
-            persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
+            updateStatus(executionId, RuntimeExecutionStatus.FAILED);
             throw exception;
         }
     }
@@ -524,11 +534,14 @@ public class RuntimeExecutionService {
                 )
                 .orElseThrow(() -> exception);
             if (!replay.requestHash().equals(requestHash)) {
+                recordIdempotency(IdempotencyOutcome.CONFLICT);
                 throw new IdempotencyKeyConflictException();
             }
             if (replay.inProgress()) {
+                recordIdempotency(IdempotencyOutcome.IN_PROGRESS);
                 throw new IdempotencyRequestInProgressException();
             }
+            recordIdempotency(IdempotencyOutcome.REPLAY);
             return RuntimeExecutionSubmission.replayed(replay);
         }
     }
@@ -546,5 +559,32 @@ public class RuntimeExecutionService {
             case REVIEW -> RuntimeExecutionStatus.REVIEW_REQUIRED;
             case BLOCK -> RuntimeExecutionStatus.BLOCKED;
         };
+    }
+
+    private void updateStatus(String executionId, RuntimeExecutionStatus status) {
+        persistence.updateStatus(executionId, status);
+        if (isTerminal(status)) {
+            observability.runtimeExecution(status);
+            log.atInfo()
+                .addKeyValue("event", "runtime_execution_transition")
+                .addKeyValue("status", status.name())
+                .log("Runtime execution reached terminal status");
+        }
+    }
+
+    private void recordIdempotency(IdempotencyOutcome outcome) {
+        observability.idempotency(outcome);
+        log.atInfo()
+            .addKeyValue("event", "idempotency_resolution")
+            .addKeyValue("outcome", outcome.name())
+            .log("Runtime idempotency resolved");
+    }
+
+    private boolean isTerminal(RuntimeExecutionStatus status) {
+        return status == RuntimeExecutionStatus.EXTERNALLY_RECONCILED
+            || status == RuntimeExecutionStatus.COMPLETED
+            || status == RuntimeExecutionStatus.REVIEW_REQUIRED
+            || status == RuntimeExecutionStatus.BLOCKED
+            || status == RuntimeExecutionStatus.FAILED;
     }
 }

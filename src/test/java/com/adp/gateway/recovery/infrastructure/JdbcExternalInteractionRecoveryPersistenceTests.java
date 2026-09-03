@@ -128,7 +128,7 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
 
         assertThat(persistence.reschedule(
             seeded.recoveryId(), "worker-exhausted", OffsetDateTime.now().plusMinutes(1), "STILL_SENT_UNKNOWN"
-        )).isTrue();
+        ).resultingStatus()).isEqualTo(com.adp.gateway.recovery.domain.RecoveryStatus.EXHAUSTED);
 
         assertTerminalAndReplay(seeded, "EXHAUSTED");
     }

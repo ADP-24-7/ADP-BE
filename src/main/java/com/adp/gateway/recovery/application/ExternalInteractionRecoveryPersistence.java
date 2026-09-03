@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
+import com.adp.gateway.recovery.domain.RecoveryStatus;
 
 public interface ExternalInteractionRecoveryPersistence {
 
@@ -13,7 +14,19 @@ public interface ExternalInteractionRecoveryPersistence {
 
     Optional<ExternalInteractionRecovery> claimNext(String workerId, OffsetDateTime now, Duration leaseDuration);
 
-    boolean reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode);
+    RecoveryTransitionResult reschedule(
+        String recoveryId,
+        String workerId,
+        OffsetDateTime nextAttemptAt,
+        String errorCode
+    );
+
+    record RecoveryTransitionResult(boolean updated, RecoveryStatus resultingStatus) {
+
+        public static RecoveryTransitionResult staleLease() {
+            return new RecoveryTransitionResult(false, null);
+        }
+    }
 
     boolean reconcile(
         String recoveryId,

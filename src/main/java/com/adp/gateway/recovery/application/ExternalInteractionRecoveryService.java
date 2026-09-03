@@ -7,6 +7,9 @@ import java.time.OffsetDateTime;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import com.adp.gateway.observability.GatewayObservability;
+import com.adp.gateway.observability.GatewayObservability.RecoveryOutcome;
+import com.adp.gateway.recovery.domain.RecoveryStatus;
+import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -47,48 +50,43 @@ public class ExternalInteractionRecoveryService {
                     ConnectorStatus status = queryResult.status();
                     if (status == ConnectorStatus.ACKNOWLEDGED || status == ConnectorStatus.COMPLETED) {
                         requireLease(persistence.reconcile(recovery.recoveryId(), workerId, queryResult, now));
-                        record("RECONCILED");
+                        observability.runtimeExecution(RuntimeExecutionStatus.EXTERNALLY_RECONCILED);
+                        record(RecoveryOutcome.RECONCILED);
                     } else if (status == ConnectorStatus.SENT_UNKNOWN) {
-                        requireLease(persistence.reschedule(
+                        recordReschedule(persistence.reschedule(
                             recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "STILL_SENT_UNKNOWN"
                         ));
-                        record("RESCHEDULED");
                     } else {
                         requireLease(persistence.markManualReview(
                             recovery.recoveryId(), workerId, "EXTERNAL_STATUS_" + status.name()
                         ));
-                        record("MANUAL_REVIEW");
+                        recordManualReview();
                     }
                 } catch (ExternalStatusQueryUnavailableException exception) {
-                    requireLease(persistence.reschedule(
+                    recordReschedule(persistence.reschedule(
                         recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "STATUS_QUERY_UNAVAILABLE"
                     ));
-                    record("RESCHEDULED");
                 } catch (ExternalStatusQueryPermanentException exception) {
                     requireLease(persistence.markManualReview(
                         recovery.recoveryId(), workerId, "STATUS_QUERY_PERMANENT_FAILURE"
                     ));
-                    record("MANUAL_REVIEW");
+                    recordManualReview();
                 } catch (AmbiguousExternalStatusQueryAdapterException exception) {
                     requireLease(persistence.markManualReview(
                         recovery.recoveryId(), workerId, "STATUS_QUERY_ADAPTER_AMBIGUOUS"
                     ));
-                    record("MANUAL_REVIEW");
+                    recordManualReview();
                 } catch (StaleRecoveryLeaseException exception) {
-                    record("STALE_LEASE");
+                    record(RecoveryOutcome.STALE_LEASE);
                     throw exception;
                 } catch (RuntimeException exception) {
-                    requireLease(persistence.reschedule(
+                    recordReschedule(persistence.reschedule(
                         recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "INTERNAL_QUERY_ERROR"
                     ));
-                    record("RESCHEDULED");
                 }
                 return true;
             })
             .orElse(false);
-        if (!processed) {
-            record("NO_JOB");
-        }
         return processed;
     }
 
@@ -98,8 +96,28 @@ public class ExternalInteractionRecoveryService {
         }
     }
 
-    private void record(String outcome) {
+    private void recordReschedule(ExternalInteractionRecoveryPersistence.RecoveryTransitionResult transition) {
+        if (!transition.updated()) {
+            throw new StaleRecoveryLeaseException();
+        }
+        if (transition.resultingStatus() == RecoveryStatus.EXHAUSTED) {
+            observability.runtimeExecution(RuntimeExecutionStatus.REVIEW_REQUIRED);
+            record(RecoveryOutcome.EXHAUSTED);
+            return;
+        }
+        record(RecoveryOutcome.RESCHEDULED);
+    }
+
+    private void recordManualReview() {
+        observability.runtimeExecution(RuntimeExecutionStatus.REVIEW_REQUIRED);
+        record(RecoveryOutcome.MANUAL_REVIEW);
+    }
+
+    private void record(RecoveryOutcome outcome) {
         observability.recovery(outcome);
-        log.info("recovery_processing outcome={}", outcome);
+        log.atInfo()
+            .addKeyValue("event", "recovery_processing")
+            .addKeyValue("outcome", outcome.name())
+            .log("External interaction recovery processed");
     }
 }

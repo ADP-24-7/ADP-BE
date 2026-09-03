@@ -1,10 +1,9 @@
 package com.adp.gateway.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.time.Duration;
-
+import com.adp.gateway.observability.GatewayObservability.IdempotencyOutcome;
+import com.adp.gateway.observability.GatewayObservability.RecoveryOutcome;
+import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -15,23 +14,16 @@ class GatewayObservabilityTests {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         GatewayObservability observability = new GatewayObservability(registry);
 
-        observability.runtimeSubmission("CREATED", Duration.ofMillis(10));
-        observability.idempotency("REPLAYED");
-        observability.recovery("RECONCILED");
+        observability.runtimeExecution(RuntimeExecutionStatus.COMPLETED);
+        observability.idempotency(IdempotencyOutcome.REPLAY);
+        observability.recovery(RecoveryOutcome.RECONCILED);
 
-        assertThat(registry.get("adp.runtime.submission.total").tag("outcome", "CREATED").counter().count())
+        assertThat(registry.get("adp.runtime.execution.total").tag("status", "COMPLETED").counter().count())
             .isEqualTo(1);
-        assertThat(registry.get("adp.idempotency.resolution.total").tag("outcome", "REPLAYED").counter().count())
+        assertThat(registry.get("adp.idempotency.resolution.total").tag("outcome", "REPLAY").counter().count())
             .isEqualTo(1);
         assertThat(registry.get("adp.recovery.processing.total").tag("outcome", "RECONCILED").counter().count())
             .isEqualTo(1);
     }
 
-    @Test
-    void rejectsUnboundedOutcomeValues() {
-        GatewayObservability observability = new GatewayObservability(new SimpleMeterRegistry());
-
-        assertThatThrownBy(() -> observability.idempotency("customer-100"))
-            .isInstanceOf(IllegalArgumentException.class);
-    }
 }

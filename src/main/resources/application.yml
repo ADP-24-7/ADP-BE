@@ -15,6 +15,8 @@ spring:
       add-mappings: false
 
 adp:
+  observability:
+    prometheus-public: ${ADP_PROMETHEUS_PUBLIC:false}
   local-user-auth:
     enabled: ${ADP_LOCAL_USER_AUTH_ENABLED:false}
   local-fixtures:
@@ -44,6 +46,10 @@ springdoc:
     path: /v3/api-docs
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:

@@ -10,7 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = "adp.observability.prometheus-public=true")
 @AutoConfigureMockMvc
 class PrometheusEndpointTests {
 
@@ -22,7 +22,7 @@ class PrometheusEndpointTests {
 
     @Test
     void exposesPrometheusMetricsWithoutCredentials() throws Exception {
-        observability.recovery("RECONCILED");
+        observability.recovery(GatewayObservability.RecoveryOutcome.RECONCILED);
         mockMvc.perform(get("/actuator/prometheus"))
             .andExpect(status().isOk())
             .andExpect(content().string(org.hamcrest.Matchers.containsString("jvm_info")))

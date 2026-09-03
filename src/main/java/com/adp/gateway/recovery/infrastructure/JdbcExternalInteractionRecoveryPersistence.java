@@ -123,7 +123,12 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
 
     @Override
     @Transactional
-    public boolean reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode) {
+    public RecoveryTransitionResult reschedule(
+        String recoveryId,
+        String workerId,
+        OffsetDateTime nextAttemptAt,
+        String errorCode
+    ) {
         OffsetDateTime now = OffsetDateTime.now(clock);
         Optional<RecoveryUpdate> update = jdbcClient.sql("""
                 update runtime.external_interaction_recovery
@@ -149,7 +154,9 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
             .optional();
         update.filter(item -> "EXHAUSTED".equals(item.recoveryStatus()))
             .ifPresent(item -> markRuntimeReviewRequired(item.executionId(), now));
-        return update.isPresent();
+        return update
+            .map(item -> new RecoveryTransitionResult(true, RecoveryStatus.valueOf(item.recoveryStatus())))
+            .orElseGet(RecoveryTransitionResult::staleLease);
     }
 
     @Override

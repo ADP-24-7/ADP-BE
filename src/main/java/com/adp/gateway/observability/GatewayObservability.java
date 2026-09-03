@@ -1,7 +1,6 @@
 package com.adp.gateway.observability;
 
-import java.time.Duration;
-
+import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
@@ -14,32 +13,30 @@ public class GatewayObservability {
         this.meterRegistry = meterRegistry;
     }
 
-    public void runtimeSubmission(String outcome, Duration duration) {
-        meterRegistry.counter("adp.runtime.submission.total", "outcome", allowed(
-            outcome, "CREATED", "REPLAYED", "REJECTED", "FAILED"
-        )).increment();
-        meterRegistry.timer("adp.runtime.submission.duration", "outcome", outcome)
-            .record(duration);
+    public void runtimeExecution(RuntimeExecutionStatus status) {
+        meterRegistry.counter("adp.runtime.execution.total", "status", status.name()).increment();
     }
 
-    public void idempotency(String outcome) {
-        meterRegistry.counter("adp.idempotency.resolution.total", "outcome", allowed(
-            outcome, "CREATED", "REPLAYED", "CONFLICT", "IN_PROGRESS"
-        )).increment();
+    public void idempotency(IdempotencyOutcome outcome) {
+        meterRegistry.counter("adp.idempotency.resolution.total", "outcome", outcome.name()).increment();
     }
 
-    public void recovery(String outcome) {
-        meterRegistry.counter("adp.recovery.processing.total", "outcome", allowed(
-            outcome, "NO_JOB", "RECONCILED", "RESCHEDULED", "MANUAL_REVIEW", "STALE_LEASE", "FAILED"
-        )).increment();
+    public void recovery(RecoveryOutcome outcome) {
+        meterRegistry.counter("adp.recovery.processing.total", "outcome", outcome.name()).increment();
     }
 
-    private String allowed(String value, String... allowedValues) {
-        for (String allowedValue : allowedValues) {
-            if (allowedValue.equals(value)) {
-                return value;
-            }
-        }
-        throw new IllegalArgumentException("Unsupported low-cardinality metric value: " + value);
+    public enum IdempotencyOutcome {
+        NEW,
+        REPLAY,
+        CONFLICT,
+        IN_PROGRESS
+    }
+
+    public enum RecoveryOutcome {
+        RECONCILED,
+        RESCHEDULED,
+        EXHAUSTED,
+        MANUAL_REVIEW,
+        STALE_LEASE
     }
 }
