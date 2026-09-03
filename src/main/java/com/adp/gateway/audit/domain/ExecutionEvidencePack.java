@@ -5,7 +5,7 @@ import java.util.List;
 
 public record ExecutionEvidencePack(
     String schemaVersion,
-    String evidenceDigest,
+    String exportContentDigest,
     String executionId,
     String requestId,
     String traceId,

@@ -1,12 +1,14 @@
 package com.adp.gateway.audit.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import com.adp.gateway.audit.application.AuditReadPort;
+import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -24,6 +28,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class AuditReadControllerTests {
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AuditReadPort auditReadPort;
 
     @Test
     void operatorSearchesInstitutionScopedRuntimeReadModel() throws Exception {
@@ -54,8 +61,8 @@ class AuditReadControllerTests {
                 .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.schemaVersion").value("adp-execution-evidence/v1"))
-            .andExpect(jsonPath("$.evidenceDigest").isString())
-            .andExpect(jsonPath("$.evidenceDigest").value(org.hamcrest.Matchers.hasLength(64)))
+            .andExpect(jsonPath("$.exportContentDigest").isString())
+            .andExpect(jsonPath("$.exportContentDigest").value(org.hamcrest.Matchers.hasLength(64)))
             .andExpect(jsonPath("$.policy.snapshotDigest").isString())
             .andExpect(jsonPath("$.data.inputDigest").isString())
             .andExpect(jsonPath("$.egress.providerRequestDigest").isString())
@@ -75,6 +82,33 @@ class AuditReadControllerTests {
                 .header("X-ADP-User-Id", "operator-local")
                 .header("X-ADP-User-Roles", "OPERATOR"))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void jdbcSearchAlwaysAppliesAllowedWorkloadScope() throws Exception {
+        String executionId = execute("workload-scope");
+
+        var unauthorized = auditReadPort.search(
+            "institution_local", Set.of("fraud_detection"), null, null, null, null, 0, 10
+        );
+        var authorized = auditReadPort.search(
+            "institution_local", Set.of("customer_summary"), null, null, null, null, 0, 10
+        );
+
+        assertThat(unauthorized.items()).noneMatch(item -> item.executionId().equals(executionId));
+        assertThat(authorized.items()).anyMatch(item -> item.executionId().equals(executionId));
+    }
+
+    @Test
+    void jdbcEvidenceRejectsCrossInstitutionAndUnauthorizedWorkloadBeforeMapping() throws Exception {
+        String executionId = execute("evidence-scope");
+
+        assertThatThrownBy(() -> auditReadPort.loadEvidence(
+            executionId, "institution_other", Set.of("customer_summary")
+        )).isInstanceOf(RuntimeExecutionNotFoundException.class);
+        assertThatThrownBy(() -> auditReadPort.loadEvidence(
+            executionId, "institution_local", Set.of("fraud_detection")
+        )).isInstanceOf(RuntimeExecutionNotFoundException.class);
     }
 
     private String execute(String label) throws Exception {

@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 
 import com.adp.gateway.audit.application.AuditReadPort;
 import com.adp.gateway.audit.domain.AuditExecutionPage;
@@ -30,6 +31,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     @Override
     public AuditExecutionPage search(
         String institutionId,
+        Set<String> allowedWorkloads,
         String workloadId,
         String status,
         OffsetDateTime from,
@@ -38,6 +40,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         int size
     ) {
         StringBuilder where = new StringBuilder(" where re.institution_id = :institutionId");
+        appendWorkloadScope(where, allowedWorkloads);
         if (workloadId != null) where.append(" and re.workload_id = :workloadId");
         if (status != null) where.append(" and re.status = :status");
         if (from != null) where.append(" and re.created_at >= :from");
@@ -54,17 +57,27 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
             """ + where + " order by re.created_at desc, re.execution_id desc limit :size offset :offset";
         String count = "select count(*) from runtime.runtime_execution re" + where;
 
-        JdbcClient.StatementSpec selectSpec = bind(jdbcClient.sql(select), institutionId, workloadId, status, from, to)
+        JdbcClient.StatementSpec selectSpec = bind(
+            jdbcClient.sql(select), institutionId, allowedWorkloads, workloadId, status, from, to
+        )
             .param("size", size).param("offset", page * size);
         List<AuditExecutionSummary> items = selectSpec.query(AuditExecutionSummary.class).list();
-        long total = bind(jdbcClient.sql(count), institutionId, workloadId, status, from, to)
+        long total = bind(
+            jdbcClient.sql(count), institutionId, allowedWorkloads, workloadId, status, from, to
+        )
             .query(Long.class).single();
         return new AuditExecutionPage(items, page, size, total);
     }
 
     @Override
-    public ExecutionEvidencePack loadEvidence(String executionId) {
-        EvidenceRow row = jdbcClient.sql("""
+    public ExecutionEvidencePack loadEvidence(
+        String executionId,
+        String institutionId,
+        Set<String> allowedWorkloads
+    ) {
+        StringBuilder scope = new StringBuilder(" and re.institution_id = :institutionId");
+        appendWorkloadScope(scope, allowedWorkloads);
+        JdbcClient.StatementSpec statement = jdbcClient.sql("""
             select re.execution_id, re.request_id, re.trace_id, re.institution_id,
                    re.workload_id, re.purpose_code, re.status as runtime_status,
                    re.authorization_status, re.approval_reference, re.approval_version,
@@ -94,9 +107,11 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                 order by created_at desc limit 1
             ) ae on true
             where re.execution_id = :executionId
-            """)
+            """ + scope)
             .param("executionId", executionId)
-            .query(EvidenceRow.class)
+            .param("institutionId", institutionId);
+        statement = bindWorkloadScope(statement, allowedWorkloads);
+        EvidenceRow row = statement.query(EvidenceRow.class)
             .optional()
             .orElseThrow(() -> new RuntimeExecutionNotFoundException(executionId));
         ExecutionEvidencePack unsigned = row.toEvidence(null);
@@ -106,16 +121,37 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     private JdbcClient.StatementSpec bind(
         JdbcClient.StatementSpec spec,
         String institutionId,
+        Set<String> allowedWorkloads,
         String workloadId,
         String status,
         OffsetDateTime from,
         OffsetDateTime to
     ) {
         spec = spec.param("institutionId", institutionId);
+        spec = bindWorkloadScope(spec, allowedWorkloads);
         if (workloadId != null) spec = spec.param("workloadId", workloadId);
         if (status != null) spec = spec.param("status", status);
         if (from != null) spec = spec.param("from", from);
         if (to != null) spec = spec.param("to", to);
+        return spec;
+    }
+
+    private void appendWorkloadScope(StringBuilder sql, Set<String> allowedWorkloads) {
+        if (allowedWorkloads.contains("*")) {
+            return;
+        }
+        sql.append(allowedWorkloads.isEmpty()
+            ? " and 1 = 0"
+            : " and re.workload_id in (:allowedWorkloads)");
+    }
+
+    private JdbcClient.StatementSpec bindWorkloadScope(
+        JdbcClient.StatementSpec spec,
+        Set<String> allowedWorkloads
+    ) {
+        if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
+            return spec.param("allowedWorkloads", allowedWorkloads);
+        }
         return spec;
     }
 
@@ -153,9 +189,9 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         String auditId, String reasonCode, String evidenceRefs,
         OffsetDateTime createdAt, OffsetDateTime updatedAt
     ) {
-        ExecutionEvidencePack toEvidence(String evidenceDigest) {
+        ExecutionEvidencePack toEvidence(String exportContentDigest) {
             return new ExecutionEvidencePack(
-                "adp-execution-evidence/v1", evidenceDigest, executionId, requestId, traceId,
+                "adp-execution-evidence/v1", exportContentDigest, executionId, requestId, traceId,
                 institutionId, workloadId, purposeCode, runtimeStatus, authorizationStatus,
                 new ExecutionEvidencePack.PolicyEvidence(
                     approvalReference, approvalVersion, approvalScopeDigest, policyVersion,

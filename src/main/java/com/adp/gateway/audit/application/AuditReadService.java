@@ -35,13 +35,16 @@ public class AuditReadService {
             throw new InvalidAuditSearchException("from must not be after to");
         }
         return auditReadPort.search(
-            principal.institutionId(), workloadId, validatedStatus(status), from, to, page, size
+            principal.institutionId(), principal.workloadIds(), workloadId,
+            validatedStatus(status), from, to, page, size
         );
     }
 
     public ExecutionEvidencePack evidence(AuthPrincipal principal, String executionId) {
         requireInstitution(principal);
-        ExecutionEvidencePack evidence = auditReadPort.loadEvidence(executionId);
+        ExecutionEvidencePack evidence = auditReadPort.loadEvidence(
+            executionId, principal.institutionId(), principal.workloadIds()
+        );
         if (!principal.institutionId().equals(evidence.institutionId())
             || !principal.canAccessWorkload(evidence.workloadId())) {
             throw new RuntimeExecutionNotFoundException(executionId);

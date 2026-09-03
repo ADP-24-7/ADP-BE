@@ -28,7 +28,7 @@ BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-f
 - [x] Logstash JSON console log와 MDC `request_id`/`trace_id`
 - [x] 원문 Payload·Subject·Secret metric/log 비노출 규칙
 - [x] BE-11B Institution-scoped Runtime/Audit 검색 Read Model
-- [x] BE-11B Privileged Evidence Export와 canonical digest
+- [x] BE-11B Privileged Evidence Export와 조회 시점 content fingerprint
 - [x] BE-11B raw payload·subject·idempotency key·provider correlation key 비노출
 - [x] BE-11B V14 검색 인덱스와 권한/검색/export 통합 테스트
 - [ ] Artifact Lifecycle·Rollback Evidence
