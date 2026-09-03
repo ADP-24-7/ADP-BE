@@ -281,6 +281,28 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v13MigrationCreatesExternalInteractionRecoveryQueue() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime'
+                  and table_name = 'external_interaction_recovery'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and table_name = 'external_interaction_recovery'
+                  and constraint_type in ('CHECK', 'UNIQUE')
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(constraintCount).isGreaterThanOrEqualTo(5);
+    }
+
+    @Test
     void v8MigrationPreservesLegacyAuditConnectorStatusRows() throws Exception {
         String databaseName = "adp_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

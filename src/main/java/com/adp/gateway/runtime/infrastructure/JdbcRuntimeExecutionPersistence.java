@@ -23,6 +23,7 @@ import com.adp.gateway.runtime.application.RuntimeExecutionPersistence;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
 import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
+import com.adp.gateway.recovery.application.ExternalInteractionRecoveryPersistence;
 import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.policyharness.domain.PolicyLayerReference;
 import com.adp.gateway.transform.domain.TransformFieldResult;
@@ -37,10 +38,16 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     private final JdbcClient jdbcClient;
     private final Clock clock;
+    private final ExternalInteractionRecoveryPersistence recoveryPersistence;
 
-    public JdbcRuntimeExecutionPersistence(JdbcClient jdbcClient, Clock clock) {
+    public JdbcRuntimeExecutionPersistence(
+        JdbcClient jdbcClient,
+        Clock clock,
+        ExternalInteractionRecoveryPersistence recoveryPersistence
+    ) {
         this.jdbcClient = jdbcClient;
         this.clock = clock;
+        this.recoveryPersistence = recoveryPersistence;
     }
 
     @Override
@@ -536,6 +543,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    @Transactional
     public void recordConnector(String executionId, ConnectorResult connectorResult) {
         jdbcClient.sql("""
             insert into runtime.connector_execution (
@@ -571,6 +579,9 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("connectorStatus", connectorResult.status().name())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
+        if (connectorResult.status() == com.adp.gateway.connector.domain.ConnectorStatus.SENT_UNKNOWN) {
+            recoveryPersistence.scheduleUnknown(executionId, connectorResult, OffsetDateTime.now(clock));
+        }
     }
 
     @Override

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorStatus;
@@ -75,6 +76,29 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
             assertThat(result.responsePayload()).isNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void sendsProviderCorrelationKeyInHeader() throws Exception {
+        AtomicReference<String> correlationKey = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            correlationKey.set(exchange.getRequestHeaders().getFirst("X-Idempotency-Key"));
+            byte[] payload = "{\"answer\":\"safe\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            exchange.getResponseBody().write(payload);
+            exchange.close();
+        });
+        server.start();
+        try {
+            connector(server, Duration.ofSeconds(1)).execute(
+                context(), mock(RuntimeDecision.class), outbound(), providerRequest()
+            );
+            assertThat(correlationKey.get()).isEqualTo("preq");
         } finally {
             server.stop(0);
         }

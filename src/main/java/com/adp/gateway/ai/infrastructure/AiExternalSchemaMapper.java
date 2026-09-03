@@ -37,14 +37,16 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
         }
         Map<String, Object> fields = new TreeMap<>();
         outboundPayload.fields().forEach(field -> fields.put(field.path(), field.value()));
+        String providerCorrelationKey = "preq_" + UUID.randomUUID();
         Map<String, Object> payload = new TreeMap<>();
         payload.put("context", fields);
+        payload.put("externalRequestId", providerCorrelationKey);
         payload.put("schemaVersion", destinationProfile.schemaVersion());
         payload.put("tenant", destinationProfile.tenantId());
         try {
             String canonicalJson = objectMapper.writeValueAsString(payload);
             return new ProviderRequestPayload(
-                "preq_" + UUID.randomUUID(),
+                providerCorrelationKey,
                 outboundPayload.outboundPayloadId(),
                 destinationProfile.providerProfileId(),
                 destinationProfile.schemaVersion(),
