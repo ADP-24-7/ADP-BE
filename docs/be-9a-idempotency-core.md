@@ -37,6 +37,8 @@ SHA-256 request hash에는 다음 실행 의미를 포함한다.
 
 Replay 응답은 기존 `executionId`와 privacy-safe policy/transform/egress metadata를 반환하고 `replayed=true`로 표시한다. Provider 응답 원문은 재저장하거나 replay하지 않는다.
 
+현재 terminal 상태인 `COMPLETED`, `BLOCKED`, `FAILED`, `REVIEW_REQUIRED`는 동일 hash 요청에 replay된다. 이 중 deterministic 결과와 transient 실패를 구분하는 재시도 계약은 BE-9B에서 external interaction 상태와 함께 확정한다.
+
 ## Concurrency And Security
 
 - PostgreSQL unique index가 동일 namespace의 실행 소유권을 한 요청에만 부여한다.
@@ -47,6 +49,15 @@ Replay 응답은 기존 `executionId`와 privacy-safe policy/transform/egress me
 - `SENT_UNKNOWN` 복구와 Provider 상태 조회는 BE-9B에서 구현한다.
 
 인가 거부 시도는 idempotency namespace를 소비하지 않는다. 거부 시도 자체의 영속 증적은 향후 별도 request-attempt 모델로 분리하며, 성공 실행과 동일한 reservation row로 표현하지 않는다.
+
+## Deferred Operational Contracts
+
+다음 항목은 BE-9A의 중복 실행 방지 범위에 포함하지 않고 후속 단계의 완료 조건으로 관리한다.
+
+- Denied Attempt Evidence: BE-11 전후에 idempotency reservation과 독립된 `request_attempt` 증적을 추가한다.
+- Retry/Recovery: BE-9B에서 deterministic terminal replay, transient `NOT_SENT` retry, `SENT_UNKNOWN` reconciliation, acknowledged execution 재전송 금지를 구분한다.
+- Retention: 운영 SLA와 reconciliation window를 반영한 idempotency retention, `expires_at`, archive/cleanup 정책을 정의한다.
+- Replay Delivery: Provider response 원문은 영속하거나 replay하지 않는다. 네트워크 단절 후 결과 재전달이 필요하면 short-lived encrypted output 또는 `controlled_delivery_reference`를 별도 설계한다.
 
 ## Migration
 

@@ -16,6 +16,20 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-7 | Completed | AI Full E2E & Policy Harness Binding |
 | BE-8 | Next | Digital Asset Thin E2E |
 
+## BE-9A Parallel Tracking
+
+BE-9A 상세 계약과 후속 범위는 [BE-9A Idempotency Core](be-9a-idempotency-core.md)에서 관리한다.
+
+- [x] Institution + Workload + Idempotency Key namespace
+- [x] 인증된 Principal Institution 기반 namespace ownership
+- [x] Authorization 성공 이후 idempotency reservation
+- [x] Canonical request hash와 동일 요청 replay
+- [x] 다른 request hash conflict 및 동시 실행 방지
+- [ ] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation 상태 계약
+- [ ] Idempotency key retention, expiry, archive/cleanup 정책
+- [ ] BE-11 Denied Attempt Evidence persistence
+- [ ] Controlled delivery 결과 재조회 또는 단기 암호화 보관 계약
+
 ## BE-0 Completion Criteria
 
 - [x] Java 21
