@@ -25,10 +25,23 @@ BE-9A 상세 계약과 후속 범위는 [BE-9A Idempotency Core](be-9a-idempoten
 - [x] Authorization 성공 이후 idempotency reservation
 - [x] Canonical request hash와 동일 요청 replay
 - [x] 다른 request hash conflict 및 동시 실행 방지
-- [ ] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation 상태 계약
+- [x] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation core 상태 계약
 - [ ] Idempotency key retention, expiry, archive/cleanup 정책
 - [ ] BE-11 Denied Attempt Evidence persistence
 - [ ] Controlled delivery 결과 재조회 또는 단기 암호화 보관 계약
+
+## BE-9B Parallel Tracking
+
+BE-9B 상세 계약은 [BE-9B External Interaction Recovery Core](be-9b-external-interaction-recovery.md)에서 관리한다.
+
+- [x] External interaction retry disposition 계약
+- [x] `SENT_UNKNOWN` reconciliation-first 강제
+- [x] Recovery job persistence와 attempt limit
+- [x] PostgreSQL claim/lease 및 `SKIP LOCKED` worker 경계
+- [x] Provider status query Port와 미구성 fail-closed adapter
+- [ ] Pack별 status query adapter와 external status mapping
+- [ ] 안전한 `NOT_SENT` 재전송 executor
+- [ ] 운영 scheduler, alert, manual recovery API
 
 ## BE-0 Completion Criteria
 
