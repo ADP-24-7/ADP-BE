@@ -126,7 +126,8 @@ class RuntimeExecutionServiceTests {
             new PolicyHarnessEvaluator(hasher),
             new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(new ObjectMapper(), hasher))),
             new ControlledDeliveryService(),
-            clock
+            clock,
+            mock(com.adp.gateway.observability.GatewayObservability.class)
         );
     }
 

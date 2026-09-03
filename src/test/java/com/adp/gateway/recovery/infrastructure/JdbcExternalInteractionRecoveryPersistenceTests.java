@@ -72,7 +72,8 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
             seed.outboundPayloadId(), seed.outboundCandidateDigest(), null, null
         ), now);
 
-        var claimed = persistence.claimNext("worker-test", now.plusSeconds(1), Duration.ofSeconds(30)).orElseThrow();
+        var claimed = persistence.claimNext("worker-test", now.plusSeconds(1), Duration.ofSeconds(30))
+            .claimed().orElseThrow();
         assertThat(claimed.providerCorrelationKey()).isEqualTo(seed.providerRequestId());
         assertThat(persistence.reconcile(
             claimed.recoveryId(), "worker-test",
@@ -128,8 +129,28 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
 
         assertThat(persistence.reschedule(
             seeded.recoveryId(), "worker-exhausted", OffsetDateTime.now().plusMinutes(1), "STILL_SENT_UNKNOWN"
-        )).isTrue();
+        ).resultingStatus()).isEqualTo(com.adp.gateway.recovery.domain.RecoveryStatus.EXHAUSTED);
 
+        assertTerminalAndReplay(seeded, "EXHAUSTED");
+    }
+
+    @Test
+    void expiredLastAttemptIsReportedWhenClaimSweepExhaustsRecovery() throws Exception {
+        ClaimedRecovery seeded = seedClaimedRecovery("expired", 1);
+        OffsetDateTime now = OffsetDateTime.now();
+        jdbcClient.sql("""
+                update runtime.external_interaction_recovery
+                set lease_until = :expiredAt
+                where recovery_id = :recoveryId
+                """)
+            .param("expiredAt", now.minusSeconds(1))
+            .param("recoveryId", seeded.recoveryId())
+            .update();
+
+        var claimResult = persistence.claimNext("worker-after-crash", now, Duration.ofSeconds(30));
+
+        assertThat(claimResult.claimed()).isEmpty();
+        assertThat(claimResult.exhaustedCount()).isEqualTo(1);
         assertTerminalAndReplay(seeded, "EXHAUSTED");
     }
 
@@ -179,7 +200,7 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
             .update();
         String workerId = "worker-" + label;
         String recoveryId = persistence.claimNext(workerId, now.plusSeconds(1), Duration.ofMinutes(1))
-            .orElseThrow().recoveryId();
+            .claimed().orElseThrow().recoveryId();
         return new ClaimedRecovery(recoveryId, executionId, request, idempotencyKey, suffix);
     }
 

@@ -18,6 +18,8 @@ import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
 import com.adp.gateway.recovery.domain.RecoveryStatus;
 import com.adp.gateway.recovery.domain.RetryDisposition;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
+import com.adp.gateway.observability.GatewayObservability;
+import com.adp.gateway.observability.GatewayObservability.RecoveryOutcome;
 import org.junit.jupiter.api.Test;
 
 class ExternalInteractionRecoveryServiceTests {
@@ -30,12 +32,18 @@ class ExternalInteractionRecoveryServiceTests {
         ExternalStatusQueryPort statusQuery = mock(ExternalStatusQueryPort.class);
         ExternalStatusQueryResolver resolver = mock(ExternalStatusQueryResolver.class);
         ExternalInteractionRecovery recovery = recovery();
-        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(Optional.of(recovery));
+        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(claimed(recovery));
         when(resolver.resolve(recovery.connectorId())).thenReturn(statusQuery);
         when(statusQuery.query(recovery)).thenThrow(new ExternalStatusQueryUnavailableException());
-        when(persistence.reschedule(any(), any(), any(), any())).thenReturn(true);
+        when(persistence.reschedule(any(), any(), any(), any())).thenReturn(
+            new ExternalInteractionRecoveryPersistence.RecoveryTransitionResult(
+                true, RecoveryStatus.RETRY_SCHEDULED
+            )
+        );
 
-        boolean processed = new ExternalInteractionRecoveryService(persistence, resolver, CLOCK)
+        boolean processed = new ExternalInteractionRecoveryService(
+            persistence, resolver, CLOCK, mock(GatewayObservability.class)
+        )
             .processNext("worker-1");
 
         assertThat(processed).isTrue();
@@ -53,7 +61,7 @@ class ExternalInteractionRecoveryServiceTests {
         ExternalStatusQueryPort statusQuery = mock(ExternalStatusQueryPort.class);
         ExternalStatusQueryResolver resolver = mock(ExternalStatusQueryResolver.class);
         ExternalInteractionRecovery recovery = recovery();
-        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(Optional.of(recovery));
+        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(claimed(recovery));
         when(resolver.resolve(recovery.connectorId())).thenReturn(statusQuery);
         ExternalStatusQueryResult result = new ExternalStatusQueryResult(
             ConnectorStatus.ACKNOWLEDGED, "a".repeat(64)
@@ -61,11 +69,61 @@ class ExternalInteractionRecoveryServiceTests {
         when(statusQuery.query(recovery)).thenReturn(result);
         when(persistence.reconcile(any(), any(), any(), any())).thenReturn(true);
 
-        new ExternalInteractionRecoveryService(persistence, resolver, CLOCK).processNext("worker-1");
+        new ExternalInteractionRecoveryService(
+            persistence, resolver, CLOCK, mock(GatewayObservability.class)
+        ).processNext("worker-1");
 
         verify(persistence).reconcile(
             recovery.recoveryId(), "worker-1", result, OffsetDateTime.parse("2026-09-03T00:00:00Z")
         );
+    }
+
+    @Test
+    void exhaustedRescheduleRecordsExhaustedAndReviewRequired() {
+        ExternalInteractionRecoveryPersistence persistence = mock(ExternalInteractionRecoveryPersistence.class);
+        ExternalStatusQueryPort statusQuery = mock(ExternalStatusQueryPort.class);
+        ExternalStatusQueryResolver resolver = mock(ExternalStatusQueryResolver.class);
+        GatewayObservability observability = mock(GatewayObservability.class);
+        ExternalInteractionRecovery recovery = recovery();
+        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(claimed(recovery));
+        when(resolver.resolve(recovery.connectorId())).thenReturn(statusQuery);
+        when(statusQuery.query(recovery)).thenThrow(new ExternalStatusQueryUnavailableException());
+        when(persistence.reschedule(any(), any(), any(), any())).thenReturn(
+            new ExternalInteractionRecoveryPersistence.RecoveryTransitionResult(true, RecoveryStatus.EXHAUSTED)
+        );
+
+        new ExternalInteractionRecoveryService(persistence, resolver, CLOCK, observability)
+            .processNext("worker-1");
+
+        verify(observability).recovery(RecoveryOutcome.EXHAUSTED);
+        verify(observability).runtimeExecution(
+            com.adp.gateway.runtime.domain.RuntimeExecutionStatus.REVIEW_REQUIRED
+        );
+    }
+
+    @Test
+    void expiredClaimsRecordExhaustedTransitionsEvenWithoutClaimedJob() {
+        ExternalInteractionRecoveryPersistence persistence = mock(ExternalInteractionRecoveryPersistence.class);
+        ExternalStatusQueryResolver resolver = mock(ExternalStatusQueryResolver.class);
+        GatewayObservability observability = mock(GatewayObservability.class);
+        when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(
+            new ExternalInteractionRecoveryPersistence.RecoveryClaimResult(Optional.empty(), 2)
+        );
+
+        boolean processed = new ExternalInteractionRecoveryService(persistence, resolver, CLOCK, observability)
+            .processNext("worker-1");
+
+        assertThat(processed).isFalse();
+        verify(observability).recovery(RecoveryOutcome.EXHAUSTED, 2);
+        verify(observability).runtimeExecution(
+            com.adp.gateway.runtime.domain.RuntimeExecutionStatus.REVIEW_REQUIRED, 2
+        );
+    }
+
+    private ExternalInteractionRecoveryPersistence.RecoveryClaimResult claimed(
+        ExternalInteractionRecovery recovery
+    ) {
+        return new ExternalInteractionRecoveryPersistence.RecoveryClaimResult(Optional.of(recovery), 0);
     }
 
     private ExternalInteractionRecovery recovery() {

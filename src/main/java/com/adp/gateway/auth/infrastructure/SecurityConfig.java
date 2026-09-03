@@ -33,7 +33,8 @@ public class SecurityConfig {
         AuthPrincipalLookup authPrincipalLookup,
         ObjectMapper objectMapper,
         Clock clock,
-        @Value("${adp.local-user-auth.enabled:false}") boolean localUserAuthEnabled
+        @Value("${adp.local-user-auth.enabled:false}") boolean localUserAuthEnabled,
+        @Value("${adp.observability.prometheus-public:false}") boolean prometheusPublic
     ) throws Exception {
         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter =
             new ApiKeyAuthenticationFilter(apiKeyHasher, authPrincipalLookup, objectMapper, clock);
@@ -42,16 +43,21 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health/**").permitAll()
-                .requestMatchers("/api/internal/info").permitAll()
-                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
-                .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
-                .requestMatchers("/api/admin/**").hasRole("OPERATOR")
-                .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
-                .anyRequest().authenticated()
-            )
+            .authorizeHttpRequests(auth -> {
+                auth.requestMatchers("/actuator/health/**", "/actuator/info").permitAll();
+                if (prometheusPublic) {
+                    auth.requestMatchers("/actuator/prometheus").permitAll();
+                } else {
+                    auth.requestMatchers("/actuator/prometheus").authenticated();
+                }
+                auth.requestMatchers("/api/internal/info").permitAll()
+                    .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                    .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
+                    .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
+                    .requestMatchers("/api/admin/**").hasRole("OPERATOR")
+                    .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
+                    .anyRequest().authenticated();
+            })
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) ->
                     writeError(response, objectMapper, clock, HttpStatus.UNAUTHORIZED, request))

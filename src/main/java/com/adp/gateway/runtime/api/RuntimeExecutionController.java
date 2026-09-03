@@ -47,14 +47,14 @@ public class RuntimeExecutionController {
             request.idempotencyKey()
         );
         var submission = runtimeExecutionService.submit(
-            context,
-            (AuthPrincipal) authentication.getPrincipal(),
-            request.institutionId(),
-            request.approvalReference(),
-            request.destinationProfileId(),
-            request.processingContexts() == null ? List.of() : request.processingContexts(),
-            request.input()
-        );
+                context,
+                (AuthPrincipal) authentication.getPrincipal(),
+                request.institutionId(),
+                request.approvalReference(),
+                request.destinationProfileId(),
+                request.processingContexts() == null ? List.of() : request.processingContexts(),
+                request.input()
+            );
         return ResponseEntity.ok(submission.isReplay()
             ? RuntimeExecutionResponse.from(submission.replay())
             : RuntimeExecutionResponse.from(submission.result()));
