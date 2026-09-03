@@ -43,6 +43,8 @@ BE-9B 상세 계약은 [BE-9B External Interaction Recovery Core](be-9b-external
 - [x] Recovery/Connector/Runtime 상태의 원자적 reconciliation convergence
 - [x] Status Query 최종 상태·시각·Evidence Digest 저장
 - [x] Status Query Adapter ambiguity fail-closed
+- [x] `MANUAL_REVIEW`/`EXHAUSTED`와 Runtime `REVIEW_REQUIRED` 원자적 수렴
+- [x] Lease 만료 시 stale worker terminal update 차단
 - [ ] Pack별 status query adapter와 external status mapping
 - [ ] 안전한 `NOT_SENT` 재전송 executor
 - [ ] 운영 scheduler, alert, manual recovery API

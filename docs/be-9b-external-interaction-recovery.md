@@ -35,7 +35,9 @@ BE-9B 선행 Slice는 Pack별 Provider 구현에 앞서 외부 전송의 불확�
 
 `EXTERNALLY_RECONCILED`는 외부 처리가 확인되어 재전송할 수 없고 idempotency 처리도 더 이상 진행 중이 아니라는 terminal 상태다. Provider 응답 원문 전달이나 Digital Asset Settlement 완료를 의미하지 않는다.
 
-Status Query Adapter가 같은 Connector에 둘 이상 매칭되거나 fallback이 둘 이상 등록되면 임의 선택하지 않고 구성을 거부한다. lease 소유권을 잃은 worker의 상태 변경은 성공으로 보고하지 않는다.
+자동 복구로 외부 상태를 확정하지 못한 `MANUAL_REVIEW`와 `EXHAUSTED`도 Recovery row만 terminal로 남기지 않는다. 동일 transaction에서 Runtime을 `REVIEW_REQUIRED`로 수렴시켜 idempotency replay가 영구적인 `IN_PROGRESS`로 남지 않게 한다. Connector의 `SENT_UNKNOWN`은 확인되지 않은 사실을 보존하기 위해 변경하지 않는다.
+
+Status Query Adapter가 같은 Connector에 둘 이상 매칭되거나 fallback이 둘 이상 등록되면 임의 선택하지 않고 구성을 거부한다. 실행 중 발견된 Adapter ambiguity는 transient 장애로 재시도하지 않고 Manual Review로 전환한다. lease owner뿐 아니라 `lease_until`도 update 조건으로 검증하며 소유권 또는 유효 기간을 잃은 worker의 상태 변경은 성공으로 보고하지 않는다.
 
 ## Deferred Gates
 

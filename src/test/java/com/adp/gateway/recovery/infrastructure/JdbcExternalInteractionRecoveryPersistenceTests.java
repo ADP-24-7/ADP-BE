@@ -111,6 +111,106 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
             .andExpect(jsonPath("$.replayed").value(true));
     }
 
+    @Test
+    void manualReviewConvergesRuntimeAndAllowsTerminalReplay() throws Exception {
+        ClaimedRecovery seeded = seedClaimedRecovery("manual");
+
+        assertThat(persistence.markManualReview(
+            seeded.recoveryId(), "worker-manual", "EXTERNAL_STATUS_FAILED"
+        )).isTrue();
+
+        assertTerminalAndReplay(seeded, "MANUAL_REVIEW");
+    }
+
+    @Test
+    void exhaustedRecoveryConvergesRuntimeAndAllowsTerminalReplay() throws Exception {
+        ClaimedRecovery seeded = seedClaimedRecovery("exhausted", 1);
+
+        assertThat(persistence.reschedule(
+            seeded.recoveryId(), "worker-exhausted", OffsetDateTime.now().plusMinutes(1), "STILL_SENT_UNKNOWN"
+        )).isTrue();
+
+        assertTerminalAndReplay(seeded, "EXHAUSTED");
+    }
+
+    private ClaimedRecovery seedClaimedRecovery(String label) throws Exception {
+        return seedClaimedRecovery(label, 5);
+    }
+
+    private ClaimedRecovery seedClaimedRecovery(String label, int maxAttempts) throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String idempotencyKey = "idem_" + label + "_" + suffix;
+        String request = request(idempotencyKey);
+        String response = execute("req_" + label + "_" + suffix, "trace_" + label + "_" + suffix, request);
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        RecoverySeed seed = jdbcClient.sql("""
+                select re.connector_execution_id, ce.connector_id, re.outbound_payload_id,
+                       re.outbound_candidate_digest, re.provider_request_id
+                from runtime.runtime_execution re
+                join runtime.connector_execution ce on ce.connector_execution_id = re.connector_execution_id
+                where re.execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(RecoverySeed.class)
+            .single();
+        jdbcClient.sql("""
+                update runtime.runtime_execution set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN'
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .update();
+        jdbcClient.sql("""
+                update runtime.connector_execution set status = 'SENT_UNKNOWN'
+                where connector_execution_id = :connectorExecutionId
+                """)
+            .param("connectorExecutionId", seed.connectorExecutionId())
+            .update();
+        OffsetDateTime now = OffsetDateTime.now();
+        persistence.scheduleUnknown(executionId, new ConnectorResult(
+            seed.connectorExecutionId(), seed.connectorId(), ConnectorStatus.SENT_UNKNOWN,
+            seed.outboundPayloadId(), seed.outboundCandidateDigest(), null, null
+        ), now);
+        jdbcClient.sql("""
+                update runtime.external_interaction_recovery set max_attempts = :maxAttempts
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .param("maxAttempts", maxAttempts)
+            .update();
+        String workerId = "worker-" + label;
+        String recoveryId = persistence.claimNext(workerId, now.plusSeconds(1), Duration.ofMinutes(1))
+            .orElseThrow().recoveryId();
+        return new ClaimedRecovery(recoveryId, executionId, request, idempotencyKey, suffix);
+    }
+
+    private void assertTerminalAndReplay(ClaimedRecovery seeded, String recoveryStatus) throws Exception {
+        String runtimeStatus = jdbcClient.sql("""
+                select status from runtime.runtime_execution where execution_id = :executionId
+                """)
+            .param("executionId", seeded.executionId())
+            .query(String.class)
+            .single();
+        String actualRecoveryStatus = jdbcClient.sql("""
+                select recovery_status from runtime.external_interaction_recovery where recovery_id = :recoveryId
+                """)
+            .param("recoveryId", seeded.recoveryId())
+            .query(String.class)
+            .single();
+        assertThat(runtimeStatus).isEqualTo("REVIEW_REQUIRED");
+        assertThat(actualRecoveryStatus).isEqualTo(recoveryStatus);
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_replay_terminal_" + seeded.suffix())
+                .header("X-Trace-Id", "trace_replay_terminal_" + seeded.suffix())
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(seeded.request()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.executionId").value(seeded.executionId()))
+            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.replayed").value(true));
+    }
+
     private String execute(String requestId, String traceId, String request) throws Exception {
         return mockMvc.perform(post("/v1/runtime/executions")
                 .header("X-Request-Id", requestId)
@@ -154,6 +254,15 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
         String recoveryStatus,
         String lastObservedExternalStatus,
         String statusQueryEvidenceDigest
+    ) {
+    }
+
+    private record ClaimedRecovery(
+        String recoveryId,
+        String executionId,
+        String request,
+        String idempotencyKey,
+        String suffix
     ) {
     }
 }

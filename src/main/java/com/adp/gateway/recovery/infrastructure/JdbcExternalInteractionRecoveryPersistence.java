@@ -55,15 +55,21 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
         Duration leaseDuration
     ) {
         jdbcClient.sql("""
-                update runtime.external_interaction_recovery
-                set recovery_status = 'EXHAUSTED',
-                    lease_owner = null,
-                    lease_until = null,
-                    last_error_code = 'RECOVERY_ATTEMPTS_EXHAUSTED',
-                    updated_at = :now
-                where recovery_status = 'CLAIMED'
-                  and lease_until <= :now
-                  and attempt_count >= max_attempts
+                with exhausted as (
+                    update runtime.external_interaction_recovery
+                    set recovery_status = 'EXHAUSTED',
+                        lease_owner = null,
+                        lease_until = null,
+                        last_error_code = 'RECOVERY_ATTEMPTS_EXHAUSTED',
+                        updated_at = :now
+                    where recovery_status = 'CLAIMED'
+                      and lease_until <= :now
+                      and attempt_count >= max_attempts
+                    returning execution_id
+                )
+                update runtime.runtime_execution
+                set status = 'REVIEW_REQUIRED', updated_at = :now
+                where execution_id in (select execution_id from exhausted)
                 """)
             .param("now", now)
             .update();
@@ -116,8 +122,10 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
     }
 
     @Override
+    @Transactional
     public boolean reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode) {
-        return jdbcClient.sql("""
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        Optional<RecoveryUpdate> update = jdbcClient.sql("""
                 update runtime.external_interaction_recovery
                 set recovery_status = case when attempt_count >= max_attempts then 'EXHAUSTED' else 'RETRY_SCHEDULED' end,
                     next_attempt_at = :nextAttemptAt,
@@ -128,13 +136,20 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 where recovery_id = :recoveryId
                   and recovery_status = 'CLAIMED'
                   and lease_owner = :workerId
+                  and lease_until > :now
+                returning execution_id, recovery_status
                 """)
             .param("recoveryId", recoveryId)
             .param("workerId", workerId)
             .param("nextAttemptAt", nextAttemptAt)
             .param("errorCode", errorCode)
-            .param("updatedAt", OffsetDateTime.now(clock))
-            .update() == 1;
+            .param("now", now)
+            .param("updatedAt", now)
+            .query(RecoveryUpdate.class)
+            .optional();
+        update.filter(item -> "EXHAUSTED".equals(item.recoveryStatus()))
+            .ifPresent(item -> markRuntimeReviewRequired(item.executionId(), now));
+        return update.isPresent();
     }
 
     @Override
@@ -158,6 +173,7 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 where recovery_id = :recoveryId
                   and recovery_status = 'CLAIMED'
                   and lease_owner = :workerId
+                  and lease_until > :queriedAt
                 """)
             .param("recoveryId", recoveryId)
             .param("workerId", workerId)
@@ -195,14 +211,12 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
     }
 
     @Override
+    @Transactional
     public boolean markManualReview(String recoveryId, String workerId, String reasonCode) {
-        return complete(recoveryId, workerId, "MANUAL_REVIEW", reasonCode);
-    }
-
-    private boolean complete(String recoveryId, String workerId, String status, String reasonCode) {
-        return jdbcClient.sql("""
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        Optional<String> executionId = jdbcClient.sql("""
                 update runtime.external_interaction_recovery
-                set recovery_status = :status,
+                set recovery_status = 'MANUAL_REVIEW',
                     lease_owner = null,
                     lease_until = null,
                     last_error_code = :reasonCode,
@@ -210,12 +224,31 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 where recovery_id = :recoveryId
                   and recovery_status = 'CLAIMED'
                   and lease_owner = :workerId
+                  and lease_until > :now
+                returning execution_id
                 """)
             .param("recoveryId", recoveryId)
             .param("workerId", workerId)
-            .param("status", status)
             .param("reasonCode", reasonCode)
-            .param("updatedAt", OffsetDateTime.now(clock))
-            .update() == 1;
+            .param("now", now)
+            .param("updatedAt", now)
+            .query(String.class)
+            .optional();
+        executionId.ifPresent(id -> markRuntimeReviewRequired(id, now));
+        return executionId.isPresent();
+    }
+
+    private void markRuntimeReviewRequired(String executionId, OffsetDateTime now) {
+        jdbcClient.sql("""
+                update runtime.runtime_execution
+                set status = 'REVIEW_REQUIRED', updated_at = :now
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .param("now", now)
+            .update();
+    }
+
+    private record RecoveryUpdate(String executionId, String recoveryStatus) {
     }
 }

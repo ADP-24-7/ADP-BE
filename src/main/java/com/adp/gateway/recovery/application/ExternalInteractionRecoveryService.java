@@ -56,6 +56,10 @@ public class ExternalInteractionRecoveryService {
                     requireLease(persistence.markManualReview(
                         recovery.recoveryId(), workerId, "STATUS_QUERY_PERMANENT_FAILURE"
                     ));
+                } catch (AmbiguousExternalStatusQueryAdapterException exception) {
+                    requireLease(persistence.markManualReview(
+                        recovery.recoveryId(), workerId, "STATUS_QUERY_ADAPTER_AMBIGUOUS"
+                    ));
                 } catch (StaleRecoveryLeaseException exception) {
                     throw exception;
                 } catch (RuntimeException exception) {
