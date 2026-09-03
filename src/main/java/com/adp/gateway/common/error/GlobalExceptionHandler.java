@@ -9,6 +9,8 @@ import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
+import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
+import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -118,6 +120,32 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.IDEMPOTENCY_KEY_REUSED,
             "Idempotency key already used for workload",
+            HttpStatus.CONFLICT,
+            request
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    ResponseEntity<ErrorResponse> handleIdempotencyKeyConflict(
+        IdempotencyKeyConflictException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.IDEMPOTENCY_KEY_CONFLICT,
+            "Idempotency key was reused with a different request",
+            HttpStatus.CONFLICT,
+            request
+        );
+    }
+
+    @ExceptionHandler(IdempotencyRequestInProgressException.class)
+    ResponseEntity<ErrorResponse> handleIdempotencyRequestInProgress(
+        IdempotencyRequestInProgressException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.IDEMPOTENCY_REQUEST_IN_PROGRESS,
+            "Idempotent request is still in progress",
             HttpStatus.CONFLICT,
             request
         );

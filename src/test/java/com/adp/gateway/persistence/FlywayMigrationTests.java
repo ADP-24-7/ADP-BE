@@ -1,6 +1,7 @@
 package com.adp.gateway.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -362,12 +363,99 @@ class FlywayMigrationTests {
                 from pg_indexes
                 where schemaname = 'runtime'
                   and tablename = 'runtime_execution'
-                  and indexname = 'uq_runtime_execution_workload_idempotency'
+                  and indexname = 'uq_runtime_execution_idempotency_scope'
                 """)
             .query(Integer.class)
             .single();
 
         assertThat(indexCount).isEqualTo(1);
+
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in ('idempotency_institution_id', 'request_hash')
+                  and is_nullable = 'NO'
+                """)
+            .query(Integer.class)
+            .single();
+        assertThat(columnCount).isEqualTo(2);
+
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        assertThatCode(() -> jdbcClient.sql("""
+                insert into runtime.runtime_execution (
+                    execution_id, request_id, trace_id, idempotency_key, workload_id,
+                    idempotency_institution_id, request_hash, purpose_code, input_digest,
+                    status, created_at, updated_at
+                ) values
+                    (:executionA, :requestA, :traceA, :key, 'namespace_test',
+                     'institution_a', :hashA, 'TEST', :inputA, 'RECEIVED', now(), now()),
+                    (:executionB, :requestB, :traceB, :key, 'namespace_test',
+                     'institution_b', :hashB, 'TEST', :inputB, 'RECEIVED', now(), now())
+                """)
+            .param("executionA", "exec_ns_a_" + suffix)
+            .param("requestA", "req_ns_a_" + suffix)
+            .param("traceA", "trace_ns_a_" + suffix)
+            .param("executionB", "exec_ns_b_" + suffix)
+            .param("requestB", "req_ns_b_" + suffix)
+            .param("traceB", "trace_ns_b_" + suffix)
+            .param("key", "idem_ns_" + suffix)
+            .param("hashA", "a".repeat(64))
+            .param("hashB", "b".repeat(64))
+            .param("inputA", "c".repeat(64))
+            .param("inputB", "d".repeat(64))
+            .update()).doesNotThrowAnyException();
+    }
+
+    @Test
+    void v12MigrationBackfillsLegacyRuntimeExecutions() throws Exception {
+        String databaseName = "adp_v12_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure()
+                .dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration")
+                .target("11")
+                .load()
+                .migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, status, created_at, updated_at
+                    ) values (
+                        'exec_legacy_v11', 'req_legacy_v11', 'trace_legacy_v11', 'idem_legacy_v11',
+                        'customer_summary', 'CUSTOMER_SUPPORT', repeat('a', 64), 'COMPLETED', now(), now()
+                    )
+                    """);
+            }
+
+            Flyway.configure()
+                .dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration")
+                .load()
+                .migrate();
+
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select idempotency_institution_id, request_hash
+                     from runtime.runtime_execution
+                     where execution_id = 'exec_legacy_v11'
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("idempotency_institution_id")).isEqualTo("LEGACY_UNSCOPED");
+                assertThat(resultSet.getString("request_hash")).hasSize(64);
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
     }
 
     @Test

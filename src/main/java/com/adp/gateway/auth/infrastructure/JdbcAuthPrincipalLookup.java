@@ -22,7 +22,7 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
 
     @Override
     public Optional<AuthPrincipal> findByApiKeyHash(String apiKeyHash) {
-        return jdbcClient.sql("""
+        Optional<PrincipalRecord> principal = jdbcClient.sql("""
                 select p.principal_id, p.principal_type, p.display_name, p.institution_id,
                        p.subject_authorization_required
                 from auth_api_key k
@@ -32,16 +32,23 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
                   and p.enabled = true
                 """)
             .param("apiKeyHash", apiKeyHash)
-            .query((rs, rowNum) -> new AuthPrincipal(
+            .query((rs, rowNum) -> new PrincipalRecord(
                 rs.getString("principal_id"),
                 PrincipalType.valueOf(rs.getString("principal_type")),
                 rs.getString("display_name"),
                 rs.getString("institution_id"),
-                rs.getBoolean("subject_authorization_required"),
-                workloadIds(rs.getString("principal_id")),
-                roles(rs.getString("principal_id"))
+                rs.getBoolean("subject_authorization_required")
             ))
             .optional();
+        return principal.map(record -> new AuthPrincipal(
+            record.principalId(),
+            record.principalType(),
+            record.displayName(),
+            record.institutionId(),
+            record.subjectAuthorizationRequired(),
+            workloadIds(record.principalId()),
+            roles(record.principalId())
+        ));
     }
 
     private Set<AdpRole> roles(String principalId) {
@@ -64,5 +71,14 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
             .param("principalId", principalId)
             .query(String.class)
             .list());
+    }
+
+    private record PrincipalRecord(
+        String principalId,
+        PrincipalType principalType,
+        String displayName,
+        String institutionId,
+        boolean subjectAuthorizationRequired
+    ) {
     }
 }

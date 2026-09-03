@@ -74,6 +74,7 @@ public class RuntimeExecutionService {
     private final RuntimeExecutionPersistence persistence;
     private final SubjectRefHasher subjectRefHasher;
     private final RuntimeInputHasher runtimeInputHasher;
+    private final RuntimeRequestHasher runtimeRequestHasher;
     private final TransformEngine transformEngine;
     private final DestinationProfilePort destinationProfilePort;
     private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
@@ -100,6 +101,7 @@ public class RuntimeExecutionService {
         RuntimeExecutionPersistence persistence,
         SubjectRefHasher subjectRefHasher,
         RuntimeInputHasher runtimeInputHasher,
+        RuntimeRequestHasher runtimeRequestHasher,
         TransformEngine transformEngine,
         DestinationProfilePort destinationProfilePort,
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
@@ -125,6 +127,7 @@ public class RuntimeExecutionService {
         this.persistence = persistence;
         this.subjectRefHasher = subjectRefHasher;
         this.runtimeInputHasher = runtimeInputHasher;
+        this.runtimeRequestHasher = runtimeRequestHasher;
         this.transformEngine = transformEngine;
         this.destinationProfilePort = destinationProfilePort;
         this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
@@ -149,9 +152,20 @@ public class RuntimeExecutionService {
         Map<String, Object> input
     ) {
         SubjectRef subject = SubjectRef.from(requestContext.subject());
+        validateAuthorization(requestContext, principal, institutionId, subject);
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
+        String requestHash = runtimeRequestHasher.hash(
+            institutionId,
+            approvalReference,
+            requestContext.workloadId(),
+            requestContext.purpose(),
+            requestContext.subject(),
+            destinationProfileId,
+            processingContexts,
+            input
+        );
         String subjectRefDigest = subject == null ? null : subjectRefHasher.hash(subject);
         persistence.recordReceived(RuntimeExecutionTrace.received(
             executionId,
@@ -166,25 +180,9 @@ public class RuntimeExecutionService {
             approvalReference,
             inputDigest,
             now
-        ));
+        ), principal.institutionId(), requestHash);
 
         try {
-            if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
-                persistence.recordAuthorization(executionId, "DENIED");
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
-                throw new AccessDeniedException("Runtime institution is not allowed");
-            }
-            if (!authorizationService.authorize(new AuthorizationRequest(
-                principal,
-                requestContext.workloadId(),
-                RuntimeAction.RUNTIME_EXECUTE,
-                requestContext.purpose(),
-                subject
-            )).allowed()) {
-                persistence.recordAuthorization(executionId, "DENIED");
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
-                throw new AccessDeniedException("Runtime execution is not allowed");
-            }
             persistence.recordAuthorization(executionId, "PASSED");
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
             var approvalScope = approvalScopePort.load(approvalReference, now);
@@ -454,6 +452,84 @@ public class RuntimeExecutionService {
         } catch (RuntimeException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
             throw exception;
+        }
+    }
+
+    private void validateAuthorization(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        SubjectRef subject
+    ) {
+        if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
+            throw new AccessDeniedException("Runtime institution is not allowed");
+        }
+        if (!authorizationService.authorize(new AuthorizationRequest(
+            principal,
+            requestContext.workloadId(),
+            RuntimeAction.RUNTIME_EXECUTE,
+            requestContext.purpose(),
+            subject
+        )).allowed()) {
+            throw new AccessDeniedException("Runtime execution is not allowed");
+        }
+    }
+
+    public RuntimeExecutionSubmission submit(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        String approvalReference,
+        String destinationProfileId,
+        List<String> processingContexts,
+        Map<String, Object> input
+    ) {
+        try {
+            return RuntimeExecutionSubmission.created(execute(
+                requestContext,
+                principal,
+                institutionId,
+                approvalReference,
+                destinationProfileId,
+                processingContexts,
+                input
+            ));
+        } catch (DuplicateRuntimeExecutionException exception) {
+            SubjectRef subject = SubjectRef.from(requestContext.subject());
+            if (principal.institutionId() == null
+                || !principal.institutionId().equals(institutionId)
+                || !authorizationService.authorize(new AuthorizationRequest(
+                    principal,
+                    requestContext.workloadId(),
+                    RuntimeAction.RUNTIME_EXECUTE,
+                    requestContext.purpose(),
+                    subject
+                )).allowed()) {
+                throw new AccessDeniedException("Runtime execution replay is not allowed");
+            }
+            String requestHash = runtimeRequestHasher.hash(
+                institutionId,
+                approvalReference,
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                requestContext.subject(),
+                destinationProfileId,
+                processingContexts,
+                input
+            );
+            IdempotentExecutionReplay replay = persistence.findIdempotentExecution(
+                    institutionId,
+                    requestContext.workloadId(),
+                    requestContext.idempotencyKey()
+                )
+                .orElseThrow(() -> exception);
+            if (!replay.requestHash().equals(requestHash)) {
+                throw new IdempotencyKeyConflictException();
+            }
+            if (replay.inProgress()) {
+                throw new IdempotencyRequestInProgressException();
+            }
+            return RuntimeExecutionSubmission.replayed(replay);
         }
     }
 

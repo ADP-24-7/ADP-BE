@@ -46,7 +46,7 @@ public class RuntimeExecutionController {
             request.subjectScope(),
             request.idempotencyKey()
         );
-        var result = runtimeExecutionService.execute(
+        var submission = runtimeExecutionService.submit(
             context,
             (AuthPrincipal) authentication.getPrincipal(),
             request.institutionId(),
@@ -55,7 +55,9 @@ public class RuntimeExecutionController {
             request.processingContexts() == null ? List.of() : request.processingContexts(),
             request.input()
         );
-        return ResponseEntity.ok(RuntimeExecutionResponse.from(result));
+        return ResponseEntity.ok(submission.isReplay()
+            ? RuntimeExecutionResponse.from(submission.replay())
+            : RuntimeExecutionResponse.from(submission.result()));
     }
 
     @GetMapping("/{executionId}")
