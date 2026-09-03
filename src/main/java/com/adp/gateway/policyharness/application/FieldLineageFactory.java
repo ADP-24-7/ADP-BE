@@ -31,9 +31,10 @@ public class FieldLineageFactory {
         Set<String> requested = retrieval.selectedFields().stream()
             .map(field -> field.datasetName() + "." + field.fieldName())
             .collect(Collectors.toCollection(TreeSet::new));
-        if (context.fields().stream().anyMatch(field -> "request".equals(field.datasetName()))) {
-            requested.add("request.prompt");
-        }
+        context.fields().stream()
+            .filter(field -> "request".equals(field.datasetName()))
+            .map(field -> "request." + field.fieldName())
+            .forEach(requested::add);
         Set<String> retrieved = context.fields().stream()
             .map(field -> field.datasetName() + "." + field.fieldName())
             .collect(Collectors.toCollection(TreeSet::new));

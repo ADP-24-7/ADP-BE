@@ -14,7 +14,23 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-5 | Baseline Completed | Transform Engine & Vault |
 | BE-6 | Baseline Completed | Common Egress Boundary |
 | BE-7 | Completed | AI Full E2E & Policy Harness Binding |
-| BE-8 | Next | Digital Asset Thin E2E |
+| BE-8 | In Progress | Digital Asset Thin E2E |
+
+## BE-8 Tracking
+
+BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.md)에서 관리한다.
+
+- [x] 기존 단일 Runtime API의 Digital Asset Pack 연결
+- [x] Input-only 최소 Retrieval Profile과 명시적 입력 Schema
+- [x] Digital Asset Policy/Approval/Destination Profile local fixture
+- [x] Customer/Account Vault Tokenization과 Wallet/Asset/Amount exact treatment
+- [x] Canonical Provider Request Digest와 Mock Asset Platform Connector
+- [x] Settlement Status와 Reconciliation Evidence V16 schema
+- [x] 정상 Settlement `SETTLED`/`MATCH` Thin E2E
+- [ ] KYC/AML/Wallet Review 및 Amount Limit 정책
+- [ ] `SENT_UNKNOWN` Provider Status Query Adapter
+- [ ] Mismatch/Critical Mismatch Recovery E2E
+- [ ] FE Digital Asset Lab fixture 연결
 
 ## BE-11 Parallel Tracking
 

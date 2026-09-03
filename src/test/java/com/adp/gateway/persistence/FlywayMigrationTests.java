@@ -568,6 +568,29 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v16MigrationCreatesDigitalAssetEvidenceTable() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime' and table_name = 'digital_asset_transaction'
+                """)
+            .query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'digital_asset_transaction'
+                  and constraint_name in (
+                    'digital_asset_transaction_execution_id_fkey',
+                    'chk_digital_asset_settlement_status',
+                    'chk_digital_asset_reconciliation'
+                  )
+                """)
+            .query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(constraintCount).isEqualTo(3);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
