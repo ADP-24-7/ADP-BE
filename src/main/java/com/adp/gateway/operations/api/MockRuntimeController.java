@@ -123,7 +123,7 @@ public class MockRuntimeController {
                 List.of()
             ))
             : ConnectorResult.notExecuted("mock-runtime-connector-boundary");
-        AuditContext audit = auditRecorder.record(context, decision, connector);
+        AuditContext audit = auditRecorder.record(null, context, decision, connector);
 
         return ResponseEntity.ok(new MockRuntimeResponse(
             context.requestId(),

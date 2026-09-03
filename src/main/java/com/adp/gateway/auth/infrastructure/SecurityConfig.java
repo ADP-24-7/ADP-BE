@@ -51,7 +51,10 @@ public class SecurityConfig {
                     auth.requestMatchers("/actuator/prometheus").authenticated();
                 }
                 auth.requestMatchers("/api/internal/info").permitAll()
-                    .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                    .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
+                    .permitAll()
+                    .requestMatchers("/api/admin/audit/executions/*/evidence")
+                    .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/api/admin/**").hasRole("OPERATOR")

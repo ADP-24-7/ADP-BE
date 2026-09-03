@@ -2,6 +2,7 @@ package com.adp.gateway.config;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -30,5 +31,16 @@ class OpenApiIntegrationTests {
     void exposesSwaggerUiWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/swagger-ui.html"))
             .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
+    void redirectsRootAndDocsToSwaggerUiWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/swagger-ui/index.html"));
+
+        mockMvc.perform(get("/docs"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/swagger-ui/index.html"));
     }
 }

@@ -1,5 +1,6 @@
 package com.adp.gateway.audit.application;
 
+import java.sql.Types;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +28,7 @@ public class AuditRecorder {
     }
 
     public AuditContext record(
+        String executionId,
         RuntimeRequestContext context,
         RuntimeDecision decision,
         ConnectorResult connectorResult
@@ -65,7 +67,7 @@ public class AuditRecorder {
 
         jdbcClient.sql("""
             insert into audit_event (
-                audit_id, request_id, trace_id, idempotency_key, workload_id,
+                audit_id, execution_id, request_id, trace_id, idempotency_key, workload_id,
                 decision_id, policy_artifact_id, policy_artifact_version,
                 policy_artifact_digest_algorithm, policy_artifact_digest_value,
                 policy_action, final_action,
@@ -74,7 +76,7 @@ public class AuditRecorder {
                 policy_version, policy_digest, reason_code, connector_status, created_at
             )
             values (
-                :auditId, :requestId, :traceId, :idempotencyKey, :workloadId,
+                :auditId, :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
                 :decisionId, :policyArtifactId, :policyArtifactVersion,
                 :policyArtifactDigestAlgorithm, :policyArtifactDigestValue,
                 :policyAction, :finalAction,
@@ -84,6 +86,7 @@ public class AuditRecorder {
             )
             """)
             .param("auditId", auditContext.auditId())
+            .param("executionId", executionId, Types.VARCHAR)
             .param("requestId", auditContext.requestId())
             .param("traceId", auditContext.traceId())
             .param("idempotencyKey", auditContext.idempotencyKey())

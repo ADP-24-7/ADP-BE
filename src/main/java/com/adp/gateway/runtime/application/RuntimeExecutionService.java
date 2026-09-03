@@ -268,7 +268,7 @@ public class RuntimeExecutionService {
             }
             if (finalStatus == RuntimeExecutionStatus.FAILED) {
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     finalStatus,
@@ -283,7 +283,7 @@ public class RuntimeExecutionService {
             }
             if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     finalStatus,
@@ -335,7 +335,7 @@ public class RuntimeExecutionService {
                     : RuntimeExecutionStatus.BLOCKED;
                 updateStatus(executionId, harnessStatus);
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     harnessStatus,
@@ -366,7 +366,7 @@ public class RuntimeExecutionService {
                 );
                 updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
                 ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     RuntimeExecutionStatus.BLOCKED,
@@ -398,7 +398,7 @@ public class RuntimeExecutionService {
                     controlledDeliveryService.deliver(connectorResult, responseGuardResult);
                 persistence.recordControlledDelivery(executionId, controlledDelivery);
                 updateStatus(executionId, RuntimeExecutionStatus.FAILED);
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     RuntimeExecutionStatus.FAILED,
@@ -418,7 +418,7 @@ public class RuntimeExecutionService {
                 ControlledDeliveryResult controlledDelivery =
                     controlledDeliveryService.deliver(connectorResult, responseGuardResult);
                 persistence.recordControlledDelivery(executionId, controlledDelivery);
-                AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
                 return new RuntimeExecutionResult(
                     executionId,
                     RuntimeExecutionStatus.EGRESSING,
@@ -440,7 +440,7 @@ public class RuntimeExecutionService {
                 ? RuntimeExecutionStatus.COMPLETED
                 : RuntimeExecutionStatus.BLOCKED;
             updateStatus(executionId, completedStatus);
-            AuditContext auditContext = auditRecorder.record(requestContext, decision, connectorResult);
+            AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
 
             return new RuntimeExecutionResult(
                 executionId,
