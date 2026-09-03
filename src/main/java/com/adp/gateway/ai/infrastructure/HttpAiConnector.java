@@ -75,6 +75,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         try {
             var response = restClient.post()
                 .uri("/v1/chat/completions")
+                .header("X-Idempotency-Key", providerRequest.providerCorrelationKey())
                 .body(providerRequest.payload())
                 .retrieve()
                 .toEntity(Map.class);

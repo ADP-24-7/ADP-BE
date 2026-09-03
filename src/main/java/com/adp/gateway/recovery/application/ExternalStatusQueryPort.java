@@ -1,7 +1,7 @@
 package com.adp.gateway.recovery.application;
 
-import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
+import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 
 public interface ExternalStatusQueryPort {
 
@@ -11,5 +11,5 @@ public interface ExternalStatusQueryPort {
         return false;
     }
 
-    ConnectorStatus query(ExternalInteractionRecovery recovery);
+    ExternalStatusQueryResult query(ExternalInteractionRecovery recovery);
 }

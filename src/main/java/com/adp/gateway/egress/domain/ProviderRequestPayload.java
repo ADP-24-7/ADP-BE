@@ -18,6 +18,10 @@ public record ProviderRequestPayload(
         payload = Map.copyOf(payload);
     }
 
+    public String providerCorrelationKey() {
+        return providerRequestId;
+    }
+
     @Override
     public String toString() {
         return "ProviderRequestPayload[providerRequestId=%s, outboundPayloadId=%s, providerProfileId=%s, schemaVersion=%s, canonicalPayloadDigest=%s, fieldCount=%d, payload=<redacted>]"

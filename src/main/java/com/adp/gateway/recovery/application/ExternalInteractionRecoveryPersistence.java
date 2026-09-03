@@ -13,9 +13,14 @@ public interface ExternalInteractionRecoveryPersistence {
 
     Optional<ExternalInteractionRecovery> claimNext(String workerId, OffsetDateTime now, Duration leaseDuration);
 
-    void reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode);
+    boolean reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode);
 
-    void markReconciled(String recoveryId, String workerId);
+    boolean reconcile(
+        String recoveryId,
+        String workerId,
+        com.adp.gateway.recovery.domain.ExternalStatusQueryResult result,
+        OffsetDateTime queriedAt
+    );
 
-    void markManualReview(String recoveryId, String workerId, String reasonCode);
+    boolean markManualReview(String recoveryId, String workerId, String reasonCode);
 }

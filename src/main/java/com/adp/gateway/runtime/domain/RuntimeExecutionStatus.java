@@ -7,6 +7,7 @@ public enum RuntimeExecutionStatus {
     DECIDED,
     TRANSFORMED,
     EGRESSING,
+    EXTERNALLY_RECONCILED,
     COMPLETED,
     REVIEW_REQUIRED,
     BLOCKED,

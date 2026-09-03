@@ -29,11 +29,12 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
     public void scheduleUnknown(String executionId, ConnectorResult result, OffsetDateTime now) {
         jdbcClient.sql("""
                 insert into runtime.external_interaction_recovery (
-                    recovery_id, execution_id, connector_execution_id, connector_id,
+                    recovery_id, execution_id, connector_execution_id, connector_id, provider_correlation_key,
                     observed_status, recovery_status, retry_disposition,
                     attempt_count, max_attempts, next_attempt_at, created_at, updated_at
                 ) values (
                     :recoveryId, :executionId, :connectorExecutionId, :connectorId,
+                    (select provider_request_id from runtime.runtime_execution where execution_id = :executionId),
                     'SENT_UNKNOWN', 'PENDING', 'RECONCILE_FIRST',
                     0, 5, :now, :now, :now
                 ) on conflict (execution_id) do nothing
@@ -96,7 +97,10 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 rs.getString("execution_id"),
                 rs.getString("connector_execution_id"),
                 rs.getString("connector_id"),
+                rs.getString("provider_correlation_key"),
                 ConnectorStatus.valueOf(rs.getString("observed_status")),
+                rs.getString("last_observed_external_status") == null
+                    ? null : ConnectorStatus.valueOf(rs.getString("last_observed_external_status")),
                 RecoveryStatus.valueOf(rs.getString("recovery_status")),
                 RetryDisposition.valueOf(rs.getString("retry_disposition")),
                 rs.getInt("attempt_count"),
@@ -104,14 +108,16 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 rs.getObject("next_attempt_at", OffsetDateTime.class),
                 rs.getString("lease_owner"),
                 rs.getObject("lease_until", OffsetDateTime.class),
-                rs.getString("last_error_code")
+                rs.getString("last_error_code"),
+                rs.getObject("last_status_queried_at", OffsetDateTime.class),
+                rs.getString("status_query_evidence_digest")
             ))
             .optional();
     }
 
     @Override
-    public void reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode) {
-        jdbcClient.sql("""
+    public boolean reschedule(String recoveryId, String workerId, OffsetDateTime nextAttemptAt, String errorCode) {
+        return jdbcClient.sql("""
                 update runtime.external_interaction_recovery
                 set recovery_status = case when attempt_count >= max_attempts then 'EXHAUSTED' else 'RETRY_SCHEDULED' end,
                     next_attempt_at = :nextAttemptAt,
@@ -128,21 +134,73 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
             .param("nextAttemptAt", nextAttemptAt)
             .param("errorCode", errorCode)
             .param("updatedAt", OffsetDateTime.now(clock))
+            .update() == 1;
+    }
+
+    @Override
+    @Transactional
+    public boolean reconcile(
+        String recoveryId,
+        String workerId,
+        com.adp.gateway.recovery.domain.ExternalStatusQueryResult result,
+        OffsetDateTime queriedAt
+    ) {
+        int recoveryUpdated = jdbcClient.sql("""
+                update runtime.external_interaction_recovery
+                set recovery_status = 'RECONCILED',
+                    last_observed_external_status = :externalStatus,
+                    last_status_queried_at = :queriedAt,
+                    status_query_evidence_digest = :evidenceDigest,
+                    lease_owner = null,
+                    lease_until = null,
+                    last_error_code = null,
+                    updated_at = :queriedAt
+                where recovery_id = :recoveryId
+                  and recovery_status = 'CLAIMED'
+                  and lease_owner = :workerId
+                """)
+            .param("recoveryId", recoveryId)
+            .param("workerId", workerId)
+            .param("externalStatus", result.status().name())
+            .param("queriedAt", queriedAt)
+            .param("evidenceDigest", result.evidenceDigest())
             .update();
-    }
-
-    @Override
-    public void markReconciled(String recoveryId, String workerId) {
-        complete(recoveryId, workerId, "RECONCILED", null);
-    }
-
-    @Override
-    public void markManualReview(String recoveryId, String workerId, String reasonCode) {
-        complete(recoveryId, workerId, "MANUAL_REVIEW", reasonCode);
-    }
-
-    private void complete(String recoveryId, String workerId, String status, String reasonCode) {
+        if (recoveryUpdated == 0) {
+            return false;
+        }
         jdbcClient.sql("""
+                update runtime.connector_execution ce
+                set status = :externalStatus
+                from runtime.external_interaction_recovery r
+                where r.recovery_id = :recoveryId
+                  and ce.connector_execution_id = r.connector_execution_id
+                """)
+            .param("recoveryId", recoveryId)
+            .param("externalStatus", result.status().name())
+            .update();
+        jdbcClient.sql("""
+                update runtime.runtime_execution re
+                set connector_status = :externalStatus,
+                    status = 'EXTERNALLY_RECONCILED',
+                    updated_at = :queriedAt
+                from runtime.external_interaction_recovery r
+                where r.recovery_id = :recoveryId
+                  and re.execution_id = r.execution_id
+                """)
+            .param("recoveryId", recoveryId)
+            .param("externalStatus", result.status().name())
+            .param("queriedAt", queriedAt)
+            .update();
+        return true;
+    }
+
+    @Override
+    public boolean markManualReview(String recoveryId, String workerId, String reasonCode) {
+        return complete(recoveryId, workerId, "MANUAL_REVIEW", reasonCode);
+    }
+
+    private boolean complete(String recoveryId, String workerId, String status, String reasonCode) {
+        return jdbcClient.sql("""
                 update runtime.external_interaction_recovery
                 set recovery_status = :status,
                     lease_owner = null,
@@ -158,6 +216,6 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
             .param("status", status)
             .param("reasonCode", reasonCode)
             .param("updatedAt", OffsetDateTime.now(clock))
-            .update();
+            .update() == 1;
     }
 }

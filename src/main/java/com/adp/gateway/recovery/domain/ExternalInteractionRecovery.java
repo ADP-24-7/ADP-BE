@@ -9,7 +9,9 @@ public record ExternalInteractionRecovery(
     String executionId,
     String connectorExecutionId,
     String connectorId,
+    String providerCorrelationKey,
     ConnectorStatus observedStatus,
+    ConnectorStatus lastObservedExternalStatus,
     RecoveryStatus recoveryStatus,
     RetryDisposition retryDisposition,
     int attemptCount,
@@ -17,6 +19,8 @@ public record ExternalInteractionRecovery(
     OffsetDateTime nextAttemptAt,
     String leaseOwner,
     OffsetDateTime leaseUntil,
-    String lastErrorCode
+    String lastErrorCode,
+    OffsetDateTime lastStatusQueriedAt,
+    String statusQueryEvidenceDigest
 ) {
 }

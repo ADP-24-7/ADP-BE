@@ -39,6 +39,10 @@ BE-9B 상세 계약은 [BE-9B External Interaction Recovery Core](be-9b-external
 - [x] Recovery job persistence와 attempt limit
 - [x] PostgreSQL claim/lease 및 `SKIP LOCKED` worker 경계
 - [x] Provider status query Port와 미구성 fail-closed adapter
+- [x] Provider-visible correlation key 전송 및 Recovery binding
+- [x] Recovery/Connector/Runtime 상태의 원자적 reconciliation convergence
+- [x] Status Query 최종 상태·시각·Evidence Digest 저장
+- [x] Status Query Adapter ambiguity fail-closed
 - [ ] Pack별 status query adapter와 external status mapping
 - [ ] 안전한 `NOT_SENT` 재전송 executor
 - [ ] 운영 scheduler, alert, manual recovery API

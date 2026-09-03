@@ -17,6 +17,7 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
 import com.adp.gateway.recovery.domain.RecoveryStatus;
 import com.adp.gateway.recovery.domain.RetryDisposition;
+import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import org.junit.jupiter.api.Test;
 
 class ExternalInteractionRecoveryServiceTests {
@@ -32,6 +33,7 @@ class ExternalInteractionRecoveryServiceTests {
         when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(Optional.of(recovery));
         when(resolver.resolve(recovery.connectorId())).thenReturn(statusQuery);
         when(statusQuery.query(recovery)).thenThrow(new ExternalStatusQueryUnavailableException());
+        when(persistence.reschedule(any(), any(), any(), any())).thenReturn(true);
 
         boolean processed = new ExternalInteractionRecoveryService(persistence, resolver, CLOCK)
             .processNext("worker-1");
@@ -53,19 +55,26 @@ class ExternalInteractionRecoveryServiceTests {
         ExternalInteractionRecovery recovery = recovery();
         when(persistence.claimNext(eq("worker-1"), any(), any())).thenReturn(Optional.of(recovery));
         when(resolver.resolve(recovery.connectorId())).thenReturn(statusQuery);
-        when(statusQuery.query(recovery)).thenReturn(ConnectorStatus.ACKNOWLEDGED);
+        ExternalStatusQueryResult result = new ExternalStatusQueryResult(
+            ConnectorStatus.ACKNOWLEDGED, "a".repeat(64)
+        );
+        when(statusQuery.query(recovery)).thenReturn(result);
+        when(persistence.reconcile(any(), any(), any(), any())).thenReturn(true);
 
         new ExternalInteractionRecoveryService(persistence, resolver, CLOCK).processNext("worker-1");
 
-        verify(persistence).markReconciled(recovery.recoveryId(), "worker-1");
+        verify(persistence).reconcile(
+            recovery.recoveryId(), "worker-1", result, OffsetDateTime.parse("2026-09-03T00:00:00Z")
+        );
     }
 
     private ExternalInteractionRecovery recovery() {
         return new ExternalInteractionRecovery(
-            "rec-1", "exec-1", "con-1", "connector-1", ConnectorStatus.SENT_UNKNOWN,
+            "rec-1", "exec-1", "con-1", "connector-1", "preq-1",
+            ConnectorStatus.SENT_UNKNOWN, null,
             RecoveryStatus.CLAIMED, RetryDisposition.RECONCILE_FIRST, 1, 5,
             OffsetDateTime.parse("2026-09-03T00:00:00Z"), "worker-1",
-            OffsetDateTime.parse("2026-09-03T00:00:30Z"), null
+            OffsetDateTime.parse("2026-09-03T00:00:30Z"), null, null, null
         );
     }
 }

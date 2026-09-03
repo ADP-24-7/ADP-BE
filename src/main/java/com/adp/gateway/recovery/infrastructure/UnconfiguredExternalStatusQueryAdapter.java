@@ -19,7 +19,7 @@ public class UnconfiguredExternalStatusQueryAdapter implements ExternalStatusQue
     }
 
     @Override
-    public com.adp.gateway.connector.domain.ConnectorStatus query(ExternalInteractionRecovery recovery) {
+    public com.adp.gateway.recovery.domain.ExternalStatusQueryResult query(ExternalInteractionRecovery recovery) {
         throw new ExternalStatusQueryUnavailableException();
     }
 }

@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.connector.domain.ConnectorStatus;
+import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,25 +33,44 @@ public class ExternalInteractionRecoveryService {
         return persistence.claimNext(workerId, now, LEASE_DURATION)
             .map(recovery -> {
                 try {
-                    ConnectorStatus status = statusQueryResolver.resolve(recovery.connectorId()).query(recovery);
+                    ExternalStatusQueryResult queryResult = statusQueryResolver
+                        .resolve(recovery.connectorId())
+                        .query(recovery);
+                    ConnectorStatus status = queryResult.status();
                     if (status == ConnectorStatus.ACKNOWLEDGED || status == ConnectorStatus.COMPLETED) {
-                        persistence.markReconciled(recovery.recoveryId(), workerId);
+                        requireLease(persistence.reconcile(recovery.recoveryId(), workerId, queryResult, now));
                     } else if (status == ConnectorStatus.SENT_UNKNOWN) {
-                        persistence.reschedule(
+                        requireLease(persistence.reschedule(
                             recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "STILL_SENT_UNKNOWN"
-                        );
+                        ));
                     } else {
-                        persistence.markManualReview(
+                        requireLease(persistence.markManualReview(
                             recovery.recoveryId(), workerId, "EXTERNAL_STATUS_" + status.name()
-                        );
+                        ));
                     }
                 } catch (ExternalStatusQueryUnavailableException exception) {
-                    persistence.reschedule(
+                    requireLease(persistence.reschedule(
                         recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "STATUS_QUERY_UNAVAILABLE"
-                    );
+                    ));
+                } catch (ExternalStatusQueryPermanentException exception) {
+                    requireLease(persistence.markManualReview(
+                        recovery.recoveryId(), workerId, "STATUS_QUERY_PERMANENT_FAILURE"
+                    ));
+                } catch (StaleRecoveryLeaseException exception) {
+                    throw exception;
+                } catch (RuntimeException exception) {
+                    requireLease(persistence.reschedule(
+                        recovery.recoveryId(), workerId, now.plus(RETRY_DELAY), "INTERNAL_QUERY_ERROR"
+                    ));
                 }
                 return true;
             })
             .orElse(false);
+    }
+
+    private void requireLease(boolean updated) {
+        if (!updated) {
+            throw new StaleRecoveryLeaseException();
+        }
     }
 }
