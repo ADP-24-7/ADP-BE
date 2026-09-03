@@ -53,7 +53,9 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
             actual.put("amount", "999999");
         }
         Map<String, Object> response = new HashMap<>();
-        response.put("externalRequestId", request.providerCorrelationKey());
+        response.put("externalRequestId", "asset-correlation-mismatch".equals(assetId)
+            ? "asset_req_wrong_" + UUID.randomUUID()
+            : request.providerCorrelationKey());
         response.put("externalTransactionId", externalTransactionId);
         response.put("settlementStatus", settlementStatus);
         response.put("settledTransaction", actual);

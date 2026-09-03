@@ -589,6 +589,14 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(1);
         assertThat(constraintCount).isEqualTo(4);
+        Integer combinationConstraint = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'digital_asset_transaction'
+                  and constraint_name = 'chk_digital_asset_state_reconciliation_combination'
+                """)
+            .query(Integer.class).single();
+        assertThat(combinationConstraint).isEqualTo(1);
     }
 
     @Test

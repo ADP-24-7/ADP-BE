@@ -91,7 +91,7 @@ public class RuntimeExecutionService {
     private final FieldLineageFactory fieldLineageFactory;
     private final PolicyHarnessEvaluator policyHarnessEvaluator;
     private final ExternalSchemaMapperResolver externalSchemaMapperResolver;
-    private final ControlledDeliveryService controlledDeliveryService;
+    private final ExecutionOutcomeFinalizer outcomeFinalizer;
     private final Clock clock;
     private final GatewayObservability observability;
 
@@ -119,7 +119,7 @@ public class RuntimeExecutionService {
         FieldLineageFactory fieldLineageFactory,
         PolicyHarnessEvaluator policyHarnessEvaluator,
         ExternalSchemaMapperResolver externalSchemaMapperResolver,
-        ControlledDeliveryService controlledDeliveryService,
+        ExecutionOutcomeFinalizer outcomeFinalizer,
         Clock clock,
         GatewayObservability observability
     ) {
@@ -146,7 +146,7 @@ public class RuntimeExecutionService {
         this.fieldLineageFactory = fieldLineageFactory;
         this.policyHarnessEvaluator = policyHarnessEvaluator;
         this.externalSchemaMapperResolver = externalSchemaMapperResolver;
-        this.controlledDeliveryService = controlledDeliveryService;
+        this.outcomeFinalizer = outcomeFinalizer;
         this.clock = clock;
         this.observability = observability;
     }
@@ -390,26 +390,9 @@ public class RuntimeExecutionService {
                 providerRequest
             );
             persistence.recordConnector(executionId, connectorResult);
-            ResponseGuardResult responseGuardResult = responseGuard.guard(outboundPayload, connectorResult);
-            persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
-            ExecutionPackOutcome outcome = controlledDeliveryService.resolve(
-                destinationProfile.packType(), executionId, providerRequest, connectorResult, responseGuardResult
-            );
-            ControlledDeliveryResult controlledDelivery = outcome.controlledDelivery();
-            persistence.recordControlledDelivery(executionId, controlledDelivery);
-            updateStatus(executionId, outcome.runtimeStatus());
-            AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
-
-            return new RuntimeExecutionResult(
-                executionId,
-                outcome.runtimeStatus(),
-                decision,
-                transformResult,
-                outboundGuardResult.status(),
-                connectorResult,
-                responseGuardResult.status(),
-                controlledDelivery,
-                auditContext
+            return outcomeFinalizer.finalizeOutcome(
+                executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
+                destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
             );
         } catch (AccessDeniedException exception) {
             throw exception;

@@ -16,7 +16,7 @@ Digital Asset Profile은 `request` dataset만 선언하는 Input-only Retrieval 
 
 - Customer/Account ID: `VAULT_TOKEN`
 - Wallet Address/Asset ID/Amount: `KEEP_EXACT_PROTECTED`
-- KYC/AML/Wallet Verification: 승인된 상태 값만 exact 전달
+- KYC/AML/Wallet Verification: 입력 상태 값을 exact 전달하며 eligibility 판정은 후속 Policy Gate에서 수행
 - 허용되지 않은 입력 필드: Pack Input Schema 단계에서 거부
 - Provider request/response 원문: Runtime, Audit, Trace에 저장하지 않음
 
@@ -34,6 +34,8 @@ HTTP/Connector 상태와 Settlement 상태는 별도 컬럼과 의미로 유지�
 Reconciliation 결과는 Provider 선언을 신뢰하지 않는다. FPG가 전송 직전 고정한 Customer/Account Token, Wallet, Asset, Amount 및 상태 필드와 Provider Settlement Evidence를 비교해 `MATCH`, `MISMATCH`, `CRITICAL_MISMATCH`, `WAIT`를 계산한 뒤 Response Guard 통과 후 저장한다.
 
 V17부터 `SENT_UNKNOWN`은 External Request ID만 필수이며 Transaction/Settlement ID와 Response Digest 없이 저장할 수 있다. 기존 Recovery Core의 reconciliation-first 원칙에 따라 Runtime은 `EGRESSING`을 유지하고 Recovery Job을 생성한다.
+
+V18은 Settlement Status와 Reconciliation Result의 허용 조합을 DB CHECK로 제한한다. Transaction evidence는 현재 실행별 최신 Snapshot이며 append-only 상태 이력은 BE-9/BE-11 후속 Gate에서 추가한다.
 
 ## Current Fixture Scope
 

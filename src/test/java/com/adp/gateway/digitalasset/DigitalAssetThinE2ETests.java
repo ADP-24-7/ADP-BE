@@ -154,6 +154,21 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
+    void rejectsProviderResponseFromAnotherExternalRequest() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-correlation-mismatch")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        Integer evidenceCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_transaction where execution_id = :executionId
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(evidenceCount).isZero();
+    }
+
+    @Test
     void persistsSentUnknownWithoutSettlementIdentifiersAndSchedulesRecovery() throws Exception {
         String response = assetRequest(token(), "customer-100", "asset-sent-unknown")
             .andExpect(status().isOk())

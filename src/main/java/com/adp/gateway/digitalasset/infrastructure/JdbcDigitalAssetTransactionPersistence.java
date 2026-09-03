@@ -4,11 +4,12 @@ import java.sql.Types;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 
+import com.adp.gateway.digitalasset.application.DigitalAssetTransactionPersistencePort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 @Component
-public class JdbcDigitalAssetTransactionPersistence {
+public class JdbcDigitalAssetTransactionPersistence implements DigitalAssetTransactionPersistencePort {
     private final JdbcClient jdbcClient;
     private final Clock clock;
 
@@ -17,6 +18,7 @@ public class JdbcDigitalAssetTransactionPersistence {
         this.clock = clock;
     }
 
+    @Override
     public void record(
         String executionId,
         String externalRequestId,

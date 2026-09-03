@@ -6,7 +6,6 @@ import java.util.TreeMap;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
-import com.adp.gateway.digitalasset.infrastructure.JdbcDigitalAssetTransactionPersistence;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
@@ -19,9 +18,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcomeHandler {
     private static final Set<String> CRITICAL_FIELDS = Set.of("walletAddress", "assetId", "amount");
-    private final JdbcDigitalAssetTransactionPersistence persistence;
+    private final DigitalAssetTransactionPersistencePort persistence;
 
-    public DigitalAssetSettlementOutcomeHandler(JdbcDigitalAssetTransactionPersistence persistence) {
+    public DigitalAssetSettlementOutcomeHandler(DigitalAssetTransactionPersistencePort persistence) {
         this.persistence = persistence;
     }
 
@@ -45,6 +44,11 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
         }
         if (!guard.isPassed() || !(connector.responsePayload() instanceof Map<?, ?> response)) {
             return outcome(RuntimeExecutionStatus.BLOCKED, connector, "SETTLEMENT_RESPONSE_REJECTED");
+        }
+
+        String responseRequestId = string(response.get("externalRequestId"));
+        if (!request.providerCorrelationKey().equals(responseRequestId)) {
+            return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "EXTERNAL_REQUEST_CORRELATION_MISMATCH");
         }
 
         String settlementStatus = String.valueOf(response.get("settlementStatus"));
