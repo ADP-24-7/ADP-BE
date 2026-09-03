@@ -4,7 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
-import com.adp.gateway.ai.application.AiInputRejectedException;
+import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
@@ -162,14 +162,14 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(AiInputRejectedException.class)
-    ResponseEntity<ErrorResponse> handleAiInputRejected(
-        AiInputRejectedException exception,
+    @ExceptionHandler(ExecutionPackInputRejectedException.class)
+    ResponseEntity<ErrorResponse> handleExecutionPackInputRejected(
+        ExecutionPackInputRejectedException exception,
         HttpServletRequest request
     ) {
         return errorResponse(
-            ReasonCode.AI_INPUT_REJECTED,
-            "AI input rejected",
+            ReasonCode.EXECUTION_PACK_INPUT_REJECTED,
+            "Execution pack input rejected",
             HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );

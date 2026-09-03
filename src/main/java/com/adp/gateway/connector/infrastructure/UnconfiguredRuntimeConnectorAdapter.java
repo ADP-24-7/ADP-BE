@@ -9,6 +9,7 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,11 @@ public class UnconfiguredRuntimeConnectorAdapter implements RuntimeConnectorPort
 
     public UnconfiguredRuntimeConnectorAdapter(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
+    }
+
+    @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.COMMON;
     }
 
     @Override

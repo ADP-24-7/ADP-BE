@@ -306,6 +306,42 @@ class RuntimeExecutionControllerTests {
     }
 
     @Test
+    void rejectsInvalidPackInputWithCommonContractAndRecordsBlockedStatus() throws Exception {
+        String suffix = token();
+        String requestId = "req_pack_input_" + suffix;
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", "trace_pack_input_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "institutionId": "institution_local",
+                      "approvalReference": "approval_ai_customer_support_v1",
+                      "workloadId": "customer_summary",
+                      "purposeCode": "CUSTOMER_SUPPORT",
+                      "subjectScope": "customer:customer-100",
+                      "destinationProfileId": "dest_internal_provider_project_provisional",
+                      "idempotencyKey": "idem_pack_input_%s",
+                      "processingContexts": ["AI_USE"],
+                      "input": {"prompt": "safe question", "unsupported": "not-logged"}
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("EXECUTION_PACK_INPUT_REJECTED"))
+            .andExpect(jsonPath("$.message").value("Execution pack input rejected"));
+
+        String runtimeStatus = jdbcClient.sql("""
+                select status from runtime.runtime_execution where request_id = :requestId
+                """)
+            .param("requestId", requestId)
+            .query(String.class)
+            .single();
+        assertThat(runtimeStatus).isEqualTo("BLOCKED");
+    }
+
+    @Test
     void returnsNotFoundForUnknownExecutionId() throws Exception {
         mockMvc.perform(get("/v1/runtime/executions/exec_not_exists")
                 .header("X-ADP-API-Key", "local-dev-api-key"))

@@ -26,6 +26,11 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
     }
 
     @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.AI;
+    }
+
+    @Override
     public ProviderRequestPayload map(DestinationProfile destinationProfile, OutboundCandidatePayload outboundPayload) {
         if (destinationProfile.packType() != ExecutionPackType.AI) {
             throw new IllegalArgumentException("AI schema mapper cannot map a non-AI execution pack");

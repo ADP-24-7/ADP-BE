@@ -13,7 +13,8 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-4 | Completed | Policy & Decision Core |
 | BE-5 | Baseline Completed | Transform Engine & Vault |
 | BE-6 | Baseline Completed | Common Egress Boundary |
-| BE-7 | In Progress | AI Full E2E & Policy Harness Binding |
+| BE-7 | Completed | AI Full E2E & Policy Harness Binding |
+| BE-8 | Next | Digital Asset Thin E2E |
 
 ## BE-0 Completion Criteria
 
@@ -245,6 +246,23 @@ BE-7 상세 구현 기준은 [BE-7 AI Full E2E](be-7-ai-full-e2e.md)에서 관�
 - [ ] Production DB-backed Approval Scope Adapter
 - [ ] DA Versioned Artifact/Workload Binding/Crosswalk file loader
 - [ ] 실제 Provider credential과 Secret Manager 연동
+
+## Parallel Foundation Tracking
+
+DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반은 Phase 완료 상태와 분리해 추적한다.
+
+### Pack Runtime Resolver
+
+상세 설계와 확장 규칙은 [Pack Runtime Resolver](pack-runtime-resolvers.md)에서 관리한다.
+
+- [x] `ExecutionPackType`별 Context Builder Resolver
+- [x] `ExecutionPackType`별 External Schema Mapper Resolver
+- [x] Pack 전용 Connector 우선 및 `COMMON` fallback Resolver
+- [x] Pack 전용 Response Guard 우선 및 `COMMON` fallback Resolver
+- [x] 중복 Adapter 등록 시 Application Context 시작 실패
+- [x] 필수 Pack Adapter 미등록 시 Connector 호출 전 `FAILED` 처리
+- [x] 기존 AI Full E2E 회귀 테스트 유지
+- [ ] BE-8 Digital Asset Adapter 연결
 
 ## Troubleshooting
 

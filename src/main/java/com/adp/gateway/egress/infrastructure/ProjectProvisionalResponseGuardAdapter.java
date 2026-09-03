@@ -7,6 +7,7 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.application.ResponseLeakageDetector;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +28,11 @@ public class ProjectProvisionalResponseGuardAdapter implements ResponseGuardPort
     ) {
         this.meterRegistry = meterRegistry;
         this.leakageDetector = leakageDetector;
+    }
+
+    @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.AI;
     }
 
     @Override
