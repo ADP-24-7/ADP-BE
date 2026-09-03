@@ -15,6 +15,7 @@ import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -56,6 +57,11 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         this.objectMapper = objectMapper;
         this.hasher = hasher;
         this.meterRegistry = meterRegistry;
+    }
+
+    @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.AI;
     }
 
     @Override

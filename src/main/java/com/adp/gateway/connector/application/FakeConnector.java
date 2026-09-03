@@ -9,6 +9,7 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -24,6 +25,11 @@ public class FakeConnector implements RuntimeConnectorPort {
     public FakeConnector(MeterRegistry meterRegistry, CanonicalValueHasher hasher) {
         this.meterRegistry = meterRegistry;
         this.hasher = hasher;
+    }
+
+    @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.COMMON;
     }
 
     public ConnectorResult execute(

@@ -24,10 +24,12 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.PrincipalType;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
+import com.adp.gateway.connector.application.RuntimeConnectorResolver;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.context.application.ExecutionPackContextBuilderResolver;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
@@ -35,9 +37,11 @@ import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.application.DestinationProfilePort;
+import com.adp.gateway.egress.application.ExternalSchemaMapperResolver;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
@@ -93,6 +97,8 @@ class RuntimeExecutionServiceTests {
         Clock clock
     ) {
         CanonicalValueHasher hasher = new CanonicalValueHasher();
+        when(connector.supportedPack()).thenReturn(ExecutionPackType.COMMON);
+        when(responseGuardPort.supportedPack()).thenReturn(ExecutionPackType.AI);
         return new RuntimeExecutionService(
             authorizationService,
             retrievalService,
@@ -101,7 +107,7 @@ class RuntimeExecutionServiceTests {
             policySnapshotPort,
             applicabilityEvaluator,
             decisionService,
-            connector,
+            new RuntimeConnectorResolver(List.of(connector)),
             auditRecorder,
             persistence,
             subjectRefHasher,
@@ -110,12 +116,14 @@ class RuntimeExecutionServiceTests {
             destinationProfilePort,
             outboundCandidatePayloadBuilder,
             outboundGuardChain,
-            responseGuardPort,
-            new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher)),
+            new ResponseGuardResolver(List.of(responseGuardPort)),
+            new ExecutionPackContextBuilderResolver(List.of(
+                new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher))
+            )),
             new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher),
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
-            new AiExternalSchemaMapper(new ObjectMapper(), hasher),
+            new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(new ObjectMapper(), hasher))),
             new ControlledDeliveryService(),
             clock
         );

@@ -8,14 +8,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.context.application.ExecutionPackContextBuilder;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.detection.application.SensitiveDataDetector;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.springframework.stereotype.Component;
 
 @Component
-public class AiCanonicalContextBuilder {
+public class AiCanonicalContextBuilder implements ExecutionPackContextBuilder {
 
     private static final String PROMPT_PATH = "$.input.prompt";
     private static final Set<String> ALLOWED_INPUT_KEYS = Set.of("prompt");
@@ -29,6 +31,12 @@ public class AiCanonicalContextBuilder {
         this.sensitiveDataDetector = sensitiveDataDetector;
     }
 
+    @Override
+    public ExecutionPackType supportedPack() {
+        return ExecutionPackType.AI;
+    }
+
+    @Override
     public CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input) {
         validate(input);
         String prompt = (String) input.get("prompt");
@@ -40,6 +48,7 @@ public class AiCanonicalContextBuilder {
             : withPrompt;
     }
 
+    @Override
     public void validate(Map<String, Object> input) {
         if (input == null || !ALLOWED_INPUT_KEYS.containsAll(input.keySet())) {
             throw new AiInputRejectedException("AI_INPUT_SCHEMA_MISMATCH");

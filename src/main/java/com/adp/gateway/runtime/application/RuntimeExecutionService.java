@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.adp.gateway.audit.application.AuditRecorder;
-import com.adp.gateway.ai.application.AiCanonicalContextBuilder;
 import com.adp.gateway.ai.application.AiInputRejectedException;
 import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.auth.application.AuthorizationRequest;
@@ -16,10 +15,11 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.RuntimeAction;
 import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
-import com.adp.gateway.connector.application.RuntimeConnectorPort;
+import com.adp.gateway.connector.application.RuntimeConnectorResolver;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
+import com.adp.gateway.context.application.ExecutionPackContextBuilderResolver;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
@@ -28,14 +28,14 @@ import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
-import com.adp.gateway.egress.application.ExternalSchemaMapper;
+import com.adp.gateway.egress.application.ExternalSchemaMapperResolver;
 import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.application.OutboundCandidatePayloadBuilder;
 import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.OutboundGuardException;
-import com.adp.gateway.egress.application.ResponseGuardPort;
+import com.adp.gateway.egress.application.PackRuntimeAdapterNotFoundException;
+import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.DestinationProfile;
-import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.policy.application.PolicyApplicabilityEvaluator;
@@ -70,7 +70,7 @@ public class RuntimeExecutionService {
     private final PolicySnapshotPort policySnapshotPort;
     private final PolicyApplicabilityEvaluator policyApplicabilityEvaluator;
     private final RuntimeDecisionService decisionService;
-    private final RuntimeConnectorPort runtimeConnector;
+    private final RuntimeConnectorResolver runtimeConnectorResolver;
     private final AuditRecorder auditRecorder;
     private final RuntimeExecutionPersistence persistence;
     private final SubjectRefHasher subjectRefHasher;
@@ -79,12 +79,12 @@ public class RuntimeExecutionService {
     private final DestinationProfilePort destinationProfilePort;
     private final OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder;
     private final OutboundGuardChain outboundGuardChain;
-    private final ResponseGuardPort responseGuardPort;
-    private final AiCanonicalContextBuilder aiCanonicalContextBuilder;
+    private final ResponseGuardResolver responseGuardResolver;
+    private final ExecutionPackContextBuilderResolver contextBuilderResolver;
     private final ApprovalScopePort approvalScopePort;
     private final FieldLineageFactory fieldLineageFactory;
     private final PolicyHarnessEvaluator policyHarnessEvaluator;
-    private final ExternalSchemaMapper externalSchemaMapper;
+    private final ExternalSchemaMapperResolver externalSchemaMapperResolver;
     private final ControlledDeliveryService controlledDeliveryService;
     private final Clock clock;
 
@@ -96,7 +96,7 @@ public class RuntimeExecutionService {
         PolicySnapshotPort policySnapshotPort,
         PolicyApplicabilityEvaluator policyApplicabilityEvaluator,
         RuntimeDecisionService decisionService,
-        RuntimeConnectorPort runtimeConnector,
+        RuntimeConnectorResolver runtimeConnectorResolver,
         AuditRecorder auditRecorder,
         RuntimeExecutionPersistence persistence,
         SubjectRefHasher subjectRefHasher,
@@ -105,12 +105,12 @@ public class RuntimeExecutionService {
         DestinationProfilePort destinationProfilePort,
         OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder,
         OutboundGuardChain outboundGuardChain,
-        ResponseGuardPort responseGuardPort,
-        AiCanonicalContextBuilder aiCanonicalContextBuilder,
+        ResponseGuardResolver responseGuardResolver,
+        ExecutionPackContextBuilderResolver contextBuilderResolver,
         ApprovalScopePort approvalScopePort,
         FieldLineageFactory fieldLineageFactory,
         PolicyHarnessEvaluator policyHarnessEvaluator,
-        ExternalSchemaMapper externalSchemaMapper,
+        ExternalSchemaMapperResolver externalSchemaMapperResolver,
         ControlledDeliveryService controlledDeliveryService,
         Clock clock
     ) {
@@ -121,7 +121,7 @@ public class RuntimeExecutionService {
         this.policySnapshotPort = policySnapshotPort;
         this.policyApplicabilityEvaluator = policyApplicabilityEvaluator;
         this.decisionService = decisionService;
-        this.runtimeConnector = runtimeConnector;
+        this.runtimeConnectorResolver = runtimeConnectorResolver;
         this.auditRecorder = auditRecorder;
         this.persistence = persistence;
         this.subjectRefHasher = subjectRefHasher;
@@ -130,12 +130,12 @@ public class RuntimeExecutionService {
         this.destinationProfilePort = destinationProfilePort;
         this.outboundCandidatePayloadBuilder = outboundCandidatePayloadBuilder;
         this.outboundGuardChain = outboundGuardChain;
-        this.responseGuardPort = responseGuardPort;
-        this.aiCanonicalContextBuilder = aiCanonicalContextBuilder;
+        this.responseGuardResolver = responseGuardResolver;
+        this.contextBuilderResolver = contextBuilderResolver;
         this.approvalScopePort = approvalScopePort;
         this.fieldLineageFactory = fieldLineageFactory;
         this.policyHarnessEvaluator = policyHarnessEvaluator;
-        this.externalSchemaMapper = externalSchemaMapper;
+        this.externalSchemaMapperResolver = externalSchemaMapperResolver;
         this.controlledDeliveryService = controlledDeliveryService;
         this.clock = clock;
     }
@@ -191,9 +191,11 @@ public class RuntimeExecutionService {
             var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
             persistence.recordDestinationProfile(executionId, destinationProfile);
-            if (destinationProfile.packType() == ExecutionPackType.AI) {
-                aiCanonicalContextBuilder.validate(input);
-            }
+            var packContextBuilder = contextBuilderResolver.resolve(destinationProfile.packType());
+            var externalSchemaMapper = externalSchemaMapperResolver.resolve(destinationProfile.packType());
+            var runtimeConnector = runtimeConnectorResolver.resolve(destinationProfile.packType());
+            var responseGuard = responseGuardResolver.resolve(destinationProfile.packType());
+            packContextBuilder.validate(input);
 
             RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
                 requestContext.requestId(),
@@ -203,9 +205,7 @@ public class RuntimeExecutionService {
                 subject
             ));
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
-            if (destinationProfile.packType() == ExecutionPackType.AI) {
-                canonicalContext = aiCanonicalContextBuilder.merge(canonicalContext, input);
-            }
+            canonicalContext = packContextBuilder.merge(canonicalContext, input);
             persistence.recordRetrieved(executionId, canonicalContext);
             persistence.updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
 
@@ -385,7 +385,7 @@ public class RuntimeExecutionService {
             persistence.recordConnector(executionId, connectorResult);
             if (connectorResult.status() == ConnectorStatus.FAILED) {
                 ResponseGuardResult responseGuardResult =
-                    responseGuardPort.guard(outboundPayload, connectorResult);
+                    responseGuard.guard(outboundPayload, connectorResult);
                 persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
                 ControlledDeliveryResult controlledDelivery =
                     controlledDeliveryService.deliver(connectorResult, responseGuardResult);
@@ -406,7 +406,7 @@ public class RuntimeExecutionService {
             }
             if (connectorResult.status() == ConnectorStatus.SENT_UNKNOWN) {
                 ResponseGuardResult responseGuardResult =
-                    responseGuardPort.guard(outboundPayload, connectorResult);
+                    responseGuard.guard(outboundPayload, connectorResult);
                 persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
                 ControlledDeliveryResult controlledDelivery =
                     controlledDeliveryService.deliver(connectorResult, responseGuardResult);
@@ -424,7 +424,7 @@ public class RuntimeExecutionService {
                     auditContext
                 );
             }
-            ResponseGuardResult responseGuardResult = responseGuardPort.guard(outboundPayload, connectorResult);
+            ResponseGuardResult responseGuardResult = responseGuard.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
             ControlledDeliveryResult controlledDelivery =
                 controlledDeliveryService.deliver(connectorResult, responseGuardResult);
@@ -449,7 +449,7 @@ public class RuntimeExecutionService {
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
-            | AiInputRejectedException | OutboundGuardException exception) {
+            | AiInputRejectedException | OutboundGuardException | PackRuntimeAdapterNotFoundException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {
