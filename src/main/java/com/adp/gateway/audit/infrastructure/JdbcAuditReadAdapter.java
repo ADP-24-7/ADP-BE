@@ -103,7 +103,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
             left join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
             left join lateral (
                 select audit_id, reason_code, evidence_refs
-                from audit_event where decision_id = re.decision_id
+                from audit_event where execution_id = re.execution_id
                 order by created_at desc limit 1
             ) ae on true
             where re.execution_id = :executionId

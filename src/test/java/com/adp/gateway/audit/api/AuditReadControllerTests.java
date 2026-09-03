@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import com.adp.gateway.audit.application.AuditReadPort;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
@@ -31,6 +32,9 @@ class AuditReadControllerTests {
 
     @Autowired
     private AuditReadPort auditReadPort;
+
+    @Autowired
+    private JdbcClient jdbcClient;
 
     @Test
     void operatorSearchesInstitutionScopedRuntimeReadModel() throws Exception {
@@ -109,6 +113,40 @@ class AuditReadControllerTests {
         assertThatThrownBy(() -> auditReadPort.loadEvidence(
             executionId, "institution_local", Set.of("fraud_detection")
         )).isInstanceOf(RuntimeExecutionNotFoundException.class);
+    }
+
+    @Test
+    void evidenceUsesAuditEventFromTheExactExecutionWhenDecisionIsShared() throws Exception {
+        String firstExecutionId = execute("shared-decision-a");
+        String secondExecutionId = execute("shared-decision-b");
+
+        String firstDecisionId = decisionId(firstExecutionId);
+        String secondDecisionId = decisionId(secondExecutionId);
+        String firstAuditId = auditId(firstExecutionId);
+        String secondAuditId = auditId(secondExecutionId);
+
+        assertThat(firstDecisionId).isEqualTo(secondDecisionId);
+        assertThat(firstAuditId).isNotEqualTo(secondAuditId);
+        assertThat(auditReadPort.loadEvidence(
+            firstExecutionId, "institution_local", Set.of("customer_summary")
+        ).audit().auditId()).isEqualTo(firstAuditId);
+        assertThat(auditReadPort.loadEvidence(
+            secondExecutionId, "institution_local", Set.of("customer_summary")
+        ).audit().auditId()).isEqualTo(secondAuditId);
+    }
+
+    private String decisionId(String executionId) {
+        return jdbcClient.sql("select decision_id from runtime.runtime_execution where execution_id = :executionId")
+            .param("executionId", executionId)
+            .query(String.class)
+            .single();
+    }
+
+    private String auditId(String executionId) {
+        return jdbcClient.sql("select audit_id from audit_event where execution_id = :executionId")
+            .param("executionId", executionId)
+            .query(String.class)
+            .single();
     }
 
     private String execute(String label) throws Exception {

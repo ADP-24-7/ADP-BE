@@ -541,6 +541,98 @@ class FlywayMigrationTests {
         assertThat(indexCount).isEqualTo(3);
     }
 
+    @Test
+    void v15MigrationBindsAuditEventsToRuntimeExecutions() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_event'
+                  and column_name = 'execution_id'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.table_constraints
+                where table_schema = 'public'
+                  and table_name = 'audit_event'
+                  and constraint_name = 'fk_audit_event_runtime_execution'
+                  and constraint_type = 'FOREIGN KEY'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(1);
+        assertThat(constraintCount).isEqualTo(1);
+    }
+
+    @Test
+    void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
+        String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure()
+                .dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration")
+                .target("14")
+                .load()
+                .migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, decision_id, status,
+                        idempotency_institution_id, request_hash, created_at, updated_at
+                    ) values (
+                        'exec_v14_audit', 'req_v14_audit', 'trace_v14_audit', 'idem_v14_audit',
+                        'customer_summary', 'CUSTOMER_SUPPORT', repeat('a', 64), 'decision_v14_audit',
+                        'COMPLETED', 'institution_local', repeat('b', 64), now(), now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into audit_event (
+                        audit_id, request_id, trace_id, idempotency_key, workload_id,
+                        decision_id, reason_code, connector_status, created_at,
+                        policy_artifact_id, policy_version, policy_digest,
+                        policy_action, policy_artifact_version, policy_artifact_digest_algorithm,
+                        policy_artifact_digest_value, final_action, authorization_result,
+                        applicability_result, runtime_context_digest, matched_rule_ids,
+                        evidence_refs, required_controls
+                    ) values (
+                        'aud_v14_audit', 'req_v14_audit', 'trace_v14_audit', 'idem_v14_audit',
+                        'customer_summary', 'decision_v14_audit', 'ALLOW', 'COMPLETED', now(),
+                        'artifact_v14', 'policy_v14', 'digest_v14', 'ALLOW', 'artifact_version_v14',
+                        'sha256', 'artifact_digest_v14', 'ALLOW', 'ALLOWED', 'APPLICABLE',
+                        repeat('c', 64), '', '', ''
+                    )
+                    """);
+            }
+
+            Flyway.configure()
+                .dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration")
+                .load()
+                .migrate();
+
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select execution_id from audit_event where audit_id = 'aud_v14_audit'
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("execution_id")).isEqualTo("exec_v14_audit");
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);

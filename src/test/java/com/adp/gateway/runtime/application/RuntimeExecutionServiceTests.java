@@ -216,7 +216,7 @@ class RuntimeExecutionServiceTests {
 
         verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.FAILED));
         verify(connector, never()).execute(any(), any(), any(), any());
-        verify(auditRecorder, never()).record(any(), any(), any());
+        verify(auditRecorder, never()).record(any(), any(), any(), any());
     }
 
     @Test
@@ -272,7 +272,7 @@ class RuntimeExecutionServiceTests {
         when(decisionService.decide(any(), any(), any(), any())).thenReturn(decision);
         when(transformEngine.transform(any(), any(), any(), any()))
             .thenReturn(com.adp.gateway.transform.domain.TransformResult.skipped("trn_skipped"));
-        when(auditRecorder.record(any(), any(), any())).thenReturn(auditContext());
+        when(auditRecorder.record(any(), any(), any(), any())).thenReturn(auditContext());
 
         service.execute(
             request(),
@@ -423,7 +423,7 @@ class RuntimeExecutionServiceTests {
             .thenReturn(OutboundGuardResult.passed());
         when(connector.execute(any(), any(), any(), any())).thenReturn(connectorResult);
         when(responseGuardPort.guard(any(), any())).thenReturn(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));
-        when(auditRecorder.record(any(), any(), any())).thenReturn(auditContext());
+        when(auditRecorder.record(any(), any(), any(), any())).thenReturn(auditContext());
 
         RuntimeExecutionResult result = service.execute(
             request(),

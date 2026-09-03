@@ -25,6 +25,8 @@ Prompt, Subject 원문, Idempotency Key, Provider Correlation Key, Provider Requ
 
 `exportContentDigest`는 digest 필드를 `null`로 둔 고정 DTO의 Jackson JSON 직렬화 결과를 SHA-256으로 계산한 조회 시점 content fingerprint다. 서명, 외부 anchoring 또는 DB 변조 탐지 기능을 제공하지 않으며 tamper-evident Evidence Bundle로 해석하지 않는다.
 
+Audit Event는 결정론적으로 재사용될 수 있는 `decision_id`가 아니라 `execution_id` FK로 Runtime Execution에 직접 연결한다. 따라서 동일한 Decision을 공유하는 별도 실행도 각 실행에서 생성된 Audit Event만 Evidence Pack에 포함한다.
+
 ## Deferred Gates
 
 - DA Artifact Lifecycle, Drift, Approval, Rollback Evidence
