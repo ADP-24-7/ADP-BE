@@ -19,23 +19,17 @@ import com.adp.gateway.transform.domain.TransformResult;
 
 public interface RuntimeExecutionPersistence {
 
-    void recordReceived(RuntimeExecutionTrace trace);
-
-    default void recordReceived(
+    void recordReceived(
         RuntimeExecutionTrace trace,
         String idempotencyInstitutionId,
         String requestHash
-    ) {
-        recordReceived(trace);
-    }
+    );
 
-    default Optional<IdempotentExecutionReplay> findIdempotentExecution(
+    Optional<IdempotentExecutionReplay> findIdempotentExecution(
         String institutionId,
         String workloadId,
         String idempotencyKey
-    ) {
-        return Optional.empty();
-    }
+    );
 
     void recordDestinationProfile(String executionId, DestinationProfile destinationProfile);
 

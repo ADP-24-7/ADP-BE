@@ -554,18 +554,49 @@ class RuntimeExecutionControllerTests {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.errorCode").value("AUTHORIZATION_DENIED"));
 
-        Integer deniedCount = jdbcClient.sql("""
+        Integer reservationCount = jdbcClient.sql("""
                 select count(*) from runtime.runtime_execution
                 where request_id = :requestId
-                  and authorization_status = 'DENIED'
-                  and institution_id = 'institution_local'
-                  and canonical_context_digest is null
-                  and destination_profile_version is null
                 """)
             .param("requestId", requestId)
             .query(Integer.class)
             .single();
-        assertThat(deniedCount).isEqualTo(1);
+        assertThat(reservationCount).isZero();
+    }
+
+    @Test
+    void unauthorizedPrincipalCannotConsumeAnAuthorizedPrincipalsIdempotencyKey() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_unauthorized_" + suffix;
+        String unauthorizedApiKey = "fraud-only-key-" + suffix;
+        insertFraudOnlyPrincipal(unauthorizedApiKey);
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_unauthorized_" + suffix)
+                .header("X-Trace-Id", "trace_unauthorized_" + suffix)
+                .header("X-ADP-API-Key", unauthorizedApiKey)
+                .contentType("application/json")
+                .content(runtimeRequest(idempotencyKey, "ticket-100")))
+            .andExpect(status().isForbidden());
+
+        String response = postRuntimeExecution(
+            "req_authorized_" + suffix,
+            "trace_authorized_" + suffix,
+            idempotencyKey,
+            "ticket-100"
+        );
+        assertThat(response).contains("\"replayed\":false");
+
+        Integer executionCount = jdbcClient.sql("""
+                select count(*) from runtime.runtime_execution
+                where idempotency_institution_id = 'institution_local'
+                  and workload_id = 'customer_summary'
+                  and idempotency_key = :idempotencyKey
+                """)
+            .param("idempotencyKey", idempotencyKey)
+            .query(Integer.class)
+            .single();
+        assertThat(executionCount).isEqualTo(1);
     }
 
     @Test
@@ -663,9 +694,10 @@ class RuntimeExecutionControllerTests {
     private void insertFraudOnlyPrincipal(String apiKey) {
         jdbcClient.sql("""
                 insert into auth_principal (
-                    principal_id, principal_type, display_name, subject_authorization_required, enabled
+                    principal_id, principal_type, display_name, institution_id,
+                    subject_authorization_required, enabled
                 )
-                values ('svc_fraud_runtime', 'SERVICE', 'Fraud Runtime', false, true)
+                values ('svc_fraud_runtime', 'SERVICE', 'Fraud Runtime', 'institution_local', false, true)
                 on conflict (principal_id) do nothing
                 """)
             .update();

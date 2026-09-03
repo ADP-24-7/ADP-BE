@@ -44,11 +44,6 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
-    public void recordReceived(RuntimeExecutionTrace trace) {
-        recordReceived(trace, trace.institutionId(), trace.inputDigest());
-    }
-
-    @Override
     public void recordReceived(
         RuntimeExecutionTrace trace,
         String idempotencyInstitutionId,
@@ -134,9 +129,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                    re.controlled_delivery_response_digest,
                    (select ae.audit_id
                     from audit_event ae
-                    where ae.request_id = re.request_id
-                      and ae.workload_id = re.workload_id
-                      and ae.idempotency_key = re.idempotency_key
+                    where ae.decision_id = rd.decision_id
                     order by ae.created_at desc
                     limit 1) as audit_id
             from runtime.runtime_execution re

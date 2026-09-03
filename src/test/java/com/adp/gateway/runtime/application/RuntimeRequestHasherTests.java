@@ -43,6 +43,12 @@ class RuntimeRequestHasherTests {
         )).isNotEqualTo(baseline);
     }
 
+    @Test
+    void duplicateProcessingContextsHaveSetSemantics() {
+        assertThat(hash(List.of("AI_USE", "AI_USE"), Map.of("prompt", "ticket-100")))
+            .isEqualTo(hash(List.of("AI_USE"), Map.of("prompt", "ticket-100")));
+    }
+
     private String hash(List<String> processingContexts, Map<String, Object> input) {
         return hasher.hash(
             "institution_local",

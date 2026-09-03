@@ -40,7 +40,7 @@ public class RuntimeRequestHasher {
         canonical.put("institutionId", institutionId);
         canonical.put("processingContexts", processingContexts == null
             ? List.of()
-            : processingContexts.stream().sorted().toList());
+            : processingContexts.stream().distinct().sorted().toList());
         canonical.put("purposeCode", purposeCode);
         canonical.put("subjectScope", subjectScope);
         canonical.put("workloadId", workloadId);

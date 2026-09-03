@@ -152,6 +152,7 @@ public class RuntimeExecutionService {
         Map<String, Object> input
     ) {
         SubjectRef subject = SubjectRef.from(requestContext.subject());
+        validateAuthorization(requestContext, principal, institutionId, subject);
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
@@ -179,25 +180,9 @@ public class RuntimeExecutionService {
             approvalReference,
             inputDigest,
             now
-        ), institutionId, requestHash);
+        ), principal.institutionId(), requestHash);
 
         try {
-            if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
-                persistence.recordAuthorization(executionId, "DENIED");
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
-                throw new AccessDeniedException("Runtime institution is not allowed");
-            }
-            if (!authorizationService.authorize(new AuthorizationRequest(
-                principal,
-                requestContext.workloadId(),
-                RuntimeAction.RUNTIME_EXECUTE,
-                requestContext.purpose(),
-                subject
-            )).allowed()) {
-                persistence.recordAuthorization(executionId, "DENIED");
-                persistence.updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
-                throw new AccessDeniedException("Runtime execution is not allowed");
-            }
             persistence.recordAuthorization(executionId, "PASSED");
             persistence.updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
             var approvalScope = approvalScopePort.load(approvalReference, now);
@@ -467,6 +452,26 @@ public class RuntimeExecutionService {
         } catch (RuntimeException exception) {
             persistence.updateStatus(executionId, RuntimeExecutionStatus.FAILED);
             throw exception;
+        }
+    }
+
+    private void validateAuthorization(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        SubjectRef subject
+    ) {
+        if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
+            throw new AccessDeniedException("Runtime institution is not allowed");
+        }
+        if (!authorizationService.authorize(new AuthorizationRequest(
+            principal,
+            requestContext.workloadId(),
+            RuntimeAction.RUNTIME_EXECUTE,
+            requestContext.purpose(),
+            subject
+        )).allowed()) {
+            throw new AccessDeniedException("Runtime execution is not allowed");
         }
     }
 

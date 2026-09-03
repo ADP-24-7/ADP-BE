@@ -341,7 +341,7 @@ class RuntimeExecutionServiceTests {
             Map.of("prompt", "safe question")
         )).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
-        verify(persistence).updateStatus(any(), org.mockito.ArgumentMatchers.eq(RuntimeExecutionStatus.BLOCKED));
+        verify(persistence, never()).recordReceived(any(), any(), any());
         verify(destinationProfilePort, never()).load(any(), any());
         verify(retrievalService, never()).retrieve(any());
         verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());

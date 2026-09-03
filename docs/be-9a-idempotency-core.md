@@ -40,9 +40,13 @@ Replay 응답은 기존 `executionId`와 privacy-safe policy/transform/egress me
 ## Concurrency And Security
 
 - PostgreSQL unique index가 동일 namespace의 실행 소유권을 한 요청에만 부여한다.
+- namespace의 Institution은 요청 본문이 아니라 인증된 Principal을 Source of Truth로 사용한다.
+- Institution binding과 Runtime Authorization을 통과한 요청만 idempotency namespace를 예약한다.
 - 동시 중복 요청은 Runtime과 Connector 실행을 추가 생성하지 않는다.
 - Replay 전에도 Institution·Workload·Purpose·Subject 인가를 다시 검증한다.
 - `SENT_UNKNOWN` 복구와 Provider 상태 조회는 BE-9B에서 구현한다.
+
+인가 거부 시도는 idempotency namespace를 소비하지 않는다. 거부 시도 자체의 영속 증적은 향후 별도 request-attempt 모델로 분리하며, 성공 실행과 동일한 reservation row로 표현하지 않는다.
 
 ## Migration
 
