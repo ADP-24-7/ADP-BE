@@ -25,7 +25,9 @@ BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.
 - [x] Digital Asset Policy/Approval/Destination Profile local fixture
 - [x] Customer/Account Vault Tokenization과 Wallet/Asset/Amount exact treatment
 - [x] Canonical Provider Request Digest와 Mock Asset Platform Connector
-- [x] Settlement Status와 Reconciliation Evidence V16 schema
+- [x] Transport 성공과 Settlement finality를 분리하는 Pack Outcome Handler
+- [x] FPG expected/actual 비교 기반 Reconciliation과 V16/V17 상태별 nullable evidence schema
+- [x] Subject Scope와 Transaction Customer ID binding
 - [x] 정상 Settlement `SETTLED`/`MATCH` Thin E2E
 - [ ] KYC/AML/Wallet Review 및 Amount Limit 정책
 - [ ] `SENT_UNKNOWN` Provider Status Query Adapter

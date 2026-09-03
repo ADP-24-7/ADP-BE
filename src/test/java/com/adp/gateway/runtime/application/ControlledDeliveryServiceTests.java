@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 class ControlledDeliveryServiceTests {
 
-    private final ControlledDeliveryService service = new ControlledDeliveryService();
+    private final ControlledDeliveryService service = new ControlledDeliveryService(List.of());
 
     @Test
     void deliversOnlyContentFromAResponseThatPassedTheGuard() {

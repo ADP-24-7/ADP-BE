@@ -32,7 +32,7 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
     @Override
     public ProviderRequestPayload map(DestinationProfile profile, OutboundCandidatePayload outbound) {
         Map<String, Object> fields = new TreeMap<>();
-        outbound.fields().forEach(field -> fields.put(field.path(), field.value()));
+        outbound.fields().forEach(field -> fields.put(providerField(field.path()), field.value()));
         String externalRequestId = "asset_req_" + UUID.randomUUID();
         Map<String, Object> payload = new TreeMap<>();
         payload.put("externalRequestId", externalRequestId);
@@ -45,5 +45,19 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Digital asset provider request could not be canonicalized", exception);
         }
+    }
+
+    private String providerField(String path) {
+        return switch (path) {
+            case "$.input.customerId" -> "customerToken";
+            case "$.input.accountId" -> "accountToken";
+            case "$.input.walletAddress" -> "walletAddress";
+            case "$.input.assetId" -> "assetId";
+            case "$.input.amount" -> "amount";
+            case "$.input.kycStatus" -> "kycStatus";
+            case "$.input.amlStatus" -> "amlStatus";
+            case "$.input.walletVerified" -> "walletVerified";
+            default -> throw new IllegalArgumentException("Unsupported Digital Asset provider field");
+        };
     }
 }

@@ -390,61 +390,19 @@ public class RuntimeExecutionService {
                 providerRequest
             );
             persistence.recordConnector(executionId, connectorResult);
-            if (connectorResult.status() == ConnectorStatus.FAILED) {
-                ResponseGuardResult responseGuardResult =
-                    responseGuard.guard(outboundPayload, connectorResult);
-                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
-                ControlledDeliveryResult controlledDelivery =
-                    controlledDeliveryService.deliver(connectorResult, responseGuardResult);
-                persistence.recordControlledDelivery(executionId, controlledDelivery);
-                updateStatus(executionId, RuntimeExecutionStatus.FAILED);
-                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
-                return new RuntimeExecutionResult(
-                    executionId,
-                    RuntimeExecutionStatus.FAILED,
-                    decision,
-                    transformResult,
-                    outboundGuardResult.status(),
-                    connectorResult,
-                    responseGuardResult.status(),
-                    controlledDelivery,
-                    auditContext
-                );
-            }
-            if (connectorResult.status() == ConnectorStatus.SENT_UNKNOWN) {
-                ResponseGuardResult responseGuardResult =
-                    responseGuard.guard(outboundPayload, connectorResult);
-                persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
-                ControlledDeliveryResult controlledDelivery =
-                    controlledDeliveryService.deliver(connectorResult, responseGuardResult);
-                persistence.recordControlledDelivery(executionId, controlledDelivery);
-                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
-                return new RuntimeExecutionResult(
-                    executionId,
-                    RuntimeExecutionStatus.EGRESSING,
-                    decision,
-                    transformResult,
-                    outboundGuardResult.status(),
-                    connectorResult,
-                    responseGuardResult.status(),
-                    controlledDelivery,
-                    auditContext
-                );
-            }
             ResponseGuardResult responseGuardResult = responseGuard.guard(outboundPayload, connectorResult);
             persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
-            ControlledDeliveryResult controlledDelivery =
-                controlledDeliveryService.deliver(connectorResult, responseGuardResult);
+            ExecutionPackOutcome outcome = controlledDeliveryService.resolve(
+                destinationProfile.packType(), executionId, providerRequest, connectorResult, responseGuardResult
+            );
+            ControlledDeliveryResult controlledDelivery = outcome.controlledDelivery();
             persistence.recordControlledDelivery(executionId, controlledDelivery);
-            RuntimeExecutionStatus completedStatus = responseGuardResult.isPassed() && controlledDelivery.isDelivered()
-                ? RuntimeExecutionStatus.COMPLETED
-                : RuntimeExecutionStatus.BLOCKED;
-            updateStatus(executionId, completedStatus);
+            updateStatus(executionId, outcome.runtimeStatus());
             AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
 
             return new RuntimeExecutionResult(
                 executionId,
-                completedStatus,
+                outcome.runtimeStatus(),
                 decision,
                 transformResult,
                 outboundGuardResult.status(),

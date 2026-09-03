@@ -29,8 +29,12 @@ V16 `runtime.digital_asset_transaction`은 Runtime Execution과 다음 privacy-s
 - Reconciliation Result
 - Provider Response Digest
 
-HTTP/Connector 상태와 Settlement 상태는 별도 컬럼과 의미로 유지한다. `SENT_UNKNOWN`은 기존 Recovery Core의 reconciliation-first 원칙을 따른다.
+HTTP/Connector 상태와 Settlement 상태는 별도 컬럼과 의미로 유지한다. Response Guard는 schema를 검증하고, Digital Asset Outcome Handler가 Settlement finality와 Runtime 상태를 해석한다. `SETTLING`은 `EGRESSING`, `CRITICAL_MISMATCH`는 `REVIEW_REQUIRED`, `SETTLED + MATCH`만 `COMPLETED`로 수렴한다.
+
+Reconciliation 결과는 Provider 선언을 신뢰하지 않는다. FPG가 전송 직전 고정한 Customer/Account Token, Wallet, Asset, Amount 및 상태 필드와 Provider Settlement Evidence를 비교해 `MATCH`, `MISMATCH`, `CRITICAL_MISMATCH`, `WAIT`를 계산한 뒤 Response Guard 통과 후 저장한다.
+
+V17부터 `SENT_UNKNOWN`은 External Request ID만 필수이며 Transaction/Settlement ID와 Response Digest 없이 저장할 수 있다. 기존 Recovery Core의 reconciliation-first 원칙에 따라 Runtime은 `EGRESSING`을 유지하고 Recovery Job을 생성한다.
 
 ## Current Fixture Scope
 
-Local Mock Asset Platform은 정상 요청에 `SETTLED`와 `MATCH`를 반환한다. 실제 Provider Status Query, timeout fixture, mismatch recovery와 수동 복구 API는 BE-9 Pack별 최종 Gate에서 연결한다.
+Local Mock Asset Platform은 Settlement 상태와 실제 처리 필드를 반환하며 `MATCH`는 FPG가 계산한다. 실제 Provider Status Query, mismatch recovery와 수동 복구 API는 BE-9 Pack별 최종 Gate에서 연결한다.

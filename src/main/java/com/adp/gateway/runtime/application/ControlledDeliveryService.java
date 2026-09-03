@@ -5,11 +5,48 @@ import java.util.Map;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.egress.domain.ExecutionPackType;
+import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
+import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ControlledDeliveryService {
+
+    private final Map<ExecutionPackType, ExecutionPackOutcomeHandler> outcomeHandlers;
+
+    public ControlledDeliveryService(List<ExecutionPackOutcomeHandler> outcomeHandlers) {
+        this.outcomeHandlers = outcomeHandlers.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+            ExecutionPackOutcomeHandler::supportedPack,
+            handler -> handler
+        ));
+    }
+
+    public ExecutionPackOutcome resolve(
+        ExecutionPackType packType,
+        String executionId,
+        ProviderRequestPayload providerRequest,
+        ConnectorResult connectorResult,
+        ResponseGuardResult responseGuardResult
+    ) {
+        ExecutionPackOutcomeHandler handler = outcomeHandlers.get(packType);
+        if (handler != null) {
+            return handler.resolve(executionId, providerRequest, connectorResult, responseGuardResult);
+        }
+        ControlledDeliveryResult delivery = deliver(connectorResult, responseGuardResult);
+        RuntimeExecutionStatus status;
+        if (connectorResult.status() == com.adp.gateway.connector.domain.ConnectorStatus.FAILED) {
+            status = RuntimeExecutionStatus.FAILED;
+        } else if (connectorResult.status() == com.adp.gateway.connector.domain.ConnectorStatus.SENT_UNKNOWN) {
+            status = RuntimeExecutionStatus.EGRESSING;
+        } else {
+            status = responseGuardResult.isPassed() && delivery.isDelivered()
+                ? RuntimeExecutionStatus.COMPLETED
+                : RuntimeExecutionStatus.BLOCKED;
+        }
+        return new ExecutionPackOutcome(status, delivery);
+    }
 
     public ControlledDeliveryResult deliver(
         ConnectorResult connectorResult,

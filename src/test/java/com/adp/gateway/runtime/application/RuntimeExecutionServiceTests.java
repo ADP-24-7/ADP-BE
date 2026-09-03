@@ -125,7 +125,7 @@ class RuntimeExecutionServiceTests {
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
             new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(new ObjectMapper(), hasher))),
-            new ControlledDeliveryService(),
+            new ControlledDeliveryService(List.of()),
             clock,
             mock(com.adp.gateway.observability.GatewayObservability.class)
         );

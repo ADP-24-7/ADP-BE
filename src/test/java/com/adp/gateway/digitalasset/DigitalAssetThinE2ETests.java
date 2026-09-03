@@ -61,7 +61,7 @@ class DigitalAssetThinE2ETests {
             .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.policyAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.applicabilityResult").value("APPLICABLE"))
-            .andExpect(jsonPath("$.connectorStatus").value("COMPLETED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
             .andExpect(jsonPath("$.responseGuardStatus").value("PASSED"))
             .andExpect(jsonPath("$.output.content").value("SETTLED"))
             .andReturn().getResponse().getContentAsString();
@@ -112,5 +112,92 @@ class DigitalAssetThinE2ETests {
             .doesNotContain("customer-100")
             .doesNotContain("acct-100-1")
             .doesNotContain("wallet-test-001");
+    }
+
+    @Test
+    void rejectsCustomerIdThatDoesNotMatchAuthorizedSubjectBeforeConnector() throws Exception {
+        String suffix = token();
+        assetRequest(suffix, "customer-999", "asset-krw-token-001")
+            .andExpect(status().isUnprocessableEntity());
+
+        Integer connectorCount = jdbcClient.sql("""
+                select count(*) from runtime.connector_execution ce
+                join runtime.runtime_execution re on re.execution_id = ce.execution_id
+                where re.request_id = :requestId
+                """)
+            .param("requestId", "req_asset_case_" + suffix).query(Integer.class).single();
+        assertThat(connectorCount).isZero();
+    }
+
+    @Test
+    void keepsRuntimeEgressingWhileSettlementIsNotFinal() throws Exception {
+        assetRequest(token(), "customer-100", "asset-settling")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("EGRESSING"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"));
+    }
+
+    @Test
+    void routesCriticalSettlementMismatchToReview() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-critical-mismatch")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        String reconciliation = jdbcClient.sql("""
+                select reconciliation_result from runtime.digital_asset_transaction
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId).query(String.class).single();
+        assertThat(reconciliation).isEqualTo("CRITICAL_MISMATCH");
+    }
+
+    @Test
+    void persistsSentUnknownWithoutSettlementIdentifiersAndSchedulesRecovery() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-sent-unknown")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("EGRESSING"))
+            .andExpect(jsonPath("$.connectorStatus").value("SENT_UNKNOWN"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        Integer evidenceCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_transaction
+                where execution_id = :executionId and settlement_status = 'SENT_UNKNOWN'
+                  and external_transaction_id is null and settlement_id is null
+                  and provider_response_digest is null and reconciliation_result = 'WAIT'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        Integer recoveryCount = jdbcClient.sql("""
+                select count(*) from runtime.external_interaction_recovery
+                where execution_id = :executionId and recovery_status = 'PENDING'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(evidenceCount).isEqualTo(1);
+        assertThat(recoveryCount).isEqualTo(1);
+        jdbcClient.sql("delete from runtime.external_interaction_recovery where execution_id = :executionId")
+            .param("executionId", executionId).update();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assetRequest(
+        String suffix, String customerId, String assetId
+    ) throws Exception {
+        return mockMvc.perform(post("/v1/runtime/executions")
+            .header("X-Request-Id", "req_asset_case_" + suffix)
+            .header("X-Trace-Id", "trace_asset_case_" + suffix)
+            .header("X-ADP-API-Key", "local-dev-api-key")
+            .contentType("application/json")
+            .content("""
+                {"institutionId":"institution_local","approvalReference":"approval_digital_asset_purchase_v1",
+                 "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
+                 "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
+                 "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
+                 "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"wallet-test-001",
+                 "assetId":"%s","amount":10000,"kycStatus":"VERIFIED","amlStatus":"PASSED","walletVerified":true}}
+                """.formatted(suffix, customerId, assetId)));
+    }
+
+    private String token() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 }

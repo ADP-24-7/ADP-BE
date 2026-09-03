@@ -581,13 +581,14 @@ class FlywayMigrationTests {
                   and constraint_name in (
                     'digital_asset_transaction_execution_id_fkey',
                     'chk_digital_asset_settlement_status',
-                    'chk_digital_asset_reconciliation'
+                    'chk_digital_asset_reconciliation',
+                    'chk_digital_asset_settled_evidence'
                   )
                 """)
             .query(Integer.class).single();
 
         assertThat(tableCount).isEqualTo(1);
-        assertThat(constraintCount).isEqualTo(3);
+        assertThat(constraintCount).isEqualTo(4);
     }
 
     @Test

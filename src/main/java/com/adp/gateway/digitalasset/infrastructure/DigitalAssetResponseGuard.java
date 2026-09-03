@@ -32,10 +32,19 @@ public class DigitalAssetResponseGuard implements ResponseGuardPort {
         if (!"digital-asset-settlement/v1".equals(result.responseSchemaVersion())
             || !(result.responsePayload() instanceof Map<?, ?> response)
             || !ALLOWED_STATUSES.contains(response.get("settlementStatus"))
-            || !(response.get("externalTransactionId") instanceof String)
-            || !(response.get("settlementId") instanceof String)) {
+            || !nonBlank(response.get("externalRequestId"))
+            || !nonBlank(response.get("externalTransactionId"))) {
+            return ResponseGuardResult.rejected(List.of("SETTLEMENT_RESPONSE_INVALID"));
+        }
+        String status = String.valueOf(response.get("settlementStatus"));
+        if ("SETTLED".equals(status) && (!nonBlank(response.get("settlementId"))
+            || !(response.get("settledTransaction") instanceof Map<?, ?>))) {
             return ResponseGuardResult.rejected(List.of("SETTLEMENT_RESPONSE_INVALID"));
         }
         return ResponseGuardResult.passed("digital-asset-response-guard/v1");
+    }
+
+    private boolean nonBlank(Object value) {
+        return value instanceof String text && !text.isBlank();
     }
 }

@@ -1,11 +1,9 @@
 package com.adp.gateway.digitalasset.application;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
@@ -13,6 +11,9 @@ import com.adp.gateway.context.application.ExecutionPackContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
+import com.adp.gateway.auth.domain.SubjectRef;
+import com.adp.gateway.dataaccess.application.SubjectRefHasher;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPurchaseInput;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.springframework.stereotype.Component;
@@ -22,15 +23,12 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
 
     public static final String WORKLOAD_ID = "tokenized_asset_purchase";
     public static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
-    private static final Set<String> REQUIRED_KEYS = Set.of(
-        "customerId", "accountId", "walletAddress", "assetId", "amount",
-        "kycStatus", "amlStatus", "walletVerified"
-    );
-
     private final CanonicalValueHasher hasher;
+    private final SubjectRefHasher subjectRefHasher;
 
-    public DigitalAssetCanonicalContextBuilder(CanonicalValueHasher hasher) {
+    public DigitalAssetCanonicalContextBuilder(CanonicalValueHasher hasher, SubjectRefHasher subjectRefHasher) {
         this.hasher = hasher;
+        this.subjectRefHasher = subjectRefHasher;
     }
 
     @Override
@@ -41,15 +39,22 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     @Override
     public CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input) {
         validate(input);
+        DigitalAssetPurchaseInput purchase = parse(input);
+        String inputSubjectDigest = subjectRefHasher.hash(new SubjectRef("customer", purchase.customerId()));
+        if (!inputSubjectDigest.equals(retrievalContext.subjectRefDigest())) {
+            throw new ExecutionPackInputRejectedException(
+                ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_SUBJECT_MISMATCH"
+            );
+        }
         List<CanonicalContextField> fields = new ArrayList<>(retrievalContext.fields());
-        add(fields, "customerId", input.get("customerId"), DataClass.CUSTOMER_IDENTIFIER);
-        add(fields, "accountId", input.get("accountId"), DataClass.ACCOUNT_IDENTIFIER);
-        add(fields, "walletAddress", input.get("walletAddress"), DataClass.TRANSACTION_IDENTIFIER);
-        add(fields, "assetId", input.get("assetId"), DataClass.BUSINESS_METADATA);
-        add(fields, "amount", input.get("amount"), DataClass.FINANCIAL_AMOUNT);
-        add(fields, "kycStatus", input.get("kycStatus"), DataClass.FINANCIAL_METADATA);
-        add(fields, "amlStatus", input.get("amlStatus"), DataClass.FINANCIAL_METADATA);
-        add(fields, "walletVerified", input.get("walletVerified"), DataClass.FINANCIAL_METADATA);
+        add(fields, "customerId", purchase.customerId(), DataClass.CUSTOMER_IDENTIFIER);
+        add(fields, "accountId", purchase.accountId(), DataClass.ACCOUNT_IDENTIFIER);
+        add(fields, "walletAddress", purchase.walletAddress(), DataClass.TRANSACTION_IDENTIFIER);
+        add(fields, "assetId", purchase.assetId(), DataClass.BUSINESS_METADATA);
+        add(fields, "amount", purchase.amount().toPlainString(), DataClass.FINANCIAL_AMOUNT);
+        add(fields, "kycStatus", purchase.kycStatus(), DataClass.FINANCIAL_METADATA);
+        add(fields, "amlStatus", purchase.amlStatus(), DataClass.FINANCIAL_METADATA);
+        add(fields, "walletVerified", purchase.walletVerified(), DataClass.FINANCIAL_METADATA);
         fields.sort(Comparator.comparing(CanonicalContextField::path));
         String digest = hasher.hash(fields.stream()
             .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
@@ -63,20 +68,15 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
 
     @Override
     public void validate(Map<String, Object> input) {
-        if (input == null || !input.keySet().equals(REQUIRED_KEYS)) {
-            throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_INPUT_SCHEMA_MISMATCH");
-        }
-        if (!text(input.get("customerId")) || !text(input.get("accountId"))
-            || !text(input.get("walletAddress")) || !text(input.get("assetId"))
-            || !text(input.get("kycStatus")) || !text(input.get("amlStatus"))
-            || !(input.get("walletVerified") instanceof Boolean)
-            || !(input.get("amount") instanceof Number amount) || new BigDecimal(amount.toString()).signum() <= 0) {
-            throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_INPUT_INVALID");
+        try {
+            DigitalAssetPurchaseInput.from(input);
+        } catch (IllegalArgumentException exception) {
+            throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, exception.getMessage());
         }
     }
 
-    private boolean text(Object value) {
-        return value instanceof String text && !text.isBlank() && text.length() <= 240;
+    private DigitalAssetPurchaseInput parse(Map<String, Object> input) {
+        return DigitalAssetPurchaseInput.from(input);
     }
 
     private void add(List<CanonicalContextField> fields, String name, Object value, DataClass dataClass) {
