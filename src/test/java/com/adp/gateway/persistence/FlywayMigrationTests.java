@@ -523,6 +523,24 @@ class FlywayMigrationTests {
         assertThat(tableCount).isEqualTo(8);
     }
 
+    @Test
+    void v14MigrationCreatesAuditReadModelIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and indexname in (
+                    'idx_runtime_execution_audit_search',
+                    'idx_runtime_execution_audit_status_search',
+                    'idx_runtime_execution_audit_workload_search'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(3);
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);

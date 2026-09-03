@@ -16,18 +16,22 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-7 | Completed | AI Full E2E & Policy Harness Binding |
 | BE-8 | Next | Digital Asset Thin E2E |
 
-## BE-11A Parallel Tracking
+## BE-11 Parallel Tracking
 
 BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-foundation.md)에서 관리한다.
 
 - [x] Prometheus registry와 `/actuator/prometheus` scrape endpoint
-- [x] Runtime submission count/duration metric
+- [x] Runtime terminal transition metric과 기본 HTTP request metric
 - [x] Idempotency resolution metric
 - [x] Recovery processing outcome metric
-- [x] Low-cardinality outcome allowlist
+- [x] Enum 기반 low-cardinality outcome
 - [x] Logstash JSON console log와 MDC `request_id`/`trace_id`
 - [x] 원문 Payload·Subject·Secret metric/log 비노출 규칙
-- [ ] BE-11B Audit Read Model과 Evidence Export
+- [x] BE-11B Institution-scoped Runtime/Audit 검색 Read Model
+- [x] BE-11B Privileged Evidence Export와 canonical digest
+- [x] BE-11B raw payload·subject·idempotency key·provider correlation key 비노출
+- [x] BE-11B V14 검색 인덱스와 권한/검색/export 통합 테스트
+- [ ] Artifact Lifecycle·Rollback Evidence
 - [ ] Policy Lifecycle·Artifact Drift·Rollback metric
 - [ ] NCP scrape 인증·network policy·retention
 

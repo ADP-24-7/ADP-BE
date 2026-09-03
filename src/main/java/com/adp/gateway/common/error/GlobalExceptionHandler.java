@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
+import com.adp.gateway.audit.application.InvalidAuditSearchException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
@@ -55,6 +56,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
         HttpMessageNotReadableException.class,
         MethodArgumentTypeMismatchException.class,
+        InvalidAuditSearchException.class,
         InvalidRuntimeHeaderException.class
     })
     ResponseEntity<ErrorResponse> handleMalformedRequest(Exception exception, HttpServletRequest request) {

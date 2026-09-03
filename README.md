@@ -95,3 +95,4 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [BE-9A Idempotency Core](docs/be-9a-idempotency-core.md)
 - [BE-9B External Interaction Recovery Core](docs/be-9b-external-interaction-recovery.md)
 - [BE-11A Observability Foundation](docs/be-11a-observability-foundation.md)
+- [BE-11B Audit Read Model](docs/be-11b-audit-read-model.md)
