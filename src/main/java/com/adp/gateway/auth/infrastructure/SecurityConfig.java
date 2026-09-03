@@ -44,6 +44,7 @@ public class SecurityConfig {
             .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers("/api/internal/info").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")

@@ -18,6 +18,7 @@ import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
 import com.adp.gateway.recovery.domain.RecoveryStatus;
 import com.adp.gateway.recovery.domain.RetryDisposition;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
+import com.adp.gateway.observability.GatewayObservability;
 import org.junit.jupiter.api.Test;
 
 class ExternalInteractionRecoveryServiceTests {
@@ -35,7 +36,9 @@ class ExternalInteractionRecoveryServiceTests {
         when(statusQuery.query(recovery)).thenThrow(new ExternalStatusQueryUnavailableException());
         when(persistence.reschedule(any(), any(), any(), any())).thenReturn(true);
 
-        boolean processed = new ExternalInteractionRecoveryService(persistence, resolver, CLOCK)
+        boolean processed = new ExternalInteractionRecoveryService(
+            persistence, resolver, CLOCK, mock(GatewayObservability.class)
+        )
             .processNext("worker-1");
 
         assertThat(processed).isTrue();
@@ -61,7 +64,9 @@ class ExternalInteractionRecoveryServiceTests {
         when(statusQuery.query(recovery)).thenReturn(result);
         when(persistence.reconcile(any(), any(), any(), any())).thenReturn(true);
 
-        new ExternalInteractionRecoveryService(persistence, resolver, CLOCK).processNext("worker-1");
+        new ExternalInteractionRecoveryService(
+            persistence, resolver, CLOCK, mock(GatewayObservability.class)
+        ).processNext("worker-1");
 
         verify(persistence).reconcile(
             recovery.recoveryId(), "worker-1", result, OffsetDateTime.parse("2026-09-03T00:00:00Z")

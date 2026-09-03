@@ -47,8 +47,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
+    prometheus:
+      access: unrestricted
     health:
       probes:
         enabled: true
@@ -58,3 +60,8 @@ management:
             - readinessState
             - db
       show-details: never
+
+logging:
+  structured:
+    format:
+      console: logstash

@@ -1,11 +1,16 @@
 package com.adp.gateway.runtime.api;
 
 import java.util.List;
+import java.time.Duration;
+import java.time.Instant;
 
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.runtime.application.RuntimeExecutionService;
+import com.adp.gateway.observability.GatewayObservability;
+import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
+import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -17,20 +22,27 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/v1/runtime/executions")
 public class RuntimeExecutionController {
 
+    private static final Logger log = LoggerFactory.getLogger(RuntimeExecutionController.class);
+
     private final RuntimeContextFactory runtimeContextFactory;
     private final RuntimeExecutionService runtimeExecutionService;
+    private final GatewayObservability observability;
 
     public RuntimeExecutionController(
         RuntimeContextFactory runtimeContextFactory,
-        RuntimeExecutionService runtimeExecutionService
+        RuntimeExecutionService runtimeExecutionService,
+        GatewayObservability observability
     ) {
         this.runtimeContextFactory = runtimeContextFactory;
         this.runtimeExecutionService = runtimeExecutionService;
+        this.observability = observability;
     }
 
     @PostMapping
@@ -46,18 +58,39 @@ public class RuntimeExecutionController {
             request.subjectScope(),
             request.idempotencyKey()
         );
-        var submission = runtimeExecutionService.submit(
-            context,
-            (AuthPrincipal) authentication.getPrincipal(),
-            request.institutionId(),
-            request.approvalReference(),
-            request.destinationProfileId(),
-            request.processingContexts() == null ? List.of() : request.processingContexts(),
-            request.input()
-        );
-        return ResponseEntity.ok(submission.isReplay()
-            ? RuntimeExecutionResponse.from(submission.replay())
-            : RuntimeExecutionResponse.from(submission.result()));
+        Instant startedAt = Instant.now();
+        try {
+            var submission = runtimeExecutionService.submit(
+                context,
+                (AuthPrincipal) authentication.getPrincipal(),
+                request.institutionId(),
+                request.approvalReference(),
+                request.destinationProfileId(),
+                request.processingContexts() == null ? List.of() : request.processingContexts(),
+                request.input()
+            );
+            String outcome = submission.isReplay() ? "REPLAYED" : "CREATED";
+            observability.idempotency(outcome);
+            observability.runtimeSubmission(outcome, Duration.between(startedAt, Instant.now()));
+            log.info("runtime_submission outcome={}", outcome);
+            return ResponseEntity.ok(submission.isReplay()
+                ? RuntimeExecutionResponse.from(submission.replay())
+                : RuntimeExecutionResponse.from(submission.result()));
+        } catch (IdempotencyKeyConflictException exception) {
+            observability.idempotency("CONFLICT");
+            observability.runtimeSubmission("REJECTED", Duration.between(startedAt, Instant.now()));
+            log.info("runtime_submission outcome=REJECTED reason=IDEMPOTENCY_CONFLICT");
+            throw exception;
+        } catch (IdempotencyRequestInProgressException exception) {
+            observability.idempotency("IN_PROGRESS");
+            observability.runtimeSubmission("REJECTED", Duration.between(startedAt, Instant.now()));
+            log.info("runtime_submission outcome=REJECTED reason=IDEMPOTENCY_IN_PROGRESS");
+            throw exception;
+        } catch (RuntimeException exception) {
+            observability.runtimeSubmission("FAILED", Duration.between(startedAt, Instant.now()));
+            log.warn("runtime_submission outcome=FAILED error_category=RUNTIME_EXCEPTION");
+            throw exception;
+        }
     }
 
     @GetMapping("/{executionId}")
