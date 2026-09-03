@@ -12,7 +12,17 @@ public interface ExternalInteractionRecoveryPersistence {
 
     void scheduleUnknown(String executionId, ConnectorResult connectorResult, OffsetDateTime now);
 
-    Optional<ExternalInteractionRecovery> claimNext(String workerId, OffsetDateTime now, Duration leaseDuration);
+    RecoveryClaimResult claimNext(String workerId, OffsetDateTime now, Duration leaseDuration);
+
+    record RecoveryClaimResult(Optional<ExternalInteractionRecovery> claimed, int exhaustedCount) {
+
+        public RecoveryClaimResult {
+            claimed = claimed == null ? Optional.empty() : claimed;
+            if (exhaustedCount < 0) {
+                throw new IllegalArgumentException("exhaustedCount must not be negative");
+            }
+        }
+    }
 
     RecoveryTransitionResult reschedule(
         String recoveryId,

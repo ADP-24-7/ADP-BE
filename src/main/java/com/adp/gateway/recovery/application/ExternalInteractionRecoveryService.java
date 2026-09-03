@@ -41,7 +41,9 @@ public class ExternalInteractionRecoveryService {
 
     public boolean processNext(String workerId) {
         OffsetDateTime now = OffsetDateTime.now(clock);
-        boolean processed = persistence.claimNext(workerId, now, LEASE_DURATION)
+        var claimResult = persistence.claimNext(workerId, now, LEASE_DURATION);
+        recordExpiredClaims(claimResult.exhaustedCount());
+        return claimResult.claimed()
             .map(recovery -> {
                 try {
                     ExternalStatusQueryResult queryResult = statusQueryResolver
@@ -87,7 +89,6 @@ public class ExternalInteractionRecoveryService {
                 return true;
             })
             .orElse(false);
-        return processed;
     }
 
     private void requireLease(boolean updated) {
@@ -111,6 +112,19 @@ public class ExternalInteractionRecoveryService {
     private void recordManualReview() {
         observability.runtimeExecution(RuntimeExecutionStatus.REVIEW_REQUIRED);
         record(RecoveryOutcome.MANUAL_REVIEW);
+    }
+
+    private void recordExpiredClaims(int exhaustedCount) {
+        if (exhaustedCount == 0) {
+            return;
+        }
+        observability.recovery(RecoveryOutcome.EXHAUSTED, exhaustedCount);
+        observability.runtimeExecution(RuntimeExecutionStatus.REVIEW_REQUIRED, exhaustedCount);
+        log.atWarn()
+            .addKeyValue("event", "recovery_expired_claims")
+            .addKeyValue("outcome", RecoveryOutcome.EXHAUSTED.name())
+            .addKeyValue("count", exhaustedCount)
+            .log("Expired recovery claims exhausted retry attempts");
     }
 
     private void record(RecoveryOutcome outcome) {

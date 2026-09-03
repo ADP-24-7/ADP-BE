@@ -18,7 +18,8 @@ class GatewayObservabilityTests {
         observability.idempotency(IdempotencyOutcome.REPLAY);
         observability.recovery(RecoveryOutcome.RECONCILED);
 
-        assertThat(registry.get("adp.runtime.execution.total").tag("status", "COMPLETED").counter().count())
+        assertThat(registry.get("adp.runtime.terminal.transition.total")
+            .tag("status", "COMPLETED").counter().count())
             .isEqualTo(1);
         assertThat(registry.get("adp.idempotency.resolution.total").tag("outcome", "REPLAY").counter().count())
             .isEqualTo(1);

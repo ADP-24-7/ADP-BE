@@ -10,11 +10,11 @@ Spring Boot Actuator가 제공하는 `/actuator/prometheus`에서 Prometheus tex
 
 | Metric | Label |
 | --- | --- |
-| `adp.runtime.execution.total` | `status=COMPLETED|BLOCKED|FAILED|REVIEW_REQUIRED|EXTERNALLY_RECONCILED` |
+| `adp.runtime.terminal.transition.total` | `status=COMPLETED|BLOCKED|FAILED|REVIEW_REQUIRED|EXTERNALLY_RECONCILED` |
 | `adp.idempotency.resolution.total` | `outcome=NEW|REPLAY|CONFLICT|IN_PROGRESS` |
 | `adp.recovery.processing.total` | `outcome=RECONCILED|RESCHEDULED|EXHAUSTED|MANUAL_REVIEW|STALE_LEASE` |
 
-HTTP 요청 수와 latency는 Spring Boot의 `http.server.requests`를 사용한다. Domain metric은 응답 시점이 아니라 reservation 판정과 실제 Runtime/Recovery 상태 전이가 영속화된 시점에 기록한다. 처리할 recovery job이 없는 polling은 정상 상태이므로 counter로 기록하지 않는다.
+HTTP 요청 수와 latency는 Spring Boot의 `http.server.requests`를 사용한다. Domain metric은 응답 시점이 아니라 reservation 판정과 실제 Runtime/Recovery 상태 전이가 영속화된 시점에 기록한다. Runtime metric은 unique execution 결과 수가 아니라 terminal state transition 횟수다. 처리할 recovery job이 없는 polling은 정상 상태이므로 counter로 기록하지 않는다.
 
 기존 Connector·Guard·Transform·Vault metric은 enum 또는 고정 Reason Code만 label로 사용한다. 자유 문자열과 식별자는 metric label로 사용할 수 없다.
 

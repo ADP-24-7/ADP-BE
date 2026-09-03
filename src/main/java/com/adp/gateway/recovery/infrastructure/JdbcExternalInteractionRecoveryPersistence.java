@@ -49,12 +49,12 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
 
     @Override
     @Transactional
-    public Optional<ExternalInteractionRecovery> claimNext(
+    public RecoveryClaimResult claimNext(
         String workerId,
         OffsetDateTime now,
         Duration leaseDuration
     ) {
-        jdbcClient.sql("""
+        int exhaustedCount = jdbcClient.sql("""
                 with exhausted as (
                     update runtime.external_interaction_recovery
                     set recovery_status = 'EXHAUSTED',
@@ -67,13 +67,18 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                       and attempt_count >= max_attempts
                     returning execution_id
                 )
-                update runtime.runtime_execution
-                set status = 'REVIEW_REQUIRED', updated_at = :now
-                where execution_id in (select execution_id from exhausted)
+                , runtime_updated as (
+                    update runtime.runtime_execution
+                    set status = 'REVIEW_REQUIRED', updated_at = :now
+                    where execution_id in (select execution_id from exhausted)
+                    returning execution_id
+                )
+                select count(*) from exhausted
                 """)
             .param("now", now)
-            .update();
-        return jdbcClient.sql("""
+            .query(Integer.class)
+            .single();
+        Optional<ExternalInteractionRecovery> claimed = jdbcClient.sql("""
                 with due as (
                     select recovery_id
                     from runtime.external_interaction_recovery
@@ -119,6 +124,7 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 rs.getString("status_query_evidence_digest")
             ))
             .optional();
+        return new RecoveryClaimResult(claimed, exhaustedCount);
     }
 
     @Override

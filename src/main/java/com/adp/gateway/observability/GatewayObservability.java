@@ -14,7 +14,11 @@ public class GatewayObservability {
     }
 
     public void runtimeExecution(RuntimeExecutionStatus status) {
-        meterRegistry.counter("adp.runtime.execution.total", "status", status.name()).increment();
+        runtimeExecution(status, 1);
+    }
+
+    public void runtimeExecution(RuntimeExecutionStatus status, int count) {
+        increment("adp.runtime.terminal.transition.total", "status", status.name(), count);
     }
 
     public void idempotency(IdempotencyOutcome outcome) {
@@ -22,7 +26,18 @@ public class GatewayObservability {
     }
 
     public void recovery(RecoveryOutcome outcome) {
-        meterRegistry.counter("adp.recovery.processing.total", "outcome", outcome.name()).increment();
+        recovery(outcome, 1);
+    }
+
+    public void recovery(RecoveryOutcome outcome, int count) {
+        increment("adp.recovery.processing.total", "outcome", outcome.name(), count);
+    }
+
+    private void increment(String name, String tagName, String tagValue, int count) {
+        if (count < 1) {
+            throw new IllegalArgumentException("Metric increment count must be positive");
+        }
+        meterRegistry.counter(name, tagName, tagValue).increment(count);
     }
 
     public enum IdempotencyOutcome {
