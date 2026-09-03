@@ -23,7 +23,8 @@ public class LocalAuthFixtureLoader implements ApplicationListener<ApplicationRe
     public void onApplicationEvent(ApplicationReadyEvent event) {
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
             new ClassPathResource("db/local/V1__local_auth_fixture.sql"),
-            new ClassPathResource("db/local/V2__local_data_access_fixture.sql")
+            new ClassPathResource("db/local/V2__local_data_access_fixture.sql"),
+            new ClassPathResource("db/local/V4__local_digital_asset_fixture.sql")
         );
         populator.execute(dataSource);
     }

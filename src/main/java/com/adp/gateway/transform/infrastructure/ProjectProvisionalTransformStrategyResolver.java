@@ -17,7 +17,9 @@ public class ProjectProvisionalTransformStrategyResolver implements TransformStr
 
     @Override
     public TransformInstruction resolve(TransformResolutionContext context) {
-        TransformStrategy strategy = switch (context.dataClass()) {
+        TransformStrategy strategy = "tokenized_asset_purchase".equals(context.workloadId())
+            ? digitalAssetStrategy(context)
+            : switch (context.dataClass()) {
             case CUSTOMER_IDENTIFIER, ACCOUNT_IDENTIFIER -> TransformStrategy.VAULT_TOKEN;
             case TRANSACTION_IDENTIFIER -> TransformStrategy.HMAC_PSEUDO;
             case FINANCIAL_AMOUNT -> TransformStrategy.GENERALIZE;
@@ -32,5 +34,16 @@ public class ProjectProvisionalTransformStrategyResolver implements TransformStr
             Duration.ofHours(24),
             Map.of()
         );
+    }
+
+    private TransformStrategy digitalAssetStrategy(TransformResolutionContext context) {
+        if (context.fieldPath().endsWith(".customerId") || context.fieldPath().endsWith(".accountId")) {
+            return TransformStrategy.VAULT_TOKEN;
+        }
+        return switch (context.dataClass()) {
+            case TRANSACTION_IDENTIFIER, FINANCIAL_AMOUNT, FINANCIAL_METADATA, BUSINESS_METADATA -> TransformStrategy.KEEP;
+            case CUSTOMER_IDENTIFIER, ACCOUNT_IDENTIFIER -> TransformStrategy.VAULT_TOKEN;
+            case UNKNOWN -> TransformStrategy.REMOVE;
+        };
     }
 }

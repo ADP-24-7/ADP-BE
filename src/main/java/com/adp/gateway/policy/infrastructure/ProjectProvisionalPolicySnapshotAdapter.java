@@ -25,12 +25,20 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     private static final String FIXTURE_WORKLOAD_ID = "customer_summary";
     private static final String FIXTURE_PURPOSE = "CUSTOMER_SUPPORT";
     private static final String FIXTURE_PROVIDER = "internal-provider";
+    private static final String ASSET_WORKLOAD_ID = "tokenized_asset_purchase";
+    private static final String ASSET_PURPOSE = "DIGITAL_ASSET_PURCHASE";
+    private static final String ASSET_PROVIDER = "mock-asset-platform";
     private static final String LEGACY_FIXTURE_WORKLOAD_ID = "workload_be0";
     private static final String LEGACY_FIXTURE_PURPOSE = "BE-0 local E2E";
     private static final OffsetDateTime FIXTURE_EFFECTIVE_AT = OffsetDateTime.parse("2026-01-01T00:00:00Z");
 
     @Override
     public PolicySnapshot load(PolicySelectionContext context) {
+        if (ASSET_WORKLOAD_ID.equals(context.workloadId()) && ASSET_PURPOSE.equals(context.purposeCode())
+            && ASSET_PROVIDER.equals(context.providerProfileId())) {
+            return fixtureSnapshot(PolicyAction.TRANSFORM, ASSET_WORKLOAD_ID, ASSET_PURPOSE,
+                "be-snapshot-local-fixture:digital-asset-purchase:mock-asset-platform");
+        }
         if (matchesRuntimeFixture(context)) {
             return fixtureSnapshot(
                 PolicyAction.TRANSFORM,
@@ -89,7 +97,7 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
                 AnalysisStatus.VALIDATED,
                 "PROJECT_PROVISIONAL local runtime fixture",
                 List.of("Not approved for production policy enforcement."),
-                List.of("AI_USE"),
+                List.of(workloadId.equals(ASSET_WORKLOAD_ID) ? "DIGITAL_ASSET" : "AI_USE"),
                 List.of("PERSONAL_INFORMATION"),
                 new RuntimeBinding(
                     "mapped",

@@ -27,6 +27,10 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
 
     @Override
     public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
+        if ("dest_mock_asset_platform_v1".equals(destinationProfileId)) {
+            meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
+            return digitalAssetProfile(destinationProfileId);
+        }
         if (!"dest_internal_provider_project_provisional".equals(destinationProfileId)) {
             meterRegistry.counter("destination.profile.lookup.total", "result", "NOT_FOUND").increment();
             throw new DestinationProfileNotFoundException(destinationProfileId);
@@ -49,6 +53,26 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             null,
             List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
             fieldContracts()
+        );
+    }
+
+    private DestinationProfile digitalAssetProfile(String destinationProfileId) {
+        return new DestinationProfile(
+            destinationProfileId, "1.0.0", "local-digital-asset-destination-v1",
+            "digital-asset-egress-contract/v1", "mock-asset-platform", ExecutionPackType.DIGITAL_ASSET,
+            "digital-asset-request/v1", "tenant_local_asset", "KR", "SETTLEMENT_EVIDENCE_ONLY", false,
+            "ACTIVE", OffsetDateTime.parse("2026-01-01T00:00:00Z"), null,
+            List.of(new DestinationBinding("tokenized_asset_purchase", "DIGITAL_ASSET_PURCHASE")),
+            List.of(
+                new DestinationFieldContract("input.customerId", DataClass.CUSTOMER_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
+                new DestinationFieldContract("input.accountId", DataClass.ACCOUNT_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
+                new DestinationFieldContract("input.walletAddress", DataClass.TRANSACTION_IDENTIFIER, FieldObligation.REQUIRED_EXACT, true, true),
+                new DestinationFieldContract("input.assetId", DataClass.BUSINESS_METADATA, FieldObligation.REQUIRED_EXACT, true, true),
+                new DestinationFieldContract("input.amount", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true),
+                new DestinationFieldContract("input.kycStatus", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
+                new DestinationFieldContract("input.amlStatus", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
+                new DestinationFieldContract("input.walletVerified", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true)
+            )
         );
     }
 
