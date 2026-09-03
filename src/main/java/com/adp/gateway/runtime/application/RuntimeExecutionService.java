@@ -390,10 +390,12 @@ public class RuntimeExecutionService {
                 providerRequest
             );
             persistence.recordConnector(executionId, connectorResult);
-            return outcomeFinalizer.finalizeOutcome(
+            RuntimeExecutionResult result = outcomeFinalizer.finalizeOutcome(
                 executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
                 destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
             );
+            recordTerminalTransition(result.status());
+            return result;
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
@@ -504,6 +506,10 @@ public class RuntimeExecutionService {
 
     private void updateStatus(String executionId, RuntimeExecutionStatus status) {
         persistence.updateStatus(executionId, status);
+        recordTerminalTransition(status);
+    }
+
+    private void recordTerminalTransition(RuntimeExecutionStatus status) {
         if (isTerminal(status)) {
             observability.runtimeExecution(status);
             log.atInfo()

@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,8 +28,12 @@ class DigitalAssetThinE2ETests {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @Test
     void executesTokenizedAssetPurchaseWithSettlementAndReconciliationEvidence() throws Exception {
+        double completedBefore = terminalTransitions("COMPLETED");
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String response = mockMvc.perform(post("/v1/runtime/executions")
                 .header("X-Request-Id", "req_asset_" + suffix)
@@ -100,6 +105,7 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(settlementEvidence).isEqualTo(1);
+        assertThat(terminalTransitions("COMPLETED")).isEqualTo(completedBefore + 1);
 
         mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
                 .header("X-ADP-API-Key", "local-dev-api-key"))
@@ -139,6 +145,7 @@ class DigitalAssetThinE2ETests {
 
     @Test
     void routesCriticalSettlementMismatchToReview() throws Exception {
+        double reviewRequiredBefore = terminalTransitions("REVIEW_REQUIRED");
         String response = assetRequest(token(), "customer-100", "asset-critical-mismatch")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
@@ -151,6 +158,7 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(String.class).single();
         assertThat(reconciliation).isEqualTo("CRITICAL_MISMATCH");
+        assertThat(terminalTransitions("REVIEW_REQUIRED")).isEqualTo(reviewRequiredBefore + 1);
     }
 
     @Test
@@ -210,6 +218,13 @@ class DigitalAssetThinE2ETests {
                  "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"wallet-test-001",
                  "assetId":"%s","amount":10000,"kycStatus":"VERIFIED","amlStatus":"PASSED","walletVerified":true}}
                 """.formatted(suffix, customerId, assetId)));
+    }
+
+    private double terminalTransitions(String status) {
+        var counter = meterRegistry.find("adp.runtime.terminal.transition.total")
+            .tag("status", status)
+            .counter();
+        return counter == null ? 0 : counter.count();
     }
 
     private String token() {
