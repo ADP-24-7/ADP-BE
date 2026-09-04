@@ -16,6 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.adp.gateway.recovery.application.ExternalInteractionRecoveryService;
+
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
     "adp.mock-runtime.enabled=true"
@@ -30,6 +32,9 @@ class DigitalAssetThinE2ETests {
 
     @Autowired
     private MeterRegistry meterRegistry;
+
+    @Autowired
+    private ExternalInteractionRecoveryService recoveryService;
 
     @Test
     void executesTokenizedAssetPurchaseWithSettlementAndReconciliationEvidence() throws Exception {
@@ -177,7 +182,7 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
-    void persistsSentUnknownWithoutSettlementIdentifiersAndSchedulesRecovery() throws Exception {
+    void reconcilesSentUnknownThroughDigitalAssetStatusQueryAdapter() throws Exception {
         String response = assetRequest(token(), "customer-100", "asset-sent-unknown")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("EGRESSING"))
@@ -198,8 +203,25 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(evidenceCount).isEqualTo(1);
         assertThat(recoveryCount).isEqualTo(1);
-        jdbcClient.sql("delete from runtime.external_interaction_recovery where execution_id = :executionId")
-            .param("executionId", executionId).update();
+
+        assertThat(recoveryService.processNext("digital-asset-e2e-worker")).isTrue();
+
+        ReconciledState reconciled = jdbcClient.sql("""
+                select re.status as runtime_status, re.connector_status,
+                       rr.recovery_status, rr.last_observed_external_status,
+                       rr.status_query_evidence_digest
+                from runtime.runtime_execution re
+                join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
+                where re.execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(ReconciledState.class)
+            .single();
+        assertThat(reconciled.runtimeStatus()).isEqualTo("EXTERNALLY_RECONCILED");
+        assertThat(reconciled.connectorStatus()).isEqualTo("ACKNOWLEDGED");
+        assertThat(reconciled.recoveryStatus()).isEqualTo("RECONCILED");
+        assertThat(reconciled.lastObservedExternalStatus()).isEqualTo("ACKNOWLEDGED");
+        assertThat(reconciled.statusQueryEvidenceDigest()).matches("[0-9a-f]{64}");
     }
 
     private org.springframework.test.web.servlet.ResultActions assetRequest(
@@ -229,5 +251,14 @@ class DigitalAssetThinE2ETests {
 
     private String token() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
+    private record ReconciledState(
+        String runtimeStatus,
+        String connectorStatus,
+        String recoveryStatus,
+        String lastObservedExternalStatus,
+        String statusQueryEvidenceDigest
+    ) {
     }
 }
