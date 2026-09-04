@@ -98,6 +98,24 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void migrationCreatesExecutionPackPolicyEvidenceTable() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'execution_pack_policy_evaluation'
+                  and column_name in (
+                    'execution_id', 'pack_type', 'profile_id', 'profile_version',
+                    'profile_digest', 'result', 'reason_codes', 'evaluated_at'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(8);
+    }
+
+    @Test
     void migrationCreatesTransformAndVaultTables() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)

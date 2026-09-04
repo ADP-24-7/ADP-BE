@@ -141,6 +141,18 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
+    void routesDigitalAssetPolicyViolationsToReviewBeforeConnector() throws Exception {
+        assertPolicyReview("kyc", "10000", "PENDING", "PASSED", true,
+            "DIGITAL_ASSET_KYC_REVIEW_REQUIRED");
+        assertPolicyReview("aml", "10000", "VERIFIED", "REVIEW", true,
+            "DIGITAL_ASSET_AML_REVIEW_REQUIRED");
+        assertPolicyReview("wallet", "10000", "VERIFIED", "PASSED", false,
+            "DIGITAL_ASSET_WALLET_REVIEW_REQUIRED");
+        assertPolicyReview("amount", "10000001", "VERIFIED", "PASSED", true,
+            "DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED");
+    }
+
+    @Test
     void keepsRuntimeEgressingWhileSettlementIsNotFinal() throws Exception {
         assetRequest(token(), "customer-100", "asset-settling")
             .andExpect(status().isOk())
@@ -244,6 +256,18 @@ class DigitalAssetThinE2ETests {
     private org.springframework.test.web.servlet.ResultActions assetRequest(
         String suffix, String customerId, String assetId
     ) throws Exception {
+        return assetRequest(suffix, customerId, assetId, "10000", "VERIFIED", "PASSED", true);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assetRequest(
+        String suffix,
+        String customerId,
+        String assetId,
+        String amount,
+        String kycStatus,
+        String amlStatus,
+        boolean walletVerified
+    ) throws Exception {
         return mockMvc.perform(post("/v1/runtime/executions")
             .header("X-Request-Id", "req_asset_case_" + suffix)
             .header("X-Trace-Id", "trace_asset_case_" + suffix)
@@ -255,8 +279,41 @@ class DigitalAssetThinE2ETests {
                  "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                  "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
                  "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"wallet-test-001",
-                 "assetId":"%s","amount":10000,"kycStatus":"VERIFIED","amlStatus":"PASSED","walletVerified":true}}
-                """.formatted(suffix, customerId, assetId)));
+                 "assetId":"%s","amount":%s,"kycStatus":"%s","amlStatus":"%s","walletVerified":%s}}
+                """.formatted(suffix, customerId, assetId, amount, kycStatus, amlStatus, walletVerified)));
+    }
+
+    private void assertPolicyReview(
+        String label,
+        String amount,
+        String kycStatus,
+        String amlStatus,
+        boolean walletVerified,
+        String expectedReason
+    ) throws Exception {
+        String suffix = label + "_" + token();
+        assetRequest(suffix, "customer-100", "asset-krw-token-001", amount, kycStatus, amlStatus, walletVerified)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.finalAction").value("REVIEW"))
+            .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"));
+
+        PolicyGateEvidence evidence = jdbcClient.sql("""
+                select pe.profile_version, pe.profile_digest, pe.result, pe.reason_codes,
+                       (select count(*) from runtime.connector_execution ce
+                        where ce.execution_id = re.execution_id) as connector_count
+                from runtime.runtime_execution re
+                join runtime.execution_pack_policy_evaluation pe on pe.execution_id = re.execution_id
+                where re.request_id = :requestId
+                """)
+            .param("requestId", "req_asset_case_" + suffix)
+            .query(PolicyGateEvidence.class)
+            .single();
+        assertThat(evidence.profileVersion()).isEqualTo("1.0.0");
+        assertThat(evidence.profileDigest()).matches("[0-9a-f]{64}");
+        assertThat(evidence.result()).isEqualTo("REVIEW");
+        assertThat(evidence.reasonCodes()).contains(expectedReason);
+        assertThat(evidence.connectorCount()).isZero();
     }
 
     private double terminalTransitions(String status) {
@@ -280,5 +337,14 @@ class DigitalAssetThinE2ETests {
     }
 
     private record SettlementState(String settlementStatus, String reconciliationResult) {
+    }
+
+    private record PolicyGateEvidence(
+        String profileVersion,
+        String profileDigest,
+        String result,
+        String reasonCodes,
+        int connectorCount
+    ) {
     }
 }

@@ -34,6 +34,7 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
+import com.adp.gateway.decision.application.ExecutionPackPolicyGateResolver;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.application.DestinationProfilePort;
@@ -107,6 +108,7 @@ class RuntimeExecutionServiceTests {
             policySnapshotPort,
             applicabilityEvaluator,
             decisionService,
+            new ExecutionPackPolicyGateResolver(List.of()),
             new RuntimeConnectorResolver(List.of(connector)),
             auditRecorder,
             persistence,

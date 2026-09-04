@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.decision.domain.ExecutionPackPolicyEvaluation;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
@@ -293,6 +294,32 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("decisionId", decision.decisionId())
             .param("finalAction", decision.finalAction().name())
             .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+    }
+
+    @Override
+    public void recordExecutionPackPolicyEvaluation(
+        String executionId,
+        ExecutionPackPolicyEvaluation evaluation
+    ) {
+        jdbcClient.sql("""
+            insert into runtime.execution_pack_policy_evaluation (
+                execution_id, pack_type, profile_id, profile_version,
+                profile_digest, result, reason_codes, evaluated_at
+            ) values (
+                :executionId, :packType, :profileId, :profileVersion,
+                :profileDigest, :result, :reasonCodes, :evaluatedAt
+            )
+            """)
+            .param("executionId", executionId)
+            .param("packType", evaluation.packType().name())
+            .param("profileId", evaluation.profileId())
+            .param("profileVersion", evaluation.profileVersion())
+            .param("profileDigest", evaluation.profileDigest())
+            .param("result", evaluation.result())
+            .param("reasonCodes", evaluation.reasonCodes().stream()
+                .map(Enum::name).collect(Collectors.joining(",")))
+            .param("evaluatedAt", OffsetDateTime.now(clock))
             .update();
     }
 
