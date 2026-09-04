@@ -5,6 +5,7 @@
 ## Contract
 
 - `fake-digital-asset-platform` 전용 `ExternalStatusQueryPort`를 Local fixture에서만 등록한다.
+- Fake Connector가 Provider-side 상태 저장소에 correlation별 결과를 기록하고 Status Query Adapter가 이를 조회한다.
 - 조회에는 저장된 Provider Correlation Key를 사용한다.
 - 조회 증적은 원문 응답 대신 SHA-256 digest로 저장한다.
 - `ACKNOWLEDGED` 확인 시 Recovery, Connector Execution, Runtime Execution을 기존 공통 transaction에서 함께 수렴한다.

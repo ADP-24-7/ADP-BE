@@ -203,6 +203,13 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(evidenceCount).isEqualTo(1);
         assertThat(recoveryCount).isEqualTo(1);
+        Integer activeRecoveryCount = jdbcClient.sql("""
+                select count(*) from runtime.external_interaction_recovery
+                where recovery_status in ('PENDING', 'RETRY_SCHEDULED', 'CLAIMED')
+                """)
+            .query(Integer.class)
+            .single();
+        assertThat(activeRecoveryCount).isEqualTo(1);
 
         assertThat(recoveryService.processNext("digital-asset-e2e-worker")).isTrue();
 
@@ -222,6 +229,16 @@ class DigitalAssetThinE2ETests {
         assertThat(reconciled.recoveryStatus()).isEqualTo("RECONCILED");
         assertThat(reconciled.lastObservedExternalStatus()).isEqualTo("ACKNOWLEDGED");
         assertThat(reconciled.statusQueryEvidenceDigest()).matches("[0-9a-f]{64}");
+        SettlementState settlement = jdbcClient.sql("""
+                select settlement_status, reconciliation_result
+                from runtime.digital_asset_transaction
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(SettlementState.class)
+            .single();
+        assertThat(settlement.settlementStatus()).isEqualTo("SENT_UNKNOWN");
+        assertThat(settlement.reconciliationResult()).isEqualTo("WAIT");
     }
 
     private org.springframework.test.web.servlet.ResultActions assetRequest(
@@ -260,5 +277,8 @@ class DigitalAssetThinE2ETests {
         String lastObservedExternalStatus,
         String statusQueryEvidenceDigest
     ) {
+    }
+
+    private record SettlementState(String settlementStatus, String reconciliationResult) {
     }
 }

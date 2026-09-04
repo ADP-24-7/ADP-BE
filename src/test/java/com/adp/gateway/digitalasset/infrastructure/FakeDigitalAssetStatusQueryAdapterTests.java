@@ -15,22 +15,40 @@ import org.junit.jupiter.api.Test;
 
 class FakeDigitalAssetStatusQueryAdapterTests {
 
+    private final FakeDigitalAssetPlatformStateStore stateStore = new FakeDigitalAssetPlatformStateStore();
     private final FakeDigitalAssetStatusQueryAdapter adapter =
-        new FakeDigitalAssetStatusQueryAdapter(new CanonicalValueHasher());
+        new FakeDigitalAssetStatusQueryAdapter(new CanonicalValueHasher(), stateStore);
 
     @Test
-    void resolvesSentUnknownByProviderCorrelationKey() {
-        var result = adapter.query(recovery("provider-request-1"));
+    void evidenceDigestIsStableAndBoundToCorrelationAndStatus() {
+        stateStore.record("provider-request-1", ConnectorStatus.ACKNOWLEDGED);
+        stateStore.record("provider-request-2", ConnectorStatus.ACKNOWLEDGED);
 
-        assertThat(result.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
-        assertThat(result.evidenceDigest()).matches("[0-9a-f]{64}");
-        assertThat(result.evidenceDigest()).doesNotContain("provider-request-1");
+        var first = adapter.query(recovery("provider-request-1"));
+        var repeated = adapter.query(recovery("provider-request-1"));
+        var differentCorrelation = adapter.query(recovery("provider-request-2"));
+
+        stateStore.record("provider-request-1", ConnectorStatus.SENT_UNKNOWN);
+        var differentStatus = adapter.query(recovery("provider-request-1"));
+
+        assertThat(first.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
+        assertThat(first.evidenceDigest()).matches("[0-9a-f]{64}");
+        assertThat(repeated.evidenceDigest()).isEqualTo(first.evidenceDigest());
+        assertThat(differentCorrelation.evidenceDigest()).isNotEqualTo(first.evidenceDigest());
+        assertThat(differentStatus.evidenceDigest()).isNotEqualTo(first.evidenceDigest());
     }
 
     @Test
     void rejectsMissingProviderCorrelationKey() {
         assertThatThrownBy(() -> adapter.query(recovery(" ")))
             .isInstanceOf(ExternalStatusQueryPermanentException.class);
+    }
+
+    @Test
+    void rejectsCorrelationKeyThatProviderDidNotRecord() {
+        assertThatThrownBy(() -> adapter.query(recovery("provider-request-not-found")))
+            .isInstanceOf(ExternalStatusQueryPermanentException.class)
+            .hasMessageContaining("not found");
     }
 
     private ExternalInteractionRecovery recovery(String correlationKey) {

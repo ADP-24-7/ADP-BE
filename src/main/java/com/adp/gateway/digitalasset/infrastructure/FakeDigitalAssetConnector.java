@@ -24,10 +24,16 @@ import org.springframework.stereotype.Component;
 public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
     private final ObjectMapper objectMapper;
     private final CanonicalValueHasher hasher;
+    private final FakeDigitalAssetPlatformStateStore stateStore;
 
-    public FakeDigitalAssetConnector(ObjectMapper objectMapper, CanonicalValueHasher hasher) {
+    public FakeDigitalAssetConnector(
+        ObjectMapper objectMapper,
+        CanonicalValueHasher hasher,
+        FakeDigitalAssetPlatformStateStore stateStore
+    ) {
         this.objectMapper = objectMapper;
         this.hasher = hasher;
+        this.stateStore = stateStore;
     }
 
     @Override
@@ -43,10 +49,12 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         Map<String, Object> expected = transaction(request.payload());
         String assetId = String.valueOf(expected.get("assetId"));
         if ("asset-sent-unknown".equals(assetId)) {
+            stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
             return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
                 ConnectorStatus.SENT_UNKNOWN, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
                 null, null, null);
         }
+        stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
         String settlementStatus = "asset-settling".equals(assetId) ? "SETTLING" : "SETTLED";
         Map<String, Object> actual = new TreeMap<>(expected);
         if ("asset-critical-mismatch".equals(assetId)) {

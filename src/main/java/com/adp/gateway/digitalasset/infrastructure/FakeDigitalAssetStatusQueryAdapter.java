@@ -16,9 +16,14 @@ public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPo
     static final String CONNECTOR_ID = "fake-digital-asset-platform";
 
     private final CanonicalValueHasher hasher;
+    private final FakeDigitalAssetPlatformStateStore stateStore;
 
-    public FakeDigitalAssetStatusQueryAdapter(CanonicalValueHasher hasher) {
+    public FakeDigitalAssetStatusQueryAdapter(
+        CanonicalValueHasher hasher,
+        FakeDigitalAssetPlatformStateStore stateStore
+    ) {
         this.hasher = hasher;
+        this.stateStore = stateStore;
     }
 
     @Override
@@ -34,9 +39,13 @@ public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPo
         if (recovery.providerCorrelationKey() == null || recovery.providerCorrelationKey().isBlank()) {
             throw new ExternalStatusQueryPermanentException("Digital asset provider correlation key is missing");
         }
+        ConnectorStatus status = stateStore.find(recovery.providerCorrelationKey())
+            .orElseThrow(() -> new ExternalStatusQueryPermanentException(
+                "Digital asset provider request was not found"
+            ));
         String evidenceDigest = hasher.hash(String.join("|",
-            "digital-asset-status/v1", recovery.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED.name()
+            "digital-asset-status/v1", recovery.providerCorrelationKey(), status.name()
         ));
-        return new ExternalStatusQueryResult(ConnectorStatus.ACKNOWLEDGED, evidenceDigest);
+        return new ExternalStatusQueryResult(status, evidenceDigest);
     }
 }

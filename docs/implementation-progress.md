@@ -32,7 +32,7 @@ BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.
 - [x] 외부 호출 이후 local outcome finalization transaction
 - [x] 정상 Settlement `SETTLED`/`MATCH` Thin E2E
 - [ ] KYC/AML/Wallet Review 및 Amount Limit 정책
-- [x] `SENT_UNKNOWN` Digital Asset Provider Status Query Adapter와 공통 Recovery 수렴
+- [x] `SENT_UNKNOWN` Digital Asset Local Provider Status Query Adapter와 공통 Recovery 수렴
 - [ ] Mismatch/Critical Mismatch Recovery E2E
 - [ ] FE Digital Asset Lab fixture 연결
 
