@@ -94,6 +94,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [BE-7 AI Full E2E](docs/be-7-ai-full-e2e.md)
 - [BE-8 Digital Asset Thin E2E](docs/be-8-digital-asset-thin-e2e.md)
 - [BE-8 Digital Asset Recovery](docs/be-8-digital-asset-recovery.md)
+- [BE-8 Digital Asset Policy Gate](docs/be-8-digital-asset-policy-gate.md)
 - [Pack Runtime Resolver](docs/pack-runtime-resolvers.md)
 - [BE-9A Idempotency Core](docs/be-9a-idempotency-core.md)
 - [BE-9B External Interaction Recovery Core](docs/be-9b-external-interaction-recovery.md)

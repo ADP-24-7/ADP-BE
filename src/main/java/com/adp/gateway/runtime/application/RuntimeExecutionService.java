@@ -24,6 +24,7 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
+import com.adp.gateway.decision.application.ExecutionPackPolicyGateResolver;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeAuthorizationResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
@@ -75,6 +76,7 @@ public class RuntimeExecutionService {
     private final PolicySnapshotPort policySnapshotPort;
     private final PolicyApplicabilityEvaluator policyApplicabilityEvaluator;
     private final RuntimeDecisionService decisionService;
+    private final ExecutionPackPolicyGateResolver packPolicyGateResolver;
     private final RuntimeConnectorResolver runtimeConnectorResolver;
     private final AuditRecorder auditRecorder;
     private final RuntimeExecutionPersistence persistence;
@@ -103,6 +105,7 @@ public class RuntimeExecutionService {
         PolicySnapshotPort policySnapshotPort,
         PolicyApplicabilityEvaluator policyApplicabilityEvaluator,
         RuntimeDecisionService decisionService,
+        ExecutionPackPolicyGateResolver packPolicyGateResolver,
         RuntimeConnectorResolver runtimeConnectorResolver,
         AuditRecorder auditRecorder,
         RuntimeExecutionPersistence persistence,
@@ -130,6 +133,7 @@ public class RuntimeExecutionService {
         this.policySnapshotPort = policySnapshotPort;
         this.policyApplicabilityEvaluator = policyApplicabilityEvaluator;
         this.decisionService = decisionService;
+        this.packPolicyGateResolver = packPolicyGateResolver;
         this.runtimeConnectorResolver = runtimeConnectorResolver;
         this.auditRecorder = auditRecorder;
         this.persistence = persistence;
@@ -238,6 +242,13 @@ public class RuntimeExecutionService {
                 RuntimeAuthorizationResult.ALLOWED,
                 applicability
             );
+            var packPolicyEvaluation = packPolicyGateResolver.evaluate(
+                destinationProfile.packType(), canonicalContext, destinationProfile, decision, now
+            );
+            if (packPolicyEvaluation.isPresent()) {
+                persistence.recordExecutionPackPolicyEvaluation(executionId, packPolicyEvaluation.get());
+                decision = packPolicyEvaluation.get().decision();
+            }
             persistence.recordRuntimeDecision(executionId, decision);
             TransformResult transformResult = transformEngine.transform(
                 executionId,

@@ -5,6 +5,7 @@ import java.util.Optional;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.decision.domain.ExecutionPackPolicyEvaluation;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
@@ -34,6 +35,8 @@ public interface RuntimeExecutionPersistence {
     void recordDestinationProfile(String executionId, DestinationProfile destinationProfile);
 
     void recordPolicyEvaluation(String executionId, PolicySnapshot snapshot);
+
+    void recordExecutionPackPolicyEvaluation(String executionId, ExecutionPackPolicyEvaluation evaluation);
 
     void recordRuntimeDecision(String executionId, RuntimeDecision decision);
 

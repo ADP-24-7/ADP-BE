@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
+import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
@@ -187,6 +188,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.APPROVAL_SCOPE_NOT_FOUND,
             "Approval scope not found",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            request
+        );
+    }
+
+    @ExceptionHandler(DigitalAssetComplianceContextUnavailableException.class)
+    ResponseEntity<ErrorResponse> handleDigitalAssetComplianceContextUnavailable(
+        DigitalAssetComplianceContextUnavailableException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED,
+            "Digital asset compliance context is not configured",
             HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );
