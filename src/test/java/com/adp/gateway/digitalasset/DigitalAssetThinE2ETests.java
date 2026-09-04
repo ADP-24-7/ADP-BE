@@ -142,13 +142,13 @@ class DigitalAssetThinE2ETests {
 
     @Test
     void routesDigitalAssetPolicyViolationsToReviewBeforeConnector() throws Exception {
-        assertPolicyReview("kyc", "10000", "PENDING", "PASSED", true,
+        assertPolicyReview("kyc", "wallet-kyc-pending", "10000", "VERIFIED", "PASSED", true,
             "DIGITAL_ASSET_KYC_REVIEW_REQUIRED");
-        assertPolicyReview("aml", "10000", "VERIFIED", "REVIEW", true,
+        assertPolicyReview("aml", "wallet-aml-review", "10000", "VERIFIED", "PASSED", true,
             "DIGITAL_ASSET_AML_REVIEW_REQUIRED");
-        assertPolicyReview("wallet", "10000", "VERIFIED", "PASSED", false,
+        assertPolicyReview("wallet", "wallet-unverified", "10000", "VERIFIED", "PASSED", true,
             "DIGITAL_ASSET_WALLET_REVIEW_REQUIRED");
-        assertPolicyReview("amount", "10000001", "VERIFIED", "PASSED", true,
+        assertPolicyReview("amount", "wallet-test-001", "10000001", "VERIFIED", "PASSED", true,
             "DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED");
     }
 
@@ -256,12 +256,15 @@ class DigitalAssetThinE2ETests {
     private org.springframework.test.web.servlet.ResultActions assetRequest(
         String suffix, String customerId, String assetId
     ) throws Exception {
-        return assetRequest(suffix, customerId, assetId, "10000", "VERIFIED", "PASSED", true);
+        return assetRequest(
+            suffix, customerId, "wallet-test-001", assetId, "10000", "VERIFIED", "PASSED", true
+        );
     }
 
     private org.springframework.test.web.servlet.ResultActions assetRequest(
         String suffix,
         String customerId,
+        String walletAddress,
         String assetId,
         String amount,
         String kycStatus,
@@ -278,13 +281,16 @@ class DigitalAssetThinE2ETests {
                  "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
                  "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                  "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
-                 "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"wallet-test-001",
+                 "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"%s",
                  "assetId":"%s","amount":%s,"kycStatus":"%s","amlStatus":"%s","walletVerified":%s}}
-                """.formatted(suffix, customerId, assetId, amount, kycStatus, amlStatus, walletVerified)));
+                """.formatted(
+                    suffix, customerId, walletAddress, assetId, amount, kycStatus, amlStatus, walletVerified
+                )));
     }
 
     private void assertPolicyReview(
         String label,
+        String walletAddress,
         String amount,
         String kycStatus,
         String amlStatus,
@@ -292,14 +298,18 @@ class DigitalAssetThinE2ETests {
         String expectedReason
     ) throws Exception {
         String suffix = label + "_" + token();
-        assetRequest(suffix, "customer-100", "asset-krw-token-001", amount, kycStatus, amlStatus, walletVerified)
+        assetRequest(
+            suffix, "customer-100", walletAddress, "asset-krw-token-001",
+            amount, kycStatus, amlStatus, walletVerified
+        )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
             .andExpect(jsonPath("$.finalAction").value("REVIEW"))
             .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"));
 
         PolicyGateEvidence evidence = jdbcClient.sql("""
-                select pe.profile_version, pe.profile_digest, pe.result, pe.reason_codes,
+                select pe.profile_version, pe.profile_digest, pe.profile_action, pe.final_action,
+                       pe.reason_codes, pe.assertion_source, pe.assertion_version, pe.assertion_digest,
                        (select count(*) from runtime.connector_execution ce
                         where ce.execution_id = re.execution_id) as connector_count
                 from runtime.runtime_execution re
@@ -311,8 +321,12 @@ class DigitalAssetThinE2ETests {
             .single();
         assertThat(evidence.profileVersion()).isEqualTo("1.0.0");
         assertThat(evidence.profileDigest()).matches("[0-9a-f]{64}");
-        assertThat(evidence.result()).isEqualTo("REVIEW");
+        assertThat(evidence.profileAction()).isEqualTo("REVIEW");
+        assertThat(evidence.finalAction()).isEqualTo("REVIEW");
         assertThat(evidence.reasonCodes()).contains(expectedReason);
+        assertThat(evidence.assertionSource()).isEqualTo("BANK_COMPLIANCE_FIXTURE");
+        assertThat(evidence.assertionVersion()).isEqualTo("1.0.0");
+        assertThat(evidence.assertionDigest()).matches("[0-9a-f]{64}");
         assertThat(evidence.connectorCount()).isZero();
     }
 
@@ -342,8 +356,12 @@ class DigitalAssetThinE2ETests {
     private record PolicyGateEvidence(
         String profileVersion,
         String profileDigest,
-        String result,
+        String profileAction,
+        String finalAction,
         String reasonCodes,
+        String assertionSource,
+        String assertionVersion,
+        String assertionDigest,
         int connectorCount
     ) {
     }

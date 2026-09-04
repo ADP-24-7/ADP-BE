@@ -305,10 +305,12 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         jdbcClient.sql("""
             insert into runtime.execution_pack_policy_evaluation (
                 execution_id, pack_type, profile_id, profile_version,
-                profile_digest, result, reason_codes, evaluated_at
+                profile_digest, baseline_action, profile_action, final_action,
+                reason_codes, assertion_source, assertion_version, assertion_digest, evaluated_at
             ) values (
                 :executionId, :packType, :profileId, :profileVersion,
-                :profileDigest, :result, :reasonCodes, :evaluatedAt
+                :profileDigest, :baselineAction, :profileAction, :finalAction,
+                :reasonCodes, :assertionSource, :assertionVersion, :assertionDigest, :evaluatedAt
             )
             """)
             .param("executionId", executionId)
@@ -316,9 +318,14 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("profileId", evaluation.profileId())
             .param("profileVersion", evaluation.profileVersion())
             .param("profileDigest", evaluation.profileDigest())
-            .param("result", evaluation.result())
+            .param("baselineAction", evaluation.baselineAction().name())
+            .param("profileAction", evaluation.profileAction().name())
+            .param("finalAction", evaluation.finalAction().name())
             .param("reasonCodes", evaluation.reasonCodes().stream()
                 .map(Enum::name).collect(Collectors.joining(",")))
+            .param("assertionSource", evaluation.assertionSource())
+            .param("assertionVersion", evaluation.assertionVersion())
+            .param("assertionDigest", evaluation.assertionDigest())
             .param("evaluatedAt", OffsetDateTime.now(clock))
             .update();
     }

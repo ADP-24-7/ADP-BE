@@ -10,8 +10,13 @@ public record ExecutionPackPolicyEvaluation(
     String profileId,
     String profileVersion,
     String profileDigest,
-    String result,
+    FinalAction baselineAction,
+    FinalAction profileAction,
+    FinalAction finalAction,
     List<ReasonCode> reasonCodes,
+    String assertionSource,
+    String assertionVersion,
+    String assertionDigest,
     RuntimeDecision decision
 ) {
     public ExecutionPackPolicyEvaluation {

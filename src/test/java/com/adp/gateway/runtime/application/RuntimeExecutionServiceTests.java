@@ -108,7 +108,7 @@ class RuntimeExecutionServiceTests {
             policySnapshotPort,
             applicabilityEvaluator,
             decisionService,
-            new ExecutionPackPolicyGateResolver(List.of()),
+            new ExecutionPackPolicyGateResolver(List.of(), hasher),
             new RuntimeConnectorResolver(List.of(connector)),
             auditRecorder,
             persistence,

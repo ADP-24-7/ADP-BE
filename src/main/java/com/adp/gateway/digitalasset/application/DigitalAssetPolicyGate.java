@@ -25,9 +25,14 @@ import org.springframework.stereotype.Component;
 public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
 
     private final DigitalAssetPolicyProfilePort profilePort;
+    private final DigitalAssetComplianceContextPort complianceContextPort;
 
-    public DigitalAssetPolicyGate(DigitalAssetPolicyProfilePort profilePort) {
+    public DigitalAssetPolicyGate(
+        DigitalAssetPolicyProfilePort profilePort,
+        DigitalAssetComplianceContextPort complianceContextPort
+    ) {
         this.profilePort = profilePort;
+        this.complianceContextPort = complianceContextPort;
     }
 
     @Override
@@ -45,7 +50,10 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         DigitalAssetPolicyProfile profile = profilePort.load(
             destinationProfile.destinationProfileId(), requestStartedAt
         );
-        List<ReasonCode> reasons = reasons(context, destinationProfile, profile, requestStartedAt);
+        var compliance = complianceContextPort.load(
+            text(context, "customerId"), text(context, "accountId"), text(context, "walletAddress")
+        );
+        List<ReasonCode> reasons = reasons(context, destinationProfile, profile, compliance, requestStartedAt);
         FinalAction profileAction = reasons.contains(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID)
             ? FinalAction.BLOCK
             : reasons.isEmpty() ? FinalAction.ALLOW : FinalAction.REVIEW;
@@ -71,7 +79,8 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         );
         return new ExecutionPackPolicyEvaluation(
             supportedPack(), profile.profileId(), profile.version(), profile.digest(),
-            profileAction.name(), reasons, decision
+            baselineDecision.finalAction(), profileAction, finalAction, reasons,
+            compliance.sourceSystem(), compliance.assertionVersion(), compliance.evidenceDigest(), decision
         );
     }
 
@@ -79,11 +88,17 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         CanonicalContext context,
         DestinationProfile destinationProfile,
         DigitalAssetPolicyProfile profile,
+        com.adp.gateway.digitalasset.domain.DigitalAssetComplianceContext compliance,
         OffsetDateTime requestStartedAt
     ) {
         List<ReasonCode> reasons = new ArrayList<>();
         if (!profile.destinationProfileId().equals(destinationProfile.destinationProfileId())
-            || !profile.isEffectiveAt(requestStartedAt)) {
+            || !profile.isEffectiveAt(requestStartedAt)
+            || !profile.complianceSourceSystem().equals(compliance.sourceSystem())
+            || !profile.complianceAssertionVersion().equals(compliance.assertionVersion())
+            || !text(context, "kycStatus").equals(compliance.kycStatus())
+            || !text(context, "amlStatus").equals(compliance.amlStatus())
+            || !Boolean.valueOf(text(context, "walletVerified")).equals(compliance.walletVerified())) {
             reasons.add(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID);
             return reasons;
         }
