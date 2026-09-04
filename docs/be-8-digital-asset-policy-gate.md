@@ -18,7 +18,9 @@ Pack Policy Gate는 Baseline Decision을 완화하지 않는다. Profile 위반�
 
 ## Compliance Trust Boundary
 
-요청의 `kycStatus`, `amlStatus`, `walletVerified` 값은 정책 판단 근거로 신뢰하지 않는다. Canonical Context Builder가 `DigitalAssetComplianceContextPort`에서 고객, 계좌, 지갑 기준의 authoritative assertion을 조회해 해당 필드를 덮어쓰며, Gate는 Profile에 고정된 assertion source/version과 일치하는지도 확인한다.
+외부 Transaction Request는 `kycStatus`, `amlStatus`, `walletVerified`를 받지 않는다. Canonical Context Builder가 `DigitalAssetComplianceContextResolver`를 통해 고객, 계좌, 지갑 기준의 authoritative assertion을 실행당 한 번 조회해 값과 source/version/digest를 pin하며, Gate는 Profile에 고정된 assertion source/version과 일치하는지도 확인한다.
+
+Compliance Port가 등록되지 않은 환경에서도 애플리케이션은 정상 기동한다. 해당 환경에서 Digital Asset 실행이 들어오면 `DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED`로 그 실행만 차단한다.
 
 Local fixture의 assertion source는 `BANK_COMPLIANCE_FIXTURE`, version은 `1.0.0`이다. 운영 환경에서는 이 Port를 금융기관 KYC/AML 및 Wallet 검증 시스템 Adapter로 교체해야 한다.
 
@@ -54,6 +56,7 @@ Decision identity는 Baseline Decision ID, Profile Digest, 강화된 Final Actio
 - `DIGITAL_ASSET_WALLET_REVIEW_REQUIRED`
 - `DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED`
 - `EXECUTION_PACK_POLICY_GATE_NOT_CONFIGURED`
+- `DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED`
 
 Review 결과에서는 Transform까지 privacy-safe하게 수행할 수 있지만 Connector는 호출하지 않는다.
 

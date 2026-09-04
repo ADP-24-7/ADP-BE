@@ -25,16 +25,16 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     public static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
     private final CanonicalValueHasher hasher;
     private final SubjectRefHasher subjectRefHasher;
-    private final DigitalAssetComplianceContextPort complianceContextPort;
+    private final DigitalAssetComplianceContextResolver complianceContextResolver;
 
     public DigitalAssetCanonicalContextBuilder(
         CanonicalValueHasher hasher,
         SubjectRefHasher subjectRefHasher,
-        DigitalAssetComplianceContextPort complianceContextPort
+        DigitalAssetComplianceContextResolver complianceContextResolver
     ) {
         this.hasher = hasher;
         this.subjectRefHasher = subjectRefHasher;
-        this.complianceContextPort = complianceContextPort;
+        this.complianceContextResolver = complianceContextResolver;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     public CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input) {
         validate(input);
         DigitalAssetPurchaseInput purchase = parse(input);
-        var compliance = complianceContextPort.load(
+        var compliance = complianceContextResolver.load(
             purchase.customerId(), purchase.accountId(), purchase.walletAddress()
         );
         String inputSubjectDigest = subjectRefHasher.hash(new SubjectRef("customer", purchase.customerId()));
@@ -65,13 +65,21 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         add(fields, "amlStatus", compliance.amlStatus(), DataClass.FINANCIAL_METADATA);
         add(fields, "walletVerified", compliance.walletVerified(), DataClass.FINANCIAL_METADATA);
         fields.sort(Comparator.comparing(CanonicalContextField::path));
-        String digest = hasher.hash(fields.stream()
-            .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
-            .collect(Collectors.joining("|")));
+        var trustedMetadata = java.util.Map.of(
+            "complianceAssertionSource", compliance.sourceSystem(),
+            "complianceAssertionVersion", compliance.assertionVersion(),
+            "complianceAssertionDigest", compliance.evidenceDigest()
+        );
+        String digest = hasher.hash(
+            fields.stream()
+                .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
+                .collect(Collectors.joining("|"))
+                + "|compliance:" + compliance.evidenceDigest()
+        );
         return new CanonicalContext(
             retrievalContext.schemaVersion(), retrievalContext.contextId(), retrievalContext.dataAccessId(),
             retrievalContext.workloadId(), retrievalContext.purpose(), retrievalContext.subjectType(),
-            retrievalContext.subjectRefDigest(), List.copyOf(fields), digest
+            retrievalContext.subjectRefDigest(), List.copyOf(fields), trustedMetadata, digest
         );
     }
 

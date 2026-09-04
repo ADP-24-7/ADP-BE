@@ -25,14 +25,9 @@ import org.springframework.stereotype.Component;
 public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
 
     private final DigitalAssetPolicyProfilePort profilePort;
-    private final DigitalAssetComplianceContextPort complianceContextPort;
 
-    public DigitalAssetPolicyGate(
-        DigitalAssetPolicyProfilePort profilePort,
-        DigitalAssetComplianceContextPort complianceContextPort
-    ) {
+    public DigitalAssetPolicyGate(DigitalAssetPolicyProfilePort profilePort) {
         this.profilePort = profilePort;
-        this.complianceContextPort = complianceContextPort;
     }
 
     @Override
@@ -50,10 +45,7 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         DigitalAssetPolicyProfile profile = profilePort.load(
             destinationProfile.destinationProfileId(), requestStartedAt
         );
-        var compliance = complianceContextPort.load(
-            text(context, "customerId"), text(context, "accountId"), text(context, "walletAddress")
-        );
-        List<ReasonCode> reasons = reasons(context, destinationProfile, profile, compliance, requestStartedAt);
+        List<ReasonCode> reasons = reasons(context, destinationProfile, profile, requestStartedAt);
         FinalAction profileAction = reasons.contains(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID)
             ? FinalAction.BLOCK
             : reasons.isEmpty() ? FinalAction.ALLOW : FinalAction.REVIEW;
@@ -80,7 +72,8 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         return new ExecutionPackPolicyEvaluation(
             supportedPack(), profile.profileId(), profile.version(), profile.digest(),
             baselineDecision.finalAction(), profileAction, finalAction, reasons,
-            compliance.sourceSystem(), compliance.assertionVersion(), compliance.evidenceDigest(), decision
+            metadata(context, "complianceAssertionSource"), metadata(context, "complianceAssertionVersion"),
+            metadata(context, "complianceAssertionDigest"), decision
         );
     }
 
@@ -88,17 +81,13 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         CanonicalContext context,
         DestinationProfile destinationProfile,
         DigitalAssetPolicyProfile profile,
-        com.adp.gateway.digitalasset.domain.DigitalAssetComplianceContext compliance,
         OffsetDateTime requestStartedAt
     ) {
         List<ReasonCode> reasons = new ArrayList<>();
         if (!profile.destinationProfileId().equals(destinationProfile.destinationProfileId())
             || !profile.isEffectiveAt(requestStartedAt)
-            || !profile.complianceSourceSystem().equals(compliance.sourceSystem())
-            || !profile.complianceAssertionVersion().equals(compliance.assertionVersion())
-            || !text(context, "kycStatus").equals(compliance.kycStatus())
-            || !text(context, "amlStatus").equals(compliance.amlStatus())
-            || !Boolean.valueOf(text(context, "walletVerified")).equals(compliance.walletVerified())) {
+            || !profile.complianceSourceSystem().equals(metadata(context, "complianceAssertionSource"))
+            || !profile.complianceAssertionVersion().equals(metadata(context, "complianceAssertionVersion"))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID);
             return reasons;
         }
@@ -127,5 +116,13 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("Digital asset policy field is missing"))
             .value();
+    }
+
+    private String metadata(CanonicalContext context, String name) {
+        String value = context.trustedMetadata().get(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Digital asset trusted metadata is missing");
+        }
+        return value;
     }
 }

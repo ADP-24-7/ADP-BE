@@ -1,7 +1,5 @@
 package com.adp.gateway.digitalasset.domain;
 
-import java.util.Objects;
-
 public record DigitalAssetComplianceContext(
     String kycStatus,
     String amlStatus,
@@ -11,12 +9,15 @@ public record DigitalAssetComplianceContext(
     String evidenceDigest
 ) {
     public DigitalAssetComplianceContext {
-        Objects.requireNonNull(kycStatus, "kycStatus must not be null");
-        Objects.requireNonNull(amlStatus, "amlStatus must not be null");
-        Objects.requireNonNull(sourceSystem, "sourceSystem must not be null");
-        Objects.requireNonNull(assertionVersion, "assertionVersion must not be null");
+        if (isBlank(kycStatus) || isBlank(amlStatus) || isBlank(sourceSystem) || isBlank(assertionVersion)) {
+            throw new IllegalArgumentException("Compliance assertion values must not be blank");
+        }
         if (evidenceDigest == null || !evidenceDigest.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("evidenceDigest must be SHA-256");
         }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

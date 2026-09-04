@@ -9,14 +9,10 @@ public record DigitalAssetPurchaseInput(
     String accountId,
     String walletAddress,
     String assetId,
-    BigDecimal amount,
-    String kycStatus,
-    String amlStatus,
-    boolean walletVerified
+    BigDecimal amount
 ) {
     private static final Set<String> KEYS = Set.of(
-        "customerId", "accountId", "walletAddress", "assetId", "amount",
-        "kycStatus", "amlStatus", "walletVerified"
+        "customerId", "accountId", "walletAddress", "assetId", "amount"
     );
 
     public static DigitalAssetPurchaseInput from(Map<String, Object> input) {
@@ -27,10 +23,7 @@ public record DigitalAssetPurchaseInput(
         String accountId = text(input.get("accountId"));
         String walletAddress = text(input.get("walletAddress"));
         String assetId = text(input.get("assetId"));
-        String kycStatus = text(input.get("kycStatus"));
-        String amlStatus = text(input.get("amlStatus"));
-        if (!(input.get("walletVerified") instanceof Boolean walletVerified)
-            || !(input.get("amount") instanceof Number number)) {
+        if (!(input.get("amount") instanceof Number number)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_INVALID");
         }
         BigDecimal amount = new BigDecimal(number.toString()).stripTrailingZeros();
@@ -38,7 +31,7 @@ public record DigitalAssetPurchaseInput(
             throw new IllegalArgumentException("DIGITAL_ASSET_AMOUNT_INVALID");
         }
         return new DigitalAssetPurchaseInput(
-            customerId, accountId, walletAddress, assetId, amount, kycStatus, amlStatus, walletVerified
+            customerId, accountId, walletAddress, assetId, amount
         );
     }
 

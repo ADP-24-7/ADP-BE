@@ -60,10 +60,7 @@ class DigitalAssetThinE2ETests {
                         "accountId":"acct-100-1",
                         "walletAddress":"wallet-test-001",
                         "assetId":"asset-krw-token-001",
-                        "amount":10000,
-                        "kycStatus":"VERIFIED",
-                        "amlStatus":"PASSED",
-                        "walletVerified":true
+                        "amount":10000
                       }
                     }
                     """.formatted(suffix)))
@@ -142,13 +139,13 @@ class DigitalAssetThinE2ETests {
 
     @Test
     void routesDigitalAssetPolicyViolationsToReviewBeforeConnector() throws Exception {
-        assertPolicyReview("kyc", "wallet-kyc-pending", "10000", "VERIFIED", "PASSED", true,
+        assertPolicyReview("kyc", "wallet-kyc-pending", "10000",
             "DIGITAL_ASSET_KYC_REVIEW_REQUIRED");
-        assertPolicyReview("aml", "wallet-aml-review", "10000", "VERIFIED", "PASSED", true,
+        assertPolicyReview("aml", "wallet-aml-review", "10000",
             "DIGITAL_ASSET_AML_REVIEW_REQUIRED");
-        assertPolicyReview("wallet", "wallet-unverified", "10000", "VERIFIED", "PASSED", true,
+        assertPolicyReview("wallet", "wallet-unverified", "10000",
             "DIGITAL_ASSET_WALLET_REVIEW_REQUIRED");
-        assertPolicyReview("amount", "wallet-test-001", "10000001", "VERIFIED", "PASSED", true,
+        assertPolicyReview("amount", "wallet-test-001", "10000001",
             "DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED");
     }
 
@@ -257,7 +254,7 @@ class DigitalAssetThinE2ETests {
         String suffix, String customerId, String assetId
     ) throws Exception {
         return assetRequest(
-            suffix, customerId, "wallet-test-001", assetId, "10000", "VERIFIED", "PASSED", true
+            suffix, customerId, "wallet-test-001", assetId, "10000"
         );
     }
 
@@ -266,10 +263,7 @@ class DigitalAssetThinE2ETests {
         String customerId,
         String walletAddress,
         String assetId,
-        String amount,
-        String kycStatus,
-        String amlStatus,
-        boolean walletVerified
+        String amount
     ) throws Exception {
         return mockMvc.perform(post("/v1/runtime/executions")
             .header("X-Request-Id", "req_asset_case_" + suffix)
@@ -282,25 +276,19 @@ class DigitalAssetThinE2ETests {
                  "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                  "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
                  "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"%s",
-                 "assetId":"%s","amount":%s,"kycStatus":"%s","amlStatus":"%s","walletVerified":%s}}
-                """.formatted(
-                    suffix, customerId, walletAddress, assetId, amount, kycStatus, amlStatus, walletVerified
-                )));
+                 "assetId":"%s","amount":%s}}
+                """.formatted(suffix, customerId, walletAddress, assetId, amount)));
     }
 
     private void assertPolicyReview(
         String label,
         String walletAddress,
         String amount,
-        String kycStatus,
-        String amlStatus,
-        boolean walletVerified,
         String expectedReason
     ) throws Exception {
         String suffix = label + "_" + token();
         assetRequest(
-            suffix, "customer-100", walletAddress, "asset-krw-token-001",
-            amount, kycStatus, amlStatus, walletVerified
+            suffix, "customer-100", walletAddress, "asset-krw-token-001", amount
         )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))

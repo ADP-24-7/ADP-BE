@@ -3,11 +3,14 @@ package com.adp.gateway.digitalasset.infrastructure;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextPort;
 import com.adp.gateway.digitalasset.domain.DigitalAssetComplianceContext;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
+@ConditionalOnExpression(
+    "'${adp.local-fixtures.enabled:false}' == 'true' && "
+        + "'${adp.digital-asset.compliance-fixture.enabled:true}' == 'true'"
+)
 public class ProjectProvisionalDigitalAssetComplianceContextAdapter
     implements DigitalAssetComplianceContextPort {
 
