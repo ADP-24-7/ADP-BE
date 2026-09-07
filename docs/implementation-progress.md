@@ -15,6 +15,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-6 | Baseline Completed | Common Egress Boundary |
 | BE-7 | Completed | AI Full E2E & Policy Harness Binding |
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
+| BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 
 ## BE-8 Tracking
 
@@ -35,6 +36,21 @@ BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.
 - [x] `SENT_UNKNOWN` Digital Asset Local Provider Status Query Adapter와 공통 Recovery 수렴
 - [x] Mismatch/Critical Mismatch privacy-safe case 격리와 자동 재시도 금지 E2E
 - [ ] FE Digital Asset Lab fixture 연결
+
+## BE-10 Parallel Tracking
+
+BE-10 Skeleton 계약은 [BE-10 Policy Lifecycle Skeleton](be-10-policy-lifecycle-skeleton.md)에서 관리한다.
+
+- [x] Lifecycle 상태 enum과 단방향 Transition Validation
+- [x] Institution·Workload scope 기반 Lifecycle metadata
+- [x] OPERATOR/PRIVILEGED_OPERATOR/AUDITOR 권한 분리
+- [x] APPROVED/ACTIVE Maker-Checker 강제
+- [x] V21 Artifact current state와 append-only Transition Evidence
+- [x] Optimistic revision 기반 동시 전이 차단
+- [x] Raw-free server-defined Transition Reason Code
+- [ ] DA Artifact Bundle Loader와 Schema Validation
+- [ ] Replay/Shadow Decision 실행 및 Diff Evidence
+- [ ] Active Policy Runtime Selection과 Rollback Propagation
 
 ## BE-11 Parallel Tracking
 

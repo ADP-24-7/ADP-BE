@@ -644,6 +644,29 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v21MigrationCreatesPolicyLifecycleSkeleton() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'policy'
+                  and table_name in ('lifecycle_artifact', 'lifecycle_transition_event')
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'policy'
+                  and table_name in ('lifecycle_artifact', 'lifecycle_transition_event')
+                  and constraint_name in (
+                    'chk_policy_lifecycle_digest', 'chk_policy_lifecycle_layer',
+                    'chk_policy_lifecycle_pack', 'chk_policy_lifecycle_stage',
+                    'chk_policy_transition_digest', 'chk_policy_transition_not_same',
+                    'chk_policy_transition_reason'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(2);
+        assertThat(constraintCount).isEqualTo(7);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
