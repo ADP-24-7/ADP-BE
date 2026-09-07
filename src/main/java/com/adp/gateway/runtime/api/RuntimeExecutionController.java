@@ -72,7 +72,7 @@ public class RuntimeExecutionController {
                 "AI_EVALUATION_REFERENCE_INCOMPLETE"
             );
         }
-        return new AiEvaluationReference(request.evaluationRunId(), request.evalCaseId(), null);
+        return new AiEvaluationReference(request.evaluationRunId(), request.evalCaseId(), null, null, null, null);
     }
 
     @GetMapping("/{executionId}")

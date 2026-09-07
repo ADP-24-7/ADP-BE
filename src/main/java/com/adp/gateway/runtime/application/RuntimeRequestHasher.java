@@ -62,6 +62,10 @@ public class RuntimeRequestHasher {
         canonical.put("workloadId", workloadId);
         canonical.put("evaluationRunId", evaluationReference == null ? null : evaluationReference.evaluationRunId());
         canonical.put("evalCaseId", evaluationReference == null ? null : evaluationReference.evalCaseId());
+        canonical.put("evaluationContractDigest",
+            evaluationReference == null ? null : evaluationReference.evaluationContractDigest());
+        canonical.put("evaluationCaseInputDigest",
+            evaluationReference == null ? null : evaluationReference.actualInputDigest());
         try {
             String json = objectMapper.writeValueAsString(canonical);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

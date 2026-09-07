@@ -805,6 +805,12 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where ame.execution_id = runtime_execution.execution_id) as ai_evaluation_run_version,
                    (select eval_case_id from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_eval_case_id,
+                   (select evaluation_contract_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_evaluation_contract_digest,
+                   (select expected_input_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_expected_input_digest,
+                   (select actual_input_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_actual_input_digest,
                    (select dataset_id from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_dataset_id,
                    (select dataset_version from runtime.ai_model_execution_evidence ame

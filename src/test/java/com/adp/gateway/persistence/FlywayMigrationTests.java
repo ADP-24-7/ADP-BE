@@ -734,6 +734,7 @@ class FlywayMigrationTests {
                   and table_name = 'ai_model_execution_evidence'
                   and column_name in (
                     'evaluation_run_id', 'evaluation_run_version', 'eval_case_id',
+                    'evaluation_contract_digest', 'expected_input_digest', 'actual_input_digest',
                     'dataset_id', 'dataset_version', 'dataset_digest',
                     'policy_snapshot_digest', 'destination_profile_digest'
                   )
@@ -742,11 +743,14 @@ class FlywayMigrationTests {
                 select count(*) from information_schema.table_constraints
                 where table_schema = 'runtime'
                   and table_name = 'ai_model_execution_evidence'
-                  and constraint_name = 'chk_ai_evaluation_binding_complete'
+                  and constraint_name in (
+                    'chk_ai_evaluation_binding_complete', 'chk_ai_eval_contract_digest',
+                    'chk_ai_eval_input_digests', 'chk_ai_eval_provenance_digests'
+                  )
                 """).query(Integer.class).single();
 
-        assertThat(columnCount).isEqualTo(8);
-        assertThat(constraintCount).isEqualTo(1);
+        assertThat(columnCount).isEqualTo(11);
+        assertThat(constraintCount).isEqualTo(4);
     }
 
     @Test

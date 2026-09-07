@@ -13,6 +13,7 @@ import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.adp.gateway.ai.application.AiEvaluationRunMismatchException;
 import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.runtime.application.RuntimeInputHasher;
 import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
@@ -32,7 +33,7 @@ class AiExternalSchemaMapperTests {
     private final AiModelExecutionEvidencePort evidencePort = mock(AiModelExecutionEvidencePort.class);
     private final AiExternalSchemaMapper mapper = new AiExternalSchemaMapper(
         objectMapper, hasher, catalog, evidencePort,
-        new AiEvaluationRunCatalog(catalog)
+        new AiEvaluationRunCatalog(catalog, new RuntimeInputHasher(objectMapper), objectMapper, hasher)
     );
 
     @Test
@@ -53,7 +54,7 @@ class AiExternalSchemaMapperTests {
         assertThatThrownBy(() -> mapper.map(
             "exec",
             new AiEvaluationReference("unknown-run", AiEvaluationRunCatalog.BASELINE_CASE_ID,
-                catalog.policySnapshotDigest()),
+                catalog.policySnapshotDigest(), "sha256:unknown", "input", "input"),
             destination(profile.profileId(), profile.destinationProfileId()),
             outbound()
         )).isInstanceOf(AiEvaluationRunMismatchException.class);
@@ -66,10 +67,16 @@ class AiExternalSchemaMapperTests {
         assertThatThrownBy(() -> mapper.map(
             "exec",
             new AiEvaluationReference(AiEvaluationRunCatalog.BASELINE_RUN_ID,
-                AiEvaluationRunCatalog.BASELINE_CASE_ID, "sha256:different"),
+                AiEvaluationRunCatalog.BASELINE_CASE_ID, "sha256:different",
+                evaluationRuns().find(AiEvaluationRunCatalog.BASELINE_RUN_ID).orElseThrow().contractDigest(),
+                "input", "input"),
             destination(profile.profileId(), profile.destinationProfileId()),
             outbound()
         )).isInstanceOf(AiEvaluationRunMismatchException.class);
+    }
+
+    private AiEvaluationRunCatalog evaluationRuns() {
+        return new AiEvaluationRunCatalog(catalog, new RuntimeInputHasher(objectMapper), objectMapper, hasher);
     }
 
     @Test

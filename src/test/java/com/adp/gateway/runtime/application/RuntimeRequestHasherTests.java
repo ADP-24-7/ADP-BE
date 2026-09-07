@@ -56,13 +56,31 @@ class RuntimeRequestHasherTests {
             "institution_local", "approval_ai_customer_support_v1", "customer_summary",
             "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
             List.of("AI_USE"), Map.of("prompt", "ticket-100"),
-            new AiEvaluationReference("run-1", "case-1", null)
+            new AiEvaluationReference("run-1", "case-1", null, "contract-1", "input", "input")
         );
         String second = hasher.hash(
             "institution_local", "approval_ai_customer_support_v1", "customer_summary",
             "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
             List.of("AI_USE"), Map.of("prompt", "ticket-100"),
-            new AiEvaluationReference("run-1", "case-2", null)
+            new AiEvaluationReference("run-1", "case-2", null, "contract-1", "input", "input")
+        );
+
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void hashChangesWhenResolvedEvaluationContractChanges() {
+        String first = hasher.hash(
+            "institution_local", "approval_ai_customer_support_v1", "customer_summary",
+            "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
+            List.of("AI_USE"), Map.of("prompt", "ticket-100"),
+            new AiEvaluationReference("run-1", "case-1", null, "contract-v1", "input", "input")
+        );
+        String second = hasher.hash(
+            "institution_local", "approval_ai_customer_support_v1", "customer_summary",
+            "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
+            List.of("AI_USE"), Map.of("prompt", "ticket-100"),
+            new AiEvaluationReference("run-1", "case-1", null, "contract-v2", "input", "input")
         );
 
         assertThat(first).isNotEqualTo(second);

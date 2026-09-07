@@ -26,6 +26,8 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
         AiModelProfile profile,
         AiEvaluationRunDefinition evaluationRun,
         String evalCaseId,
+        String expectedInputDigest,
+        String actualInputDigest,
         String destinationProfileDigest
     ) {
         jdbcClient.sql("""
@@ -34,6 +36,7 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
                 provider_model_id, provider_model_version, connection_profile_id,
                 max_tokens, temperature, sampling_profile_version,
                 evaluation_run_id, evaluation_run_version, eval_case_id,
+                evaluation_contract_digest, expected_input_digest, actual_input_digest,
                 dataset_id, dataset_version, dataset_digest,
                 policy_snapshot_digest, destination_profile_digest, recorded_at
             ) values (
@@ -41,6 +44,7 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
                 :providerModelId, :providerModelVersion, :connectionProfileId,
                 :maxTokens, :temperature, :samplingProfileVersion,
                 :evaluationRunId, :evaluationRunVersion, :evalCaseId,
+                :evaluationContractDigest, :expectedInputDigest, :actualInputDigest,
                 :datasetId, :datasetVersion, :datasetDigest,
                 :policySnapshotDigest, :destinationProfileDigest, :recordedAt
             )
@@ -58,6 +62,9 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
             .param("evaluationRunId", evaluationRun == null ? null : evaluationRun.evaluationRunId())
             .param("evaluationRunVersion", evaluationRun == null ? null : evaluationRun.runVersion())
             .param("evalCaseId", evalCaseId)
+            .param("evaluationContractDigest", evaluationRun == null ? null : evaluationRun.contractDigest())
+            .param("expectedInputDigest", expectedInputDigest)
+            .param("actualInputDigest", actualInputDigest)
             .param("datasetId", evaluationRun == null ? null : evaluationRun.datasetId())
             .param("datasetVersion", evaluationRun == null ? null : evaluationRun.datasetVersion())
             .param("datasetDigest", evaluationRun == null ? null : evaluationRun.datasetDigest())

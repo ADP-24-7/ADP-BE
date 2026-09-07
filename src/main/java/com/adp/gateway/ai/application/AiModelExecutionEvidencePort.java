@@ -10,6 +10,8 @@ public interface AiModelExecutionEvidencePort {
         AiModelProfile profile,
         AiEvaluationRunDefinition evaluationRun,
         String evalCaseId,
+        String expectedInputDigest,
+        String actualInputDigest,
         String destinationProfileDigest
     );
 }

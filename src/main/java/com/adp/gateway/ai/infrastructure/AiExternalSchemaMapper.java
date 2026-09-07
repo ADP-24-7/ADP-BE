@@ -65,7 +65,9 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
         var evaluationRun = evaluationReference == null ? null : evaluationRuns
             .find(evaluationReference.evaluationRunId())
             .orElseThrow(() -> new AiEvaluationRunMismatchException("AI_EVALUATION_RUN_NOT_FOUND"));
-        if (evaluationRun != null && (!evaluationRun.evalCaseIds().contains(evaluationReference.evalCaseId())
+        if (evaluationRun != null && (!evaluationRun.cases().containsKey(evaluationReference.evalCaseId())
+            || !evaluationRun.contractDigest().equals(evaluationReference.evaluationContractDigest())
+            || !evaluationReference.expectedInputDigest().equals(evaluationReference.actualInputDigest())
             || modelProfile.isEmpty()
             || !evaluationRun.modelProfileIds().contains(modelProfile.get().profileId())
             || !evaluationRun.policySnapshotDigest().equals(evaluationReference.policySnapshotDigest())
@@ -77,6 +79,8 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
             profile,
             evaluationRun,
             evaluationReference == null ? null : evaluationReference.evalCaseId(),
+            evaluationReference == null ? null : evaluationReference.expectedInputDigest(),
+            evaluationReference == null ? null : evaluationReference.actualInputDigest(),
             destinationProfile.profileDigest()
         ));
         Map<String, Object> payload = modelProfile
