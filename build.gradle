@@ -36,6 +36,7 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'com.networknt:json-schema-validator:2.0.4'
 }
 
 tasks.named('test') {
