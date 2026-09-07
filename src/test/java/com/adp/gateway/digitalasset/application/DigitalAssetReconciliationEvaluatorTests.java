@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Map;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.digitalasset.domain.DigitalAssetMismatchField;
+import com.adp.gateway.digitalasset.domain.DigitalAssetReconciliationResult;
 import org.junit.jupiter.api.Test;
 
 class DigitalAssetReconciliationEvaluatorTests {
@@ -19,8 +21,8 @@ class DigitalAssetReconciliationEvaluatorTests {
             "SETTLED"
         );
 
-        assertThat(assessment.result()).isEqualTo("CRITICAL_MISMATCH");
-        assertThat(assessment.mismatchedFields()).containsExactly("amount");
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.CRITICAL_MISMATCH);
+        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.AMOUNT);
     }
 
     @Test
@@ -31,8 +33,8 @@ class DigitalAssetReconciliationEvaluatorTests {
             "SETTLED"
         );
 
-        assertThat(assessment.result()).isEqualTo("MISMATCH");
-        assertThat(assessment.mismatchedFields()).containsExactly("kycStatus");
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.MISMATCH);
+        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.KYC_STATUS);
     }
 
     @Test
@@ -43,7 +45,7 @@ class DigitalAssetReconciliationEvaluatorTests {
             "SETTLING"
         );
 
-        assertThat(assessment.result()).isEqualTo("WAIT");
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.WAIT);
         assertThat(assessment.mismatchedFields()).isEmpty();
     }
 
@@ -51,11 +53,24 @@ class DigitalAssetReconciliationEvaluatorTests {
     void digestsCorrelationMismatchWithoutRetainingRawIdentifiers() {
         var assessment = evaluator.criticalCorrelationMismatch("expected-request", "actual-request");
 
-        assertThat(assessment.result()).isEqualTo("CRITICAL_MISMATCH");
-        assertThat(assessment.mismatchedFields()).containsExactly("externalRequestId");
-        assertThat(assessment.expectedDigest()).matches("[0-9a-f]{64}");
-        assertThat(assessment.actualDigest()).matches("[0-9a-f]{64}");
-        assertThat(assessment.expectedDigest()).isNotEqualTo(assessment.actualDigest());
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.CRITICAL_MISMATCH);
+        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.EXTERNAL_REQUEST_ID);
+        assertThat(assessment.expectedProjectionDigest()).matches("[0-9a-f]{64}");
+        assertThat(assessment.actualProjectionDigest()).matches("[0-9a-f]{64}");
+        assertThat(assessment.expectedProjectionDigest()).isNotEqualTo(assessment.actualProjectionDigest());
+    }
+
+    @Test
+    void normalizesUntrustedProviderKeyToServerOwnedLabel() {
+        var expected = transaction("wallet-1", "asset-1", "100", "PASSED");
+        var actual = new java.util.HashMap<String, Object>(expected);
+        actual.put("customer-100-sensitive-value", "unexpected");
+
+        var assessment = evaluator.evaluate(request(expected), response(actual), "SETTLED");
+
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.CRITICAL_MISMATCH);
+        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.UNEXPECTED_FIELD);
+        assertThat(assessment.mismatchedFields().toString()).doesNotContain("customer-100-sensitive-value");
     }
 
     private Map<String, Object> request(Map<String, Object> transaction) {

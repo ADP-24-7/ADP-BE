@@ -61,7 +61,7 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
 
         String settlementStatus = String.valueOf(response.get("settlementStatus"));
         var assessment = reconciliationEvaluator.evaluate(request.payload(), response, settlementStatus);
-        String reconciliation = assessment.result();
+        String reconciliation = assessment.result().name();
         String externalTransactionId = string(response.get("externalTransactionId"));
         String settlementId = string(response.get("settlementId"));
         persistence.record(executionId, request.providerCorrelationKey(), externalTransactionId, settlementId,

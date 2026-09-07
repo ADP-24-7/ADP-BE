@@ -1,16 +1,22 @@
 package com.adp.gateway.digitalasset.application;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.digitalasset.domain.DigitalAssetReconciliationAssessment;
+import com.adp.gateway.digitalasset.domain.DigitalAssetMismatchField;
+import com.adp.gateway.digitalasset.domain.DigitalAssetReconciliationResult;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetReconciliationEvaluator {
-    private static final Set<String> CRITICAL_FIELDS = Set.of("walletAddress", "assetId", "amount");
+    private static final java.util.Set<String> TRANSACTION_FIELDS = java.util.Arrays.stream(
+            DigitalAssetMismatchField.values()
+        )
+        .filter(field -> field.externalName() != null && field != DigitalAssetMismatchField.EXTERNAL_REQUEST_ID)
+        .map(DigitalAssetMismatchField::externalName)
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
     private final CanonicalValueHasher hasher;
 
     public DigitalAssetReconciliationEvaluator(CanonicalValueHasher hasher) {
@@ -27,23 +33,36 @@ public class DigitalAssetReconciliationEvaluator {
         String expectedDigest = digest(expected);
         String actualDigest = digest(actual);
         if (!"SETTLED".equals(settlementStatus)) {
-            return new DigitalAssetReconciliationAssessment("WAIT", java.util.List.of(), expectedDigest, actualDigest);
+            return new DigitalAssetReconciliationAssessment(
+                DigitalAssetReconciliationResult.WAIT, java.util.List.of(), expectedDigest, actualDigest
+            );
         }
-        var mismatchedFields = java.util.stream.Stream.concat(expected.keySet().stream(), actual.keySet().stream())
-            .distinct()
-            .filter(field -> !String.valueOf(expected.get(field)).equals(String.valueOf(actual.get(field))))
-            .sorted()
+        var mismatchedFields = java.util.Arrays.stream(DigitalAssetMismatchField.values())
+            .filter(field -> field != DigitalAssetMismatchField.EXTERNAL_REQUEST_ID
+                && field != DigitalAssetMismatchField.UNEXPECTED_FIELD)
+            .filter(field -> !java.util.Objects.equals(
+                expected.get(field.externalName()), actual.get(field.externalName())
+            ))
             .toList();
-        String result = mismatchedFields.isEmpty()
-            ? "MATCH"
-            : mismatchedFields.stream().anyMatch(CRITICAL_FIELDS::contains) ? "CRITICAL_MISMATCH" : "MISMATCH";
+        boolean unexpectedField = actual.keySet().stream().anyMatch(key -> !TRANSACTION_FIELDS.contains(key));
+        if (unexpectedField) {
+            mismatchedFields = java.util.stream.Stream.concat(
+                mismatchedFields.stream(), java.util.stream.Stream.of(DigitalAssetMismatchField.UNEXPECTED_FIELD)
+            ).toList();
+            actualDigest = hasher.hash(actualDigest + "|UNEXPECTED_FIELD_PRESENT");
+        }
+        DigitalAssetReconciliationResult result = mismatchedFields.isEmpty()
+            ? DigitalAssetReconciliationResult.MATCH
+            : mismatchedFields.stream().anyMatch(DigitalAssetMismatchField::critical)
+                ? DigitalAssetReconciliationResult.CRITICAL_MISMATCH
+                : DigitalAssetReconciliationResult.MISMATCH;
         return new DigitalAssetReconciliationAssessment(result, mismatchedFields, expectedDigest, actualDigest);
     }
 
     public DigitalAssetReconciliationAssessment criticalCorrelationMismatch(String expected, String actual) {
         return new DigitalAssetReconciliationAssessment(
-            "CRITICAL_MISMATCH",
-            java.util.List.of("externalRequestId"),
+            DigitalAssetReconciliationResult.CRITICAL_MISMATCH,
+            java.util.List.of(DigitalAssetMismatchField.EXTERNAL_REQUEST_ID),
             hasher.hash("externalRequestId=" + String.valueOf(expected)),
             hasher.hash("externalRequestId=" + String.valueOf(actual))
         );

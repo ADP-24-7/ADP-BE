@@ -14,12 +14,12 @@
 V20 `runtime.digital_asset_mismatch_case`는 실행별 다음 privacy-safe 증적을 저장한다.
 
 - Severity와 정렬된 mismatched field 이름
-- Expected/Actual canonical payload SHA-256 digest
+- Expected/Actual server-defined transaction projection SHA-256 digest
 - Case status `OPEN`
 - `auto_retry_allowed=false`
 - Opened/Updated timestamp
 
-Expected/Actual transaction 원문은 저장하지 않는다. DB CHECK는 허용 severity/status, digest 형식, 비어 있지 않은 field 배열과 자동 재시도 금지를 강제한다.
+Expected/Actual transaction 원문은 저장하지 않는다. 불일치 field는 서버 소유 enum으로만 저장하며 Provider의 임의 key는 `UNEXPECTED_FIELD`로 정규화한다. DB CHECK는 허용 field label, severity/status, digest 형식, 비어 있지 않은 field 배열과 자동 재시도 금지를 강제한다.
 
 ## Deferred
 

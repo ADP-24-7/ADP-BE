@@ -3,16 +3,17 @@ package com.adp.gateway.digitalasset.domain;
 import java.util.List;
 
 public record DigitalAssetReconciliationAssessment(
-    String result,
-    List<String> mismatchedFields,
-    String expectedDigest,
-    String actualDigest
+    DigitalAssetReconciliationResult result,
+    List<DigitalAssetMismatchField> mismatchedFields,
+    String expectedProjectionDigest,
+    String actualProjectionDigest
 ) {
     public DigitalAssetReconciliationAssessment {
         mismatchedFields = List.copyOf(mismatchedFields);
     }
 
     public boolean requiresReview() {
-        return "MISMATCH".equals(result) || "CRITICAL_MISMATCH".equals(result);
+        return result == DigitalAssetReconciliationResult.MISMATCH
+            || result == DigitalAssetReconciliationResult.CRITICAL_MISMATCH;
     }
 }
