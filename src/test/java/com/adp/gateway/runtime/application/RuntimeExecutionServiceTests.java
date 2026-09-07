@@ -123,10 +123,12 @@ class RuntimeExecutionServiceTests {
             new ExecutionPackContextBuilderResolver(List.of(
                 new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher))
             )),
-            new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher),
+            new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher, new com.adp.gateway.ai.application.AiModelProfileCatalog()),
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
-            new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(new ObjectMapper(), hasher))),
+            new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(
+                new ObjectMapper(), hasher, new com.adp.gateway.ai.application.AiModelProfileCatalog()
+            ))),
             new ExecutionOutcomeFinalizer(
                 persistence,
                 new ControlledDeliveryService(List.of()),

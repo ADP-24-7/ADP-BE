@@ -40,6 +40,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
     private final ObjectMapper objectMapper;
     private final CanonicalValueHasher hasher;
     private final MeterRegistry meterRegistry;
+    private final String apiKey;
 
     public HttpAiConnector(
         RestClient.Builder restClientBuilder,
@@ -47,6 +48,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         CanonicalValueHasher hasher,
         MeterRegistry meterRegistry,
         @Value("${adp.ai-connector.base-url:http://localhost:8090}") String baseUrl,
+        @Value("${adp.ai-connector.api-key:}") String apiKey,
         @Value("${adp.ai-connector.connect-timeout:2s}") Duration connectTimeout,
         @Value("${adp.ai-connector.read-timeout:5s}") Duration readTimeout
     ) {
@@ -57,6 +59,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         this.objectMapper = objectMapper;
         this.hasher = hasher;
         this.meterRegistry = meterRegistry;
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
     }
 
     @Override
@@ -73,9 +76,13 @@ public class HttpAiConnector implements RuntimeConnectorPort {
     ) {
         String connectorExecutionId = "con_" + UUID.randomUUID();
         try {
-            var response = restClient.post()
+            var request = restClient.post()
                 .uri("/v1/chat/completions")
-                .header("X-Idempotency-Key", providerRequest.providerCorrelationKey())
+                .header("X-Idempotency-Key", providerRequest.providerCorrelationKey());
+            if (!apiKey.isBlank()) {
+                request = request.header("Authorization", "Bearer " + apiKey);
+            }
+            var response = request
                 .body(providerRequest.payload())
                 .retrieve()
                 .toEntity(Map.class);

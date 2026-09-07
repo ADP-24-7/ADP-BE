@@ -104,6 +104,36 @@ class HttpAiConnectorTests {
         }
     }
 
+    @Test
+    void sendsNvidiaApiKeyAsBearerCredentialWithoutExposingItInResult() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] payload = "{\"answer\":\"safe\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            exchange.getResponseBody().write(payload);
+            exchange.close();
+        });
+        server.start();
+        try {
+            String apiKey = "test-only-nvidia-key";
+            var connector = new HttpAiConnector(
+                RestClient.builder(), new ObjectMapper(), new CanonicalValueHasher(), new SimpleMeterRegistry(),
+                "http://localhost:" + server.getAddress().getPort(), apiKey,
+                Duration.ofSeconds(1), Duration.ofSeconds(1)
+            );
+
+            var result = connector.execute(context(), mock(RuntimeDecision.class), outbound(), providerRequest());
+
+            assertThat(authorization.get()).isEqualTo("Bearer " + apiKey);
+            assertThat(result.toString()).doesNotContain(apiKey);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpAiConnector connector(HttpServer server, Duration readTimeout) {
         return new HttpAiConnector(
             RestClient.builder(),
@@ -111,6 +141,7 @@ class HttpAiConnectorTests {
             new CanonicalValueHasher(),
             new SimpleMeterRegistry(),
             "http://localhost:" + server.getAddress().getPort(),
+            "",
             Duration.ofSeconds(1),
             readTimeout
         );
