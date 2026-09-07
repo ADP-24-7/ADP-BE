@@ -33,6 +33,10 @@ public class GatewayObservability {
         meterRegistry.counter("adp.ai.evaluation.evidence.total", "outcome", outcome.name()).increment();
     }
 
+    public void aiEvaluationBundleExport(AiEvaluationBundleExportOutcome outcome) {
+        meterRegistry.counter("adp.ai.evaluation.bundle.export.total", "outcome", outcome.name()).increment();
+    }
+
     public void recovery(RecoveryOutcome outcome, int count) {
         increment("adp.recovery.processing.total", "outcome", outcome.name(), count);
     }
@@ -63,5 +67,14 @@ public class GatewayObservability {
         CONNECTOR_RECORDED,
         COMPLETE,
         PERSISTENCE_FAILED
+    }
+
+    public enum AiEvaluationBundleExportOutcome {
+        SUCCESS,
+        NOT_FOUND,
+        INCOMPLETE,
+        SIZE_LIMIT_EXCEEDED,
+        PROVENANCE_MISMATCH,
+        MODEL_MISMATCH
     }
 }

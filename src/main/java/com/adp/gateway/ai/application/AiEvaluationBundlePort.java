@@ -9,6 +9,7 @@ public interface AiEvaluationBundlePort {
     List<AiEvaluationBundleSource> load(
         String evaluationRunId,
         String institutionId,
-        Set<String> allowedWorkloads
+        Set<String> allowedWorkloads,
+        int limit
     );
 }

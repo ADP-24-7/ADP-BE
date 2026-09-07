@@ -6,11 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.security.MessageDigest;
-import java.util.HexFormat;
-import java.util.UUID;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
+import com.adp.gateway.ai.application.AiEvaluationBundleCanonicalizer;
 import com.adp.gateway.ai.application.AiEvaluationBundlePort;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
@@ -41,10 +41,16 @@ class AiEvaluationBundleControllerTests {
     @Autowired
     private AiEvaluationBundlePort bundlePort;
 
+    @Autowired
+    private AiEvaluationBundleCanonicalizer canonicalizer;
+
     @Test
     void privilegedOperatorExportsDaConsumableEvaluationBundle() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        String executionId = submitEvaluation(suffix);
+        var executionIds = new java.util.ArrayList<String>();
+        for (int index = 0; index < modelProfiles.profiles().size(); index++) {
+            executionIds.add(submitEvaluation(suffix + "_" + index, index));
+        }
 
         String firstResponse = export("PRIVILEGED_OPERATOR")
             .andExpect(status().isOk())
@@ -55,9 +61,11 @@ class AiEvaluationBundleControllerTests {
                 .value(AiEvaluationRunCatalog.BASELINE_RUN_ID))
             .andExpect(jsonPath("$.execution_config.dataset_digest")
                 .value(org.hamcrest.Matchers.matchesPattern("sha256:[0-9a-f]{64}")))
-            .andExpect(jsonPath("$.case_results[?(@.execution_id == '%s')]", executionId).exists())
-            .andExpect(jsonPath("$.runtime_metrics[?(@.execution_id == '%s')]", executionId).exists())
-            .andExpect(jsonPath("$.trace_index[?(@.execution_id == '%s')]", executionId).exists())
+            .andExpect(jsonPath("$.manifest.execution_count").value(3))
+            .andExpect(jsonPath("$.manifest.model_count").value(3))
+            .andExpect(jsonPath("$.manifest.case_count").value(1))
+            .andExpect(jsonPath("$.failure_summary.total").value(3))
+            .andExpect(jsonPath("$.failure_summary.failed").value(0))
             .andReturn().getResponse().getContentAsString();
 
         String secondResponse = export("PRIVILEGED_OPERATOR")
@@ -65,19 +73,29 @@ class AiEvaluationBundleControllerTests {
             .andReturn().getResponse().getContentAsString();
         JsonNode first = objectMapper.readTree(firstResponse);
         JsonNode second = objectMapper.readTree(secondResponse);
+        var daBundle = new DaEvaluationBundleParserFixture(objectMapper).parse(firstResponse);
 
+        assertThat(daBundle.evaluationRunId()).isEqualTo(AiEvaluationRunCatalog.BASELINE_RUN_ID);
+        assertThat(daBundle.executionCount()).isEqualTo(3);
+        assertThat(daBundle.modelCount()).isEqualTo(3);
+        assertThat(daBundle.failureTotal()).isEqualTo(3);
         assertThat(first.path("manifest").path("content_digest").asText())
             .isEqualTo(second.path("manifest").path("content_digest").asText());
-        var digestContent = objectMapper.createObjectNode();
-        digestContent.put("schema_version", first.path("manifest").path("schema_version").asText());
-        digestContent.set("execution_config", first.path("execution_config"));
-        digestContent.set("case_results", first.path("case_results"));
-        digestContent.set("runtime_metrics", first.path("runtime_metrics"));
-        digestContent.set("trace_index", first.path("trace_index"));
-        String recomputedDigest = "sha256:" + HexFormat.of().formatHex(
-            MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(digestContent))
+        Map<String, Object> digestContent = Map.of(
+            "schema_version", first.path("manifest").path("schema_version").asText(),
+            "execution_config", objectMapper.convertValue(first.path("execution_config"), Object.class),
+            "case_results", objectMapper.convertValue(first.path("case_results"), Object.class),
+            "runtime_metrics", objectMapper.convertValue(first.path("runtime_metrics"), Object.class),
+            "failure_summary", objectMapper.convertValue(first.path("failure_summary"), Object.class),
+            "trace_index", objectMapper.convertValue(first.path("trace_index"), Object.class)
         );
+        String recomputedDigest = canonicalizer.digest(digestContent);
         assertThat(first.path("manifest").path("content_digest").asText()).isEqualTo(recomputedDigest);
+        executionIds.forEach(executionId -> {
+            assertThat(first.path("case_results").toString()).contains(executionId);
+            assertThat(first.path("runtime_metrics").toString()).contains(executionId);
+            assertThat(first.path("trace_index").toString()).contains(executionId);
+        });
         assertThat(firstResponse)
             .doesNotContain("승인된 고객 정보를 간단히 요약하세요")
             .doesNotContain("customer-100")
@@ -85,11 +103,21 @@ class AiEvaluationBundleControllerTests {
             .doesNotContain("req_eval_bundle_")
             .doesNotContain("trace_eval_bundle_");
 
-        assertThat(bundlePort.load(AiEvaluationRunCatalog.BASELINE_RUN_ID, "other-institution", Set.of("*")))
+        assertThat(bundlePort.load(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "other-institution", Set.of("*"), 10
+        ))
             .isEmpty();
         assertThat(bundlePort.load(
-            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("fraud_detection")
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("fraud_detection"), 10
         )).isEmpty();
+
+        String latestFirstModelExecution = submitEvaluation(suffix + "_latest", 0);
+        String latestResponse = export("PRIVILEGED_OPERATOR")
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        JsonNode latest = objectMapper.readTree(latestResponse);
+        assertThat(latest.path("case_results").toString()).contains(latestFirstModelExecution);
+        assertThat(latest.path("case_results").toString()).doesNotContain(executionIds.getFirst());
     }
 
     @Test
@@ -114,8 +142,8 @@ class AiEvaluationBundleControllerTests {
             .header("X-ADP-User-Roles", role));
     }
 
-    private String submitEvaluation(String suffix) throws Exception {
-        var profile = modelProfiles.profiles().getFirst();
+    private String submitEvaluation(String suffix, int profileIndex) throws Exception {
+        var profile = modelProfiles.profiles().get(profileIndex);
         String response = mockMvc.perform(post("/v1/runtime/executions")
                 .header("X-Request-Id", "req_eval_bundle_" + suffix)
                 .header("X-Trace-Id", "trace_eval_bundle_" + suffix)

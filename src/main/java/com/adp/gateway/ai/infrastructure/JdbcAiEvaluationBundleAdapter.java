@@ -20,13 +20,14 @@ public class JdbcAiEvaluationBundleAdapter implements AiEvaluationBundlePort {
     public List<AiEvaluationBundleSource> load(
         String evaluationRunId,
         String institutionId,
-        Set<String> allowedWorkloads
+        Set<String> allowedWorkloads,
+        int limit
     ) {
         String workloadScope = allowedWorkloads.contains("*")
             ? ""
             : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and re.workload_id in (:allowedWorkloads)";
         JdbcClient.StatementSpec statement = jdbcClient.sql("""
-            select re.execution_id,
+            select distinct on (evidence.eval_case_id, evidence.profile_id) re.execution_id,
                    evidence.evaluation_run_id, evidence.evaluation_run_version,
                    evidence.evaluation_contract_digest, evidence.eval_case_id,
                    evidence.expected_input_digest, evidence.actual_input_digest,
@@ -54,10 +55,12 @@ public class JdbcAiEvaluationBundleAdapter implements AiEvaluationBundlePort {
             where evidence.evaluation_run_id = :evaluationRunId
               and re.institution_id = :institutionId
             """ + workloadScope + """
-            order by evidence.eval_case_id, evidence.profile_id, re.execution_id
+            order by evidence.eval_case_id, evidence.profile_id, re.created_at desc, re.execution_id desc
+            limit :limit
             """)
             .param("evaluationRunId", evaluationRunId)
-            .param("institutionId", institutionId);
+            .param("institutionId", institutionId)
+            .param("limit", limit);
         if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
             statement = statement.param("allowedWorkloads", allowedWorkloads);
         }

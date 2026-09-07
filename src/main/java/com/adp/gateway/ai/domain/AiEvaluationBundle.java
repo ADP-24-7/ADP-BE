@@ -2,6 +2,7 @@ package com.adp.gateway.ai.domain;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
@@ -12,6 +13,7 @@ public record AiEvaluationBundle(
     ExecutionConfig executionConfig,
     List<CaseResult> caseResults,
     List<RuntimeMetric> runtimeMetrics,
+    FailureSummary failureSummary,
     List<TraceEntry> traceIndex
 ) {
     public AiEvaluationBundle {
@@ -23,15 +25,32 @@ public record AiEvaluationBundle(
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Manifest(
         String schemaVersion,
+        String bundleId,
+        String bundleVersion,
         String contentDigest,
         String evaluationRunId,
         String evaluationRunVersion,
         int executionCount,
         int caseCount,
         int modelCount,
+        OffsetDateTime createdAt,
         OffsetDateTime evidenceFrom,
         OffsetDateTime evidenceTo
     ) {
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record FailureSummary(
+        int total,
+        int failed,
+        int sentUnknown,
+        int notAttempted,
+        int partialEvidence,
+        Map<String, Integer> byErrorCategory
+    ) {
+        public FailureSummary {
+            byErrorCategory = Map.copyOf(byErrorCategory);
+        }
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

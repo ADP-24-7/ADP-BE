@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
 import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
+import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
@@ -178,6 +179,19 @@ public class GlobalExceptionHandler {
             ReasonCode.AI_EVALUATION_BUNDLE_NOT_FOUND,
             "AI evaluation bundle not found",
             HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(AiEvaluationBundleIntegrityException.class)
+    ResponseEntity<ErrorResponse> handleAiEvaluationBundleIntegrity(
+        AiEvaluationBundleIntegrityException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.valueOf(exception.reasonCode()),
+            "AI evaluation bundle integrity validation failed",
+            HttpStatus.CONFLICT,
             request
         );
     }
