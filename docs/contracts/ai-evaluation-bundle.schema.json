@@ -171,6 +171,61 @@
           ]
         }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "measurement_type": { "const": "HTTP_FULL_RESPONSE" } } },
+          "then": {
+            "properties": {
+              "full_response_latency_millis": { "type": "integer", "minimum": 0 },
+              "attempt_elapsed_millis": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "measurement_type": { "const": "HTTP_ATTEMPT_NO_RESPONSE" } } },
+          "then": {
+            "properties": {
+              "full_response_latency_millis": { "type": "null" },
+              "attempt_elapsed_millis": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "measurement_type": { "const": "NOT_ATTEMPTED" } } },
+          "then": {
+            "properties": {
+              "full_response_latency_millis": { "type": "null" },
+              "attempt_elapsed_millis": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "measurement_type": { "const": "MOCK" } } },
+          "then": {
+            "properties": {
+              "full_response_latency_millis": { "const": 0 },
+              "attempt_elapsed_millis": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "token_usage_status": { "const": "COMPLETE" } } },
+          "then": {
+            "properties": {
+              "input_tokens": { "type": "integer", "minimum": 0 },
+              "output_tokens": { "type": "integer", "minimum": 0 },
+              "total_tokens": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "input_tokens": { "type": "null" },
+              "output_tokens": { "type": "null" },
+              "total_tokens": { "type": "null" }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "failure_summary": {

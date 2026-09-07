@@ -57,6 +57,7 @@ Evidence 테이블의 기록 시각이 아니라 선택된 실행의 처리 기�
 - caller-provided Request ID와 Trace ID 대신 server-owned Execution ID를 Trace 기준으로 사용한다.
 - Bundle 사본이나 Export 상태를 별도 저장하지 않고 V22~V24의 실행 시점 Evidence를 조회한다.
 - DA 소비자는 섹션별 Execution ID 집합, manifest 집계, Case×Model 유일성, input digest 일치를 재검증한다.
+- DA 소비자는 manifest의 `content_digest`, Case×Model Cartesian Product, failure summary도 payload에서 재계산한다.
 - 서로 다른 Run/Dataset/Policy provenance 또는 동일 Profile의 상충 설정이 섞이면 fail closed한다.
 
 ## 운영 한계
@@ -74,3 +75,9 @@ V25는 `evaluation_run_id, eval_case_id, profile_id, execution_id` 부분 인덱
 
 동일 Case x Model 재실행 누적 시 latest-selection query 비용은 후속 운영 검증에서
 `EXPLAIN (ANALYZE, BUFFERS)`로 측정한다. 현재 동기 Export 상한 내에서는 별도 인덱스를 추정으로 추가하지 않는다.
+
+## 현재 버전 해석 한계
+
+현재 `AiEvaluationRunCatalog`와 `AiModelProfileCatalog`는 static baseline의 현재 버전만 resolve한다. 다중
+Run/Profile 버전을 운영하기 전에는 `(runId, runVersion)`, `(profileId, profileVersion)` 기반 immutable persisted
+catalog로 전환해야 한다. 그렇지 않으면 현재 Profile 갱신 후 과거 Evidence Export가 mismatch로 거부될 수 있다.

@@ -84,15 +84,7 @@ class AiEvaluationBundleControllerTests {
         assertThat(daBundle.evaluatedExecutionCount()).isEqualTo(3);
         assertThat(first.path("manifest").path("content_digest").asText())
             .isEqualTo(second.path("manifest").path("content_digest").asText());
-        Map<String, Object> digestContent = Map.of(
-            "schema_version", first.path("manifest").path("schema_version").asText(),
-            "execution_config", objectMapper.convertValue(first.path("execution_config"), Object.class),
-            "case_results", objectMapper.convertValue(first.path("case_results"), Object.class),
-            "runtime_metrics", objectMapper.convertValue(first.path("runtime_metrics"), Object.class),
-            "failure_summary", objectMapper.convertValue(first.path("failure_summary"), Object.class),
-            "trace_index", objectMapper.convertValue(first.path("trace_index"), Object.class)
-        );
-        String recomputedDigest = canonicalizer.digest(digestContent);
+        String recomputedDigest = canonicalizer.digest(digestContent(first));
         assertThat(first.path("manifest").path("content_digest").asText()).isEqualTo(recomputedDigest);
         assertDaParserRejectsInconsistentIdentity(first);
         executionIds.forEach(executionId -> {
@@ -134,6 +126,7 @@ class AiEvaluationBundleControllerTests {
         JsonNode mismatchedExecution = validBundle.deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) mismatchedExecution.path("runtime_metrics").get(0))
             .put("execution_id", "exec-mismatched");
+        refreshContentDigest(mismatchedExecution);
         assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(mismatchedExecution)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("execution identity");
@@ -141,14 +134,60 @@ class AiEvaluationBundleControllerTests {
         JsonNode mismatchedDigest = validBundle.deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) mismatchedDigest.path("case_results").get(0))
             .put("actual_input_digest", "sha256:" + "f".repeat(64));
+        refreshContentDigest(mismatchedDigest);
         assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(mismatchedDigest)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("input digest");
+
+        JsonNode changedPayload = validBundle.deepCopy();
+        var changedMetric = (com.fasterxml.jackson.databind.node.ObjectNode)
+            changedPayload.path("runtime_metrics").get(0);
+        changedMetric.put(
+            "initial_runtime_latency_millis",
+            changedMetric.path("initial_runtime_latency_millis").asLong() + 1
+        );
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(changedPayload)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("content digest");
+
+        JsonNode incompleteMatrix = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) incompleteMatrix.path("case_results").get(0))
+            .put("eval_case_id", "second-case");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) incompleteMatrix.path("runtime_metrics").get(0))
+            .put("eval_case_id", "second-case");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) incompleteMatrix.path("manifest"))
+            .put("case_count", 2);
+        refreshContentDigest(incompleteMatrix);
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(incompleteMatrix)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Cartesian product");
+
+        JsonNode inconsistentSummary = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) inconsistentSummary.path("failure_summary"))
+            .put("failed", 1);
+        refreshContentDigest(inconsistentSummary);
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(inconsistentSummary)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("failure summary");
 
         JsonNode invalidStatus = validBundle.deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) invalidStatus.path("runtime_metrics").get(0))
             .put("provider_status", "UNKNOWN");
         assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(invalidStatus)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("JSON Schema");
+
+        JsonNode invalidTiming = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalidTiming.path("runtime_metrics").get(0))
+            .put("measurement_type", "NOT_ATTEMPTED");
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(invalidTiming)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("JSON Schema");
+
+        JsonNode invalidTokenUsage = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalidTokenUsage.path("runtime_metrics").get(0))
+            .put("token_usage_status", "COMPLETE");
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(invalidTokenUsage)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("JSON Schema");
 
@@ -158,6 +197,22 @@ class AiEvaluationBundleControllerTests {
         assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(missingProvenance)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("JSON Schema");
+    }
+
+    private Map<String, Object> digestContent(JsonNode bundle) {
+        return Map.of(
+            "schema_version", bundle.path("manifest").path("schema_version").asText(),
+            "execution_config", objectMapper.convertValue(bundle.path("execution_config"), Object.class),
+            "case_results", objectMapper.convertValue(bundle.path("case_results"), Object.class),
+            "runtime_metrics", objectMapper.convertValue(bundle.path("runtime_metrics"), Object.class),
+            "failure_summary", objectMapper.convertValue(bundle.path("failure_summary"), Object.class),
+            "trace_index", objectMapper.convertValue(bundle.path("trace_index"), Object.class)
+        );
+    }
+
+    private void refreshContentDigest(JsonNode bundle) {
+        ((com.fasterxml.jackson.databind.node.ObjectNode) bundle.path("manifest"))
+            .put("content_digest", canonicalizer.digest(digestContent(bundle)));
     }
 
     @Test

@@ -7,9 +7,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import com.adp.gateway.ai.application.AiEvaluationBundleCanonicalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.InputFormat;
@@ -20,9 +22,11 @@ final class DaEvaluationBundleParserFixture {
     private final ObjectMapper objectMapper;
     private final Set<String> requiredSections;
     private final com.networknt.schema.Schema schema;
+    private final AiEvaluationBundleCanonicalizer canonicalizer;
 
     DaEvaluationBundleParserFixture(ObjectMapper objectMapper) throws IOException {
         this.objectMapper = objectMapper;
+        this.canonicalizer = new AiEvaluationBundleCanonicalizer(objectMapper);
         String schemaJson = Files.readString(Path.of("docs/contracts/ai-evaluation-bundle.schema.json"));
         JsonNode schemaNode = objectMapper.readTree(schemaJson);
         this.requiredSections = StreamSupport.stream(schemaNode.path("required").spliterator(), false)
@@ -48,6 +52,17 @@ final class DaEvaluationBundleParserFixture {
         JsonNode manifest = root.path("manifest");
         if (!"adp-ai-evaluation-bundle/v1".equals(manifest.path("schema_version").asText())) {
             throw new IllegalArgumentException("DA bundle schema is unsupported");
+        }
+        String calculatedDigest = canonicalizer.digest(Map.of(
+            "schema_version", manifest.path("schema_version").asText(),
+            "execution_config", objectMapper.convertValue(root.path("execution_config"), Object.class),
+            "case_results", objectMapper.convertValue(root.path("case_results"), Object.class),
+            "runtime_metrics", objectMapper.convertValue(root.path("runtime_metrics"), Object.class),
+            "failure_summary", objectMapper.convertValue(root.path("failure_summary"), Object.class),
+            "trace_index", objectMapper.convertValue(root.path("trace_index"), Object.class)
+        ));
+        if (!calculatedDigest.equals(manifest.path("content_digest").asText())) {
+            throw new IllegalArgumentException("DA bundle content digest is inconsistent");
         }
         int executionCount = manifest.path("execution_count").asInt(-1);
         if (executionCount != root.path("case_results").size()
@@ -88,12 +103,64 @@ final class DaEvaluationBundleParserFixture {
                 throw new IllegalArgumentException("DA bundle input digest is inconsistent");
             }
         }
+        Set<String> expectedPairs = new HashSet<>();
+        for (String caseId : values(root.path("case_results"), "eval_case_id")) {
+            for (String modelId : configuredModelIds) {
+                expectedPairs.add(caseId + "\u0000" + modelId);
+            }
+        }
+        if (!expectedPairs.equals(caseModelPairs)) {
+            throw new IllegalArgumentException("DA bundle case-model Cartesian product is incomplete");
+        }
+        validateFailureSummary(root.path("runtime_metrics"), root.path("failure_summary"));
         return new ParsedBundle(
             root.path("execution_config").path("evaluation_run_id").asText(),
             executionCount,
             manifest.path("model_count").asInt(),
             evaluatedExecutionCount
         );
+    }
+
+    private void validateFailureSummary(JsonNode metrics, JsonNode summary) {
+        int failed = 0;
+        int sentUnknown = 0;
+        int notAttempted = 0;
+        Map<String, Integer> byErrorCategory = new TreeMap<>();
+        for (JsonNode metric : metrics) {
+            failed += "FAILED".equals(metric.path("provider_status").asText()) ? 1 : 0;
+            sentUnknown += "SENT_UNKNOWN".equals(metric.path("provider_status").asText()) ? 1 : 0;
+            notAttempted += "NOT_ATTEMPTED".equals(metric.path("measurement_type").asText()) ? 1 : 0;
+            String errorCategory = metric.path("error_category").asText();
+            if (!"NONE".equals(errorCategory)) {
+                byErrorCategory.merge(errorCategory, 1, Integer::sum);
+            }
+            validateTokenUsage(metric);
+        }
+        Map<String, Integer> receivedByErrorCategory = new TreeMap<>();
+        summary.path("by_error_category").properties().forEach(entry ->
+            receivedByErrorCategory.put(entry.getKey(), entry.getValue().asInt())
+        );
+        if (summary.path("failed").asInt(-1) != failed
+            || summary.path("sent_unknown").asInt(-1) != sentUnknown
+            || summary.path("not_attempted").asInt(-1) != notAttempted
+            || !receivedByErrorCategory.equals(byErrorCategory)) {
+            throw new IllegalArgumentException("DA bundle failure summary is inconsistent");
+        }
+    }
+
+    private void validateTokenUsage(JsonNode metric) {
+        boolean complete = "COMPLETE".equals(metric.path("token_usage_status").asText());
+        JsonNode input = metric.path("input_tokens");
+        JsonNode output = metric.path("output_tokens");
+        JsonNode total = metric.path("total_tokens");
+        if (complete) {
+            if (!input.isIntegralNumber() || !output.isIntegralNumber() || !total.isIntegralNumber()
+                || total.asLong() != input.asLong() + output.asLong()) {
+                throw new IllegalArgumentException("DA bundle token usage is inconsistent");
+            }
+        } else if (!input.isNull() || !output.isNull() || !total.isNull()) {
+            throw new IllegalArgumentException("DA bundle token usage is inconsistent");
+        }
     }
 
     private Set<String> values(JsonNode array, String field) {
