@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
+import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
@@ -163,6 +164,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.RUNTIME_EXECUTION_NOT_FOUND,
             "Runtime execution not found",
+            HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(AiEvaluationBundleNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleAiEvaluationBundleNotFound(
+        AiEvaluationBundleNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.AI_EVALUATION_BUNDLE_NOT_FOUND,
+            "AI evaluation bundle not found",
             HttpStatus.NOT_FOUND,
             request
         );

@@ -34,7 +34,10 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
   - Branch: `feature/ai-eval-2-runtime-evidence`
   - Migration: V24
   - HTTP response timing, provider latency, token usage, provider status/error category와 Runtime trace 결합
-- [ ] AI-EVAL-3 DA Evaluation Bundle Export
+- [x] AI-EVAL-3 DA Evaluation Bundle Export
+  - Branch: `feature/ai-eval-3-da-evaluation-bundle`
+  - Migration: V25 evaluation run export index
+  - Privileged, institution/workload-scoped Bundle API와 재현 가능한 content fingerprint
 
 ## Security Cross-cutting Tracking
 

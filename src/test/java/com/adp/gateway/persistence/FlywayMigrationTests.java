@@ -784,6 +784,18 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v25MigrationIndexesEvaluationBundleExportScope() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*) from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'ai_model_execution_evidence'
+                  and indexname = 'idx_ai_model_execution_evidence_evaluation_run'
+                """).query(Integer.class).single();
+
+        assertThat(indexCount).isEqualTo(1);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

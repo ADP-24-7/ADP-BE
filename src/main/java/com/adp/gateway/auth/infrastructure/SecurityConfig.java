@@ -54,6 +54,8 @@ public class SecurityConfig {
                     .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers("/api/internal/auth/**").authenticated()
+                    .requestMatchers("/api/admin/ai/evaluation-runs/*/bundle")
+                    .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/audit/executions/*/evidence")
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/policy-lifecycle/**")
