@@ -16,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PolicyLifecycleService {
+    private static final Set<ExecutionPackType> LIFECYCLE_PACKS = Set.of(
+        ExecutionPackType.COMMON, ExecutionPackType.AI, ExecutionPackType.DIGITAL_ASSET
+    );
     private static final Set<PolicyLifecycleStage> PRIVILEGED_TARGETS = Set.of(
         PolicyLifecycleStage.APPROVED, PolicyLifecycleStage.ACTIVE, PolicyLifecycleStage.ROLLED_BACK
     );
@@ -47,6 +50,9 @@ public class PolicyLifecycleService {
         requireRole(principal, AdpRole.OPERATOR);
         requireScope(principal, workloadId);
         validateIdentity(artifactId, artifactVersion, artifactDigest, workloadId, purposeCode);
+        if (!LIFECYCLE_PACKS.contains(pack)) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_ARTIFACT_INVALID");
+        }
         OffsetDateTime now = OffsetDateTime.now(clock);
         return persistence.create(new PolicyLifecycleRecord(
             artifactId, artifactVersion, artifactDigest, principal.institutionId(), layer, pack,
@@ -62,9 +68,7 @@ public class PolicyLifecycleService {
         PolicyLifecycleStage target,
         PolicyLifecycleTransitionReason reason
     ) {
-        PolicyLifecycleRecord current = persistence.load(artifactId, artifactVersion);
-        requireInstitution(principal, current);
-        requireScope(principal, current.workloadId());
+        PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
         requireRole(principal, PRIVILEGED_TARGETS.contains(target) ? AdpRole.PRIVILEGED_OPERATOR : AdpRole.OPERATOR);
         if ((target == PolicyLifecycleStage.APPROVED || target == PolicyLifecycleStage.ACTIVE)
             && current.createdBy().equals(principal.principalId())) {
@@ -78,14 +82,11 @@ public class PolicyLifecycleService {
     }
 
     public PolicyLifecycleRecord load(AuthPrincipal principal, String artifactId, String artifactVersion) {
-        PolicyLifecycleRecord record = persistence.load(artifactId, artifactVersion);
-        requireInstitution(principal, record);
-        requireScope(principal, record.workloadId());
         if (!principal.hasRole(AdpRole.OPERATOR) && !principal.hasRole(AdpRole.PRIVILEGED_OPERATOR)
             && !principal.hasRole(AdpRole.AUDITOR)) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_FORBIDDEN");
         }
-        return record;
+        return loadScoped(principal, artifactId, artifactVersion);
     }
 
     private void validateIdentity(String id, String version, String digest, String workload, String purpose) {
@@ -95,10 +96,11 @@ public class PolicyLifecycleService {
         }
     }
 
-    private void requireInstitution(AuthPrincipal principal, PolicyLifecycleRecord record) {
-        if (principal.institutionId() == null || !principal.institutionId().equals(record.institutionId())) {
+    private PolicyLifecycleRecord loadScoped(AuthPrincipal principal, String artifactId, String artifactVersion) {
+        if (principal.institutionId() == null || principal.institutionId().isBlank()) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_FORBIDDEN");
         }
+        return persistence.load(principal.institutionId(), principal.workloadIds(), artifactId, artifactVersion);
     }
 
     private void requireScope(AuthPrincipal principal, String workloadId) {

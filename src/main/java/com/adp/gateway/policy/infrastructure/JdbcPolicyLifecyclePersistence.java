@@ -1,6 +1,7 @@
 package com.adp.gateway.policy.infrastructure;
 
 import java.time.OffsetDateTime;
+import java.util.Set;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
@@ -54,17 +55,32 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
     }
 
     @Override
-    public PolicyLifecycleRecord load(String artifactId, String artifactVersion) {
-        return jdbcClient.sql("""
+    public PolicyLifecycleRecord load(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String artifactId,
+        String artifactVersion
+    ) {
+        if (allowedWorkloads == null || allowedWorkloads.isEmpty()) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND");
+        }
+        String workloadPredicate = allowedWorkloads.contains("*") ? "" : "and workload_id in (:allowedWorkloads)";
+        var query = jdbcClient.sql("""
                 select artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
                        execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
                        revision, created_at, updated_at
                 from policy.lifecycle_artifact
-                where artifact_id = :artifactId and artifact_version = :artifactVersion
-                """)
+                where institution_id = :institutionId
+                  and artifact_id = :artifactId
+                  and artifact_version = :artifactVersion
+                """ + workloadPredicate)
+            .param("institutionId", institutionId)
             .param("artifactId", artifactId)
-            .param("artifactVersion", artifactVersion)
-            .query((rs, rowNum) -> new PolicyLifecycleRecord(
+            .param("artifactVersion", artifactVersion);
+        if (!allowedWorkloads.contains("*")) {
+            query = query.param("allowedWorkloads", allowedWorkloads);
+        }
+        return query.query((rs, rowNum) -> new PolicyLifecycleRecord(
                 rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),
                 rs.getString("institution_id"), PolicyLayer.valueOf(rs.getString("policy_layer")),
                 ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
@@ -87,13 +103,17 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         int updated = jdbcClient.sql("""
                 update policy.lifecycle_artifact
                 set lifecycle_stage = :target, revision = revision + 1, updated_at = :occurredAt
-                where artifact_id = :artifactId and artifact_version = :artifactVersion
+                where institution_id = :institutionId
+                  and artifact_id = :artifactId and artifact_version = :artifactVersion
+                  and workload_id = :workloadId
                   and lifecycle_stage = :current and revision = :revision
                 """)
             .param("target", target.name())
             .param("occurredAt", occurredAt)
+            .param("institutionId", current.institutionId())
             .param("artifactId", current.artifactId())
             .param("artifactVersion", current.artifactVersion())
+            .param("workloadId", current.workloadId())
             .param("current", current.lifecycleStage().name())
             .param("revision", current.revision())
             .update();
@@ -102,14 +122,15 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         }
         jdbcClient.sql("""
                 insert into policy.lifecycle_transition_event (
-                    artifact_id, artifact_version, from_stage, to_stage, actor_id,
+                    institution_id, artifact_id, artifact_version, from_stage, to_stage, actor_id,
                     reason_code, artifact_digest, occurred_at
                 ) values (
-                    :artifactId, :artifactVersion, :fromStage, :toStage, :actorId,
+                    :institutionId, :artifactId, :artifactVersion, :fromStage, :toStage, :actorId,
                     :reason, :artifactDigest, :occurredAt
                 )
                 """)
             .param("artifactId", current.artifactId())
+            .param("institutionId", current.institutionId())
             .param("artifactVersion", current.artifactVersion())
             .param("fromStage", current.lifecycleStage().name())
             .param("toStage", target.name())
@@ -118,6 +139,6 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             .param("artifactDigest", current.artifactDigest())
             .param("occurredAt", occurredAt)
             .update();
-        return load(current.artifactId(), current.artifactVersion());
+        return load(current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion());
     }
 }

@@ -22,9 +22,13 @@ HTTP role 검사 이후 Service에서 Institution, Workload, 역할, Maker-Check
 
 ## Persistence
 
+- Artifact 식별자는 `(institution_id, artifact_id, artifact_version)` 복합 키로 기관별 분리한다.
+- Lifecycle 조회와 전이는 SQL 단계에서 institution 및 허용 workload 조건을 강제한다.
+- 지원 Pack은 `COMMON`, `AI`, `DIGITAL_ASSET`로 제한하며 `SAAS`는 영속화 전에 거부한다.
+
 V21은 `policy.lifecycle_artifact`와 append-only `policy.lifecycle_transition_event`를 추가한다.
 
-- Artifact ID + Version 복합 식별자
+- Institution + Artifact ID + Version 복합 식별자
 - Artifact SHA-256 Digest
 - Institution, Policy Layer, Execution Pack, Workload, Purpose scope
 - Current Stage와 optimistic revision

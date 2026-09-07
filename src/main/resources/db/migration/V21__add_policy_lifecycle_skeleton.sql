@@ -14,7 +14,7 @@ create table policy.lifecycle_artifact (
     revision bigint not null default 0,
     created_at timestamptz not null,
     updated_at timestamptz not null,
-    primary key (artifact_id, artifact_version),
+    primary key (institution_id, artifact_id, artifact_version),
     constraint chk_policy_lifecycle_digest check (artifact_digest ~ '^[0-9a-f]{64}$'),
     constraint chk_policy_lifecycle_layer check (
         policy_layer in ('REGULATORY_BASELINE', 'INSTITUTION', 'WORKLOAD', 'DESTINATION')
@@ -28,6 +28,7 @@ create table policy.lifecycle_artifact (
 
 create table policy.lifecycle_transition_event (
     transition_id bigserial primary key,
+    institution_id varchar(120) not null,
     artifact_id varchar(120) not null,
     artifact_version varchar(120) not null,
     from_stage varchar(40) not null,
@@ -36,8 +37,8 @@ create table policy.lifecycle_transition_event (
     reason_code varchar(40) not null,
     artifact_digest varchar(64) not null,
     occurred_at timestamptz not null,
-    foreign key (artifact_id, artifact_version)
-        references policy.lifecycle_artifact (artifact_id, artifact_version),
+    foreign key (institution_id, artifact_id, artifact_version)
+        references policy.lifecycle_artifact (institution_id, artifact_id, artifact_version),
     constraint chk_policy_transition_digest check (artifact_digest ~ '^[0-9a-f]{64}$'),
     constraint chk_policy_transition_not_same check (from_stage <> to_stage),
     constraint chk_policy_transition_reason check (reason_code in (
@@ -50,4 +51,4 @@ create index idx_policy_lifecycle_scope
     on policy.lifecycle_artifact (institution_id, workload_id, lifecycle_stage, updated_at);
 
 create index idx_policy_transition_artifact
-    on policy.lifecycle_transition_event (artifact_id, artifact_version, occurred_at);
+    on policy.lifecycle_transition_event (institution_id, artifact_id, artifact_version, occurred_at);

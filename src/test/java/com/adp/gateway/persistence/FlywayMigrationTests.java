@@ -664,6 +664,32 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(2);
         assertThat(constraintCount).isEqualTo(7);
+
+        Integer tenantPrimaryKeyColumns = jdbcClient.sql("""
+                select count(*)
+                from information_schema.key_column_usage
+                where table_schema = 'policy'
+                  and table_name = 'lifecycle_artifact'
+                  and constraint_name = 'lifecycle_artifact_pkey'
+                  and column_name in ('institution_id', 'artifact_id', 'artifact_version')
+                """).query(Integer.class).single();
+        Integer tenantForeignKeyColumns = jdbcClient.sql("""
+                select count(*)
+                from information_schema.key_column_usage
+                where table_schema = 'policy'
+                  and table_name = 'lifecycle_transition_event'
+                  and constraint_name in (
+                      select constraint_name
+                      from information_schema.table_constraints
+                      where table_schema = 'policy'
+                        and table_name = 'lifecycle_transition_event'
+                        and constraint_type = 'FOREIGN KEY'
+                  )
+                  and column_name in ('institution_id', 'artifact_id', 'artifact_version')
+                """).query(Integer.class).single();
+
+        assertThat(tenantPrimaryKeyColumns).isEqualTo(3);
+        assertThat(tenantForeignKeyColumns).isEqualTo(3);
     }
 
     @Test
