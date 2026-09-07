@@ -1,8 +1,6 @@
 package com.adp.gateway.digitalasset.application;
 
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
@@ -17,11 +15,18 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcomeHandler {
-    private static final Set<String> CRITICAL_FIELDS = Set.of("walletAddress", "assetId", "amount");
     private final DigitalAssetTransactionPersistencePort persistence;
+    private final DigitalAssetMismatchPersistencePort mismatchPersistence;
+    private final DigitalAssetReconciliationEvaluator reconciliationEvaluator;
 
-    public DigitalAssetSettlementOutcomeHandler(DigitalAssetTransactionPersistencePort persistence) {
+    public DigitalAssetSettlementOutcomeHandler(
+        DigitalAssetTransactionPersistencePort persistence,
+        DigitalAssetMismatchPersistencePort mismatchPersistence,
+        DigitalAssetReconciliationEvaluator reconciliationEvaluator
+    ) {
         this.persistence = persistence;
+        this.mismatchPersistence = mismatchPersistence;
+        this.reconciliationEvaluator = reconciliationEvaluator;
     }
 
     @Override
@@ -48,15 +53,22 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
 
         String responseRequestId = string(response.get("externalRequestId"));
         if (!request.providerCorrelationKey().equals(responseRequestId)) {
+            mismatchPersistence.open(executionId, reconciliationEvaluator.criticalCorrelationMismatch(
+                request.providerCorrelationKey(), responseRequestId
+            ));
             return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "EXTERNAL_REQUEST_CORRELATION_MISMATCH");
         }
 
         String settlementStatus = String.valueOf(response.get("settlementStatus"));
-        String reconciliation = reconciliation(request.payload(), response, settlementStatus);
+        var assessment = reconciliationEvaluator.evaluate(request.payload(), response, settlementStatus);
+        String reconciliation = assessment.result();
         String externalTransactionId = string(response.get("externalTransactionId"));
         String settlementId = string(response.get("settlementId"));
         persistence.record(executionId, request.providerCorrelationKey(), externalTransactionId, settlementId,
             settlementStatus, reconciliation, connector.responseDigest());
+        if (assessment.requiresReview()) {
+            mismatchPersistence.open(executionId, assessment);
+        }
 
         if (("MATCH".equals(reconciliation) || "RECOVERED".equals(reconciliation))
             && "SETTLED".equals(settlementStatus)) {
@@ -71,28 +83,6 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
             return outcome(RuntimeExecutionStatus.FAILED, connector, "SETTLEMENT_FAILED");
         }
         return outcome(RuntimeExecutionStatus.EGRESSING, connector, "SETTLEMENT_PENDING");
-    }
-
-    private String reconciliation(Map<String, Object> requestPayload, Map<?, ?> response, String status) {
-        if (!"SETTLED".equals(status)) {
-            return "WAIT";
-        }
-        Map<String, Object> expected = map(requestPayload.get("transaction"));
-        Map<String, Object> actual = map(response.get("settledTransaction"));
-        boolean criticalMismatch = CRITICAL_FIELDS.stream()
-            .anyMatch(field -> !String.valueOf(expected.get(field)).equals(String.valueOf(actual.get(field))));
-        if (criticalMismatch) {
-            return "CRITICAL_MISMATCH";
-        }
-        return expected.equals(actual) ? "MATCH" : "MISMATCH";
-    }
-
-    private Map<String, Object> map(Object value) {
-        Map<String, Object> result = new TreeMap<>();
-        if (value instanceof Map<?, ?> map) {
-            map.forEach((key, item) -> result.put(String.valueOf(key), item));
-        }
-        return result;
     }
 
     private String string(Object value) {

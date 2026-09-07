@@ -172,7 +172,20 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(String.class).single();
         assertThat(reconciliation).isEqualTo("CRITICAL_MISMATCH");
+        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "amount");
         assertThat(terminalTransitions("REVIEW_REQUIRED")).isEqualTo(reviewRequiredBefore + 1);
+    }
+
+    @Test
+    void quarantinesNonCriticalMismatchWithoutAutomaticRetry() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-mismatch")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        assertMismatchCase(executionId, "MISMATCH", "kycStatus");
     }
 
     @Test
@@ -183,11 +196,12 @@ class DigitalAssetThinE2ETests {
             .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
             .andReturn().getResponse().getContentAsString();
         String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
-        Integer evidenceCount = jdbcClient.sql("""
+        Integer transactionEvidenceCount = jdbcClient.sql("""
                 select count(*) from runtime.digital_asset_transaction where execution_id = :executionId
                 """)
             .param("executionId", executionId).query(Integer.class).single();
-        assertThat(evidenceCount).isZero();
+        assertThat(transactionEvidenceCount).isZero();
+        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "externalRequestId");
     }
 
     @Test
@@ -325,6 +339,28 @@ class DigitalAssetThinE2ETests {
         return counter == null ? 0 : counter.count();
     }
 
+    private void assertMismatchCase(String executionId, String severity, String field) {
+        MismatchCase mismatch = jdbcClient.sql("""
+                select severity, mismatched_fields::text as mismatched_fields,
+                       expected_payload_digest, actual_payload_digest, case_status, auto_retry_allowed,
+                       (select count(*) from runtime.external_interaction_recovery er
+                        where er.execution_id = mc.execution_id) as recovery_count
+                from runtime.digital_asset_mismatch_case mc
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(MismatchCase.class)
+            .single();
+        assertThat(mismatch.severity()).isEqualTo(severity);
+        assertThat(mismatch.mismatchedFields()).contains(field);
+        assertThat(mismatch.expectedPayloadDigest()).matches("[0-9a-f]{64}");
+        assertThat(mismatch.actualPayloadDigest()).matches("[0-9a-f]{64}");
+        assertThat(mismatch.expectedPayloadDigest()).isNotEqualTo(mismatch.actualPayloadDigest());
+        assertThat(mismatch.caseStatus()).isEqualTo("OPEN");
+        assertThat(mismatch.autoRetryAllowed()).isFalse();
+        assertThat(mismatch.recoveryCount()).isZero();
+    }
+
     private String token() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
@@ -339,6 +375,17 @@ class DigitalAssetThinE2ETests {
     }
 
     private record SettlementState(String settlementStatus, String reconciliationResult) {
+    }
+
+    private record MismatchCase(
+        String severity,
+        String mismatchedFields,
+        String expectedPayloadDigest,
+        String actualPayloadDigest,
+        String caseStatus,
+        boolean autoRetryAllowed,
+        int recoveryCount
+    ) {
     }
 
     private record PolicyGateEvidence(
