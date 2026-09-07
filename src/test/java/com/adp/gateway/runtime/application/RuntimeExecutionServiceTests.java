@@ -98,6 +98,8 @@ class RuntimeExecutionServiceTests {
         Clock clock
     ) {
         CanonicalValueHasher hasher = new CanonicalValueHasher();
+        ObjectMapper objectMapper = new ObjectMapper();
+        var modelProfiles = new com.adp.gateway.ai.application.AiModelProfileCatalog(objectMapper, hasher);
         when(connector.supportedPack()).thenReturn(ExecutionPackType.COMMON);
         when(responseGuardPort.supportedPack()).thenReturn(ExecutionPackType.AI);
         return new RuntimeExecutionService(
@@ -114,7 +116,7 @@ class RuntimeExecutionServiceTests {
             persistence,
             subjectRefHasher,
             runtimeInputHasher,
-            new RuntimeRequestHasher(new ObjectMapper()),
+            new RuntimeRequestHasher(objectMapper),
             transformEngine,
             destinationProfilePort,
             outboundCandidatePayloadBuilder,
@@ -123,11 +125,11 @@ class RuntimeExecutionServiceTests {
             new ExecutionPackContextBuilderResolver(List.of(
                 new AiCanonicalContextBuilder(hasher, new RegexSensitiveDataDetector(hasher))
             )),
-            new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher, new com.adp.gateway.ai.application.AiModelProfileCatalog()),
+            new ProjectProvisionalApprovalScopeAdapter(subjectRefHasher, modelProfiles),
             new FieldLineageFactory(hasher),
             new PolicyHarnessEvaluator(hasher),
             new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(
-                new ObjectMapper(), hasher, new com.adp.gateway.ai.application.AiModelProfileCatalog()
+                objectMapper, hasher, modelProfiles
             ))),
             new ExecutionOutcomeFinalizer(
                 persistence,

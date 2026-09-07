@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.policyharness.application.ApprovalScopePort;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -13,6 +15,8 @@ class ApprovalScopeWiringTests {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
         .withUserConfiguration(
             SubjectRefHasher.class,
+            ObjectMapper.class,
+            CanonicalValueHasher.class,
             AiModelProfileCatalog.class,
             ProjectProvisionalApprovalScopeAdapter.class,
             UnconfiguredApprovalScopeAdapter.class

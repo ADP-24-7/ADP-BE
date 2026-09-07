@@ -20,9 +20,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 class AiExternalSchemaMapperTests {
-    private final AiModelProfileCatalog catalog = new AiModelProfileCatalog();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final CanonicalValueHasher hasher = new CanonicalValueHasher();
+    private final AiModelProfileCatalog catalog = new AiModelProfileCatalog(objectMapper, hasher);
     private final AiExternalSchemaMapper mapper = new AiExternalSchemaMapper(
-        new ObjectMapper(), new CanonicalValueHasher(), catalog
+        objectMapper, hasher, catalog
     );
 
     @Test
@@ -34,6 +36,27 @@ class AiExternalSchemaMapperTests {
                 "meta/muse-glimmer-30b",
                 "google/gemma-4-31b-it"
             );
+    }
+
+    @Test
+    void usesContentDerivedProvenanceAndOnePolicyDigestForTheSamePolicy() {
+        assertThat(catalog.profiles())
+            .extracting(profile -> profile.modelVersion())
+            .containsExactly("1.0-preview", "v1.0", "v1.0");
+        assertThat(catalog.profiles())
+            .extracting(profile -> profile.modelProfileDigest())
+            .allMatch(value -> value.toString().matches("sha256:[0-9a-f]{64}"))
+            .doesNotHaveDuplicates();
+        assertThat(catalog.profiles())
+            .extracting(profile -> profile.destinationProfileDigest())
+            .allMatch(value -> value.toString().matches("sha256:[0-9a-f]{64}"))
+            .doesNotHaveDuplicates();
+        assertThat(catalog.policySnapshotDigest()).matches("sha256:[0-9a-f]{64}");
+        var profile = catalog.profiles().getFirst();
+        assertThat(catalog.modelProfileDigest(
+            profile.modelId(), profile.modelVersion(), profile.maxTokens() + 1,
+            profile.temperature(), profile.providerConnectionProfileId()
+        )).isNotEqualTo(profile.modelProfileDigest());
     }
 
     @Test
@@ -72,4 +95,3 @@ class AiExternalSchemaMapperTests {
         );
     }
 }
-

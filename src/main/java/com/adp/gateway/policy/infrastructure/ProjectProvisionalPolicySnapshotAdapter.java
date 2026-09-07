@@ -47,7 +47,7 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
                 PolicyAction.TRANSFORM,
                 FIXTURE_WORKLOAD_ID,
                 FIXTURE_PURPOSE,
-                aiModelProfiles.policySnapshotDigest(aiModelProfile.get())
+                aiModelProfiles.policySnapshotDigest()
             );
         }
         if (ASSET_WORKLOAD_ID.equals(context.workloadId()) && ASSET_PURPOSE.equals(context.purposeCode())

@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.ai.application.AiProviderConnectionRegistry;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
@@ -119,13 +121,22 @@ class HttpAiConnectorTests {
         server.start();
         try {
             String apiKey = "test-only-nvidia-key";
+            var catalog = catalog();
+            var connections = new AiProviderConnectionRegistry(
+                catalog, "http://internal.invalid", "http://localhost:" + server.getAddress().getPort(), apiKey
+            );
+            assertThat(connections.resolve(catalog.profiles().getFirst().profileId()).orElseThrow().toString())
+                .doesNotContain(apiKey);
             var connector = new HttpAiConnector(
                 RestClient.builder(), new ObjectMapper(), new CanonicalValueHasher(), new SimpleMeterRegistry(),
-                "http://localhost:" + server.getAddress().getPort(), apiKey,
+                connections,
                 Duration.ofSeconds(1), Duration.ofSeconds(1)
             );
 
-            var result = connector.execute(context(), mock(RuntimeDecision.class), outbound(), providerRequest());
+            var result = connector.execute(
+                context(), mock(RuntimeDecision.class), outbound(),
+                providerRequest(catalog.profiles().getFirst().profileId())
+            );
 
             assertThat(authorization.get()).isEqualTo("Bearer " + apiKey);
             assertThat(result.toString()).doesNotContain(apiKey);
@@ -134,14 +145,68 @@ class HttpAiConnectorTests {
         }
     }
 
+    @Test
+    void neverSendsNvidiaCredentialToInternalProvider() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] payload = "{\"answer\":\"safe\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            exchange.getResponseBody().write(payload);
+            exchange.close();
+        });
+        server.start();
+        try {
+            var connections = new AiProviderConnectionRegistry(
+                catalog(), "http://localhost:" + server.getAddress().getPort(), "http://nvidia.invalid", "secret"
+            );
+            var connector = connector(connections, Duration.ofSeconds(1));
+            connector.execute(context(), mock(RuntimeDecision.class), outbound(), providerRequest());
+            assertThat(authorization.get()).isNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failsClosedBeforeNetworkWhenNvidiaCredentialIsMissing() {
+        var catalog = catalog();
+        var connections = new AiProviderConnectionRegistry(
+            catalog, "http://internal.invalid", "http://127.0.0.1:1", ""
+        );
+        var result = connector(connections, Duration.ofSeconds(1)).execute(
+            context(), mock(RuntimeDecision.class), outbound(),
+            providerRequest(catalog.profiles().getFirst().profileId())
+        );
+        assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
+    }
+
+    @Test
+    void failsClosedBeforeNetworkForUnregisteredProviderProfile() {
+        var connections = new AiProviderConnectionRegistry(
+            catalog(), "http://127.0.0.1:1", "http://127.0.0.1:1", "secret"
+        );
+        var result = connector(connections, Duration.ofSeconds(1)).execute(
+            context(), mock(RuntimeDecision.class), outbound(), providerRequest("unregistered-provider")
+        );
+        assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
+    }
+
     private HttpAiConnector connector(HttpServer server, Duration readTimeout) {
+        return connector(new AiProviderConnectionRegistry(
+            catalog(), "http://localhost:" + server.getAddress().getPort(), "http://nvidia.invalid", ""
+        ), readTimeout);
+    }
+
+    private HttpAiConnector connector(AiProviderConnectionRegistry connections, Duration readTimeout) {
         return new HttpAiConnector(
             RestClient.builder(),
             new ObjectMapper(),
             new CanonicalValueHasher(),
             new SimpleMeterRegistry(),
-            "http://localhost:" + server.getAddress().getPort(),
-            "",
+            connections,
             Duration.ofSeconds(1),
             readTimeout
         );
@@ -192,14 +257,22 @@ class HttpAiConnectorTests {
     }
 
     private ProviderRequestPayload providerRequest() {
+        return providerRequest("internal-provider");
+    }
+
+    private ProviderRequestPayload providerRequest(String providerProfileId) {
         return new ProviderRequestPayload(
             "preq",
             "out",
-            "provider",
+            providerProfileId,
             "schema-v1",
             "provider-request-digest",
             1,
             Map.of("context", Map.of("request.prompt", "safe question"))
         );
+    }
+
+    private AiModelProfileCatalog catalog() {
+        return new AiModelProfileCatalog(new ObjectMapper(), new CanonicalValueHasher());
     }
 }

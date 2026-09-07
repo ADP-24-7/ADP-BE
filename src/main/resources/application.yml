@@ -26,6 +26,7 @@ adp:
   ai-connector:
     enabled: ${ADP_AI_CONNECTOR_ENABLED:false}
     base-url: ${ADP_AI_CONNECTOR_BASE_URL:http://localhost:8090}
+    nvidia-base-url: ${ADP_NVIDIA_BASE_URL:https://integrate.api.nvidia.com}
     api-key: ${NVIDIA_API_KEY:}
     connect-timeout: ${ADP_AI_CONNECTOR_CONNECT_TIMEOUT:2s}
     read-timeout: ${ADP_AI_CONNECTOR_READ_TIMEOUT:5s}

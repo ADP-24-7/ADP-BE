@@ -82,13 +82,14 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
     }
 
     private ApprovalScope aiEvaluationApproval(AiModelProfile modelProfile) {
+        String subjectDigest = subjectRefHasher.hash(SubjectRef.from("customer:customer-100"));
         return new ApprovalScope(
             aiModelProfiles.approvalReference(modelProfile), modelProfile.profileVersion(),
-            "local-ai-evaluation-approval:" + modelProfile.profileId(),
+            aiModelProfiles.approvalScopeDigest(modelProfile, subjectDigest),
             "institution_local", "institution-policy/local/1.0.0", "local-institution-policy-digest-v1",
             "customer_summary", "CUSTOMER_SUPPORT", "EXACT_DIGEST",
-            subjectRefHasher.hash(SubjectRef.from("customer:customer-100")),
-            "be-runtime-policy/0.0.0", aiModelProfiles.policySnapshotDigest(modelProfile),
+            subjectDigest,
+            "be-runtime-policy/0.0.0", aiModelProfiles.policySnapshotDigest(),
             Set.of(AdpRole.RUNTIME_EXECUTOR), Set.of("AI_USE", "CUSTOMER_SUPPORT"),
             Set.of(
                 "request.prompt", "customer.customer_id", "customer.segment", "account.account_id",
