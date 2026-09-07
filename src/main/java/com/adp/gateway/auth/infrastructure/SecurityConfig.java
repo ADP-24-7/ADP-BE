@@ -55,6 +55,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/admin/audit/executions/*/evidence")
                     .hasRole("PRIVILEGED_OPERATOR")
+                    .requestMatchers("/api/admin/policy-lifecycle/**")
+                    .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/api/admin/**").hasRole("OPERATOR")

@@ -7,6 +7,7 @@ import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
+import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
@@ -217,6 +218,22 @@ public class GlobalExceptionHandler {
             HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );
+    }
+
+    @ExceptionHandler(PolicyLifecycleException.class)
+    ResponseEntity<ErrorResponse> handlePolicyLifecycle(
+        PolicyLifecycleException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case POLICY_LIFECYCLE_ARTIFACT_CONFLICT,
+                 POLICY_LIFECYCLE_CONCURRENT_MODIFICATION -> HttpStatus.CONFLICT;
+            case POLICY_LIFECYCLE_FORBIDDEN -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.UNPROCESSABLE_ENTITY;
+        };
+        return errorResponse(reasonCode, "Policy lifecycle operation rejected", status, request);
     }
 
     @ExceptionHandler(OutboundGuardException.class)
