@@ -6,6 +6,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.ai.application.AiModelExecutionEvidencePort;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.egress.application.ExternalSchemaMapper;
 import com.adp.gateway.egress.domain.DestinationProfile;
@@ -22,15 +23,18 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
     private final ObjectMapper objectMapper;
     private final CanonicalValueHasher hasher;
     private final AiModelProfileCatalog modelProfiles;
+    private final AiModelExecutionEvidencePort evidencePort;
 
     public AiExternalSchemaMapper(
         ObjectMapper objectMapper,
         CanonicalValueHasher hasher,
-        AiModelProfileCatalog modelProfiles
+        AiModelProfileCatalog modelProfiles,
+        AiModelExecutionEvidencePort evidencePort
     ) {
         this.objectMapper = objectMapper;
         this.hasher = hasher;
         this.modelProfiles = modelProfiles;
+        this.evidencePort = evidencePort;
     }
 
     @Override
@@ -39,14 +43,20 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
     }
 
     @Override
-    public ProviderRequestPayload map(DestinationProfile destinationProfile, OutboundCandidatePayload outboundPayload) {
+    public ProviderRequestPayload map(
+        String executionId,
+        DestinationProfile destinationProfile,
+        OutboundCandidatePayload outboundPayload
+    ) {
         if (destinationProfile.packType() != ExecutionPackType.AI) {
             throw new IllegalArgumentException("AI schema mapper cannot map a non-AI execution pack");
         }
         Map<String, Object> fields = new TreeMap<>();
         outboundPayload.fields().forEach(field -> fields.put(field.path(), field.value()));
         String providerCorrelationKey = "preq_" + UUID.randomUUID();
-        Map<String, Object> payload = modelProfiles.findByProfileId(destinationProfile.providerProfileId())
+        var modelProfile = modelProfiles.findByProfileId(destinationProfile.providerProfileId());
+        modelProfile.ifPresent(profile -> evidencePort.record(executionId, profile));
+        Map<String, Object> payload = modelProfile
             .map(profile -> nvidiaPayload(profile.modelId(), profile.maxTokens(), profile.temperature(), fields))
             .orElseGet(() -> legacyPayload(destinationProfile, providerCorrelationKey, fields));
         try {

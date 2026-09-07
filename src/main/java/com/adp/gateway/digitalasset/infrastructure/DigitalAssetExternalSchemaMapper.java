@@ -30,7 +30,7 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
     }
 
     @Override
-    public ProviderRequestPayload map(DestinationProfile profile, OutboundCandidatePayload outbound) {
+    public ProviderRequestPayload map(String executionId, DestinationProfile profile, OutboundCandidatePayload outbound) {
         Map<String, Object> fields = new TreeMap<>();
         outbound.fields().forEach(field -> fields.put(providerField(field.path()), field.value()));
         String externalRequestId = "asset_req_" + UUID.randomUUID();

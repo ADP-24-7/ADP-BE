@@ -33,7 +33,8 @@ public record RuntimeExecutionEvidenceResponse(
     String controlledDeliveryStatus,
     String controlledDeliveryResponseDigest,
     String controlledDeliveryReasonCode,
-    java.time.OffsetDateTime controlledDeliveredAt
+    java.time.OffsetDateTime controlledDeliveredAt,
+    AiModelExecutionEvidenceResponse aiModel
 ) {
 
     public static RuntimeExecutionEvidenceResponse from(RuntimeExecutionTrace trace) {
@@ -65,7 +66,8 @@ public record RuntimeExecutionEvidenceResponse(
             trace.controlledDeliveryStatus(),
             trace.controlledDeliveryResponseDigest(),
             trace.controlledDeliveryReasonCode(),
-            trace.controlledDeliveredAt()
+            trace.controlledDeliveredAt(),
+            AiModelExecutionEvidenceResponse.from(trace)
         );
     }
 

@@ -693,6 +693,40 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v22MigrationCreatesAiModelExecutionEvidence() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime' and table_name = 'ai_model_execution_evidence'
+                """).query(Integer.class).single();
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'ai_model_execution_evidence'
+                  and column_name in (
+                    'execution_id', 'profile_id', 'profile_version', 'profile_digest',
+                    'provider_model_id', 'provider_model_version', 'connection_profile_id',
+                    'max_tokens', 'temperature', 'sampling_profile_version', 'recorded_at'
+                  )
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'ai_model_execution_evidence'
+                  and constraint_name in (
+                    'ai_model_execution_evidence_pkey',
+                    'ai_model_execution_evidence_execution_id_fkey',
+                    'chk_ai_model_profile_digest',
+                    'chk_ai_model_max_tokens',
+                    'chk_ai_model_temperature'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(columnCount).isEqualTo(11);
+        assertThat(constraintCount).isEqualTo(5);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

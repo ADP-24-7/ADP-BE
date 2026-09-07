@@ -67,8 +67,19 @@ class AiModelProfileRuntimeTests {
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.providerProfileId").value(profile.profileId()))
+            .andExpect(jsonPath("$.snapshotDigest").value(catalog.policySnapshotDigest()))
             .andExpect(jsonPath("$.evidence.destinationProfileId").value(profile.destinationProfileId()))
-            .andExpect(jsonPath("$.evidence.destinationProfileVersion").value(profile.destinationProfileVersion()));
+            .andExpect(jsonPath("$.evidence.destinationProfileVersion").value(profile.destinationProfileVersion()))
+            .andExpect(jsonPath("$.evidence.aiModel.profileId").value(profile.profileId()))
+            .andExpect(jsonPath("$.evidence.aiModel.profileVersion").value(profile.profileVersion()))
+            .andExpect(jsonPath("$.evidence.aiModel.profileDigest").value(profile.modelProfileDigest()))
+            .andExpect(jsonPath("$.evidence.aiModel.providerModelId").value(profile.modelId()))
+            .andExpect(jsonPath("$.evidence.aiModel.providerModelVersion").value(profile.modelVersion()))
+            .andExpect(jsonPath("$.evidence.aiModel.connectionProfileId")
+                .value(profile.providerConnectionProfileId()))
+            .andExpect(jsonPath("$.evidence.aiModel.maxTokens").value(profile.maxTokens()))
+            .andExpect(jsonPath("$.evidence.aiModel.temperature").value(profile.temperature()))
+            .andExpect(jsonPath("$.evidence.aiModel.samplingProfileVersion").value(profile.profileVersion()));
     }
 
     private static Stream<Integer> modelIndexes() {

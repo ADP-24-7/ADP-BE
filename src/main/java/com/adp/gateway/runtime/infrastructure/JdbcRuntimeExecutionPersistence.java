@@ -781,6 +781,24 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                    authorization_status,
                    controlled_delivery_status, controlled_delivery_response_digest,
                    controlled_delivery_reason_code, controlled_delivered_at,
+                   (select profile_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_model_profile_id,
+                   (select profile_version from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_model_profile_version,
+                   (select profile_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_model_profile_digest,
+                   (select provider_model_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_provider_model_id,
+                   (select provider_model_version from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_provider_model_version,
+                   (select connection_profile_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_connection_profile_id,
+                   (select max_tokens from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_max_tokens,
+                   (select temperature::double precision from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_temperature,
+                   (select sampling_profile_version from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_sampling_profile_version,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

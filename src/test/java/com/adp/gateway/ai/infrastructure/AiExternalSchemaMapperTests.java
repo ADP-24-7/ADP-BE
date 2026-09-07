@@ -1,11 +1,13 @@
 package com.adp.gateway.ai.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.ai.application.AiModelExecutionEvidencePort;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.DestinationProfile;
@@ -24,7 +26,7 @@ class AiExternalSchemaMapperTests {
     private final CanonicalValueHasher hasher = new CanonicalValueHasher();
     private final AiModelProfileCatalog catalog = new AiModelProfileCatalog(objectMapper, hasher);
     private final AiExternalSchemaMapper mapper = new AiExternalSchemaMapper(
-        objectMapper, hasher, catalog
+        objectMapper, hasher, catalog, mock(AiModelExecutionEvidencePort.class)
     );
 
     @Test
@@ -62,7 +64,7 @@ class AiExternalSchemaMapperTests {
     @Test
     void mapsCatalogModelAndFixedEvaluationParametersIntoNvidiaRequest() {
         var profile = catalog.profiles().getFirst();
-        var request = mapper.map(destination(profile.profileId(), profile.destinationProfileId()), outbound());
+        var request = mapper.map("exec", destination(profile.profileId(), profile.destinationProfileId()), outbound());
 
         assertThat(request.providerProfileId()).isEqualTo(profile.profileId());
         assertThat(request.payload())

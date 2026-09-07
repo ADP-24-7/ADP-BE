@@ -391,7 +391,7 @@ public class RuntimeExecutionService {
                 );
             }
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
-            var providerRequest = externalSchemaMapper.map(destinationProfile, outboundPayload);
+            var providerRequest = externalSchemaMapper.map(executionId, destinationProfile, outboundPayload);
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
             updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(

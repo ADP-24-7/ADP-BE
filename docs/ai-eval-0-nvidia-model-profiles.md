@@ -20,6 +20,7 @@ Profile과 Model ID는 서버 Catalog가 소유한다. Runtime Request는 임의
 4. `HttpAiConnector`는 `NVIDIA_API_KEY`를 Bearer Header로만 전달한다.
 5. Provider connection registry가 내부 Provider와 NVIDIA endpoint/credential을 분리한다.
 6. 모델, 목적지, 승인, 정책 provenance는 canonical content의 SHA-256 digest로 고정한다.
+7. 실행 시점의 모델 버전, profile digest, connection profile, sampling 조건을 AI execution evidence로 영속화한다.
 5. Timeout은 `SENT_UNKNOWN`, 비정상 HTTP 응답은 `FAILED`, 정상 응답은 `ACKNOWLEDGED`로 정규화한다.
 6. Response Guard를 통과한 content만 Controlled Delivery로 반환한다.
 
@@ -28,6 +29,7 @@ Profile과 Model ID는 서버 Catalog가 소유한다. Runtime Request는 임의
 - 실제 키는 `.env` 또는 배포 Secret Store에서 `NVIDIA_API_KEY`로 주입한다.
 - NVIDIA 자격증명은 NVIDIA 평가 프로필에서만 사용하며 내부 Provider에는 전달하지 않는다.
 - NVIDIA 프로필에서 키가 누락되거나 Provider profile이 등록되지 않으면 네트워크 호출 전에 실패한다.
+- 모델 실행 증적에는 prompt, Provider 응답 원문, credential을 저장하지 않는다.
 - `.env.example`에는 빈 변수만 유지한다.
 - 키는 Request Body, DB, API Response, Trace, Metric, Log에 포함하지 않는다.
 - Docker Compose는 환경변수를 BE 컨테이너에 전달할 뿐 이미지에 포함하지 않는다.

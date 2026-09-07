@@ -9,5 +9,9 @@ public interface ExternalSchemaMapper {
 
     ExecutionPackType supportedPack();
 
-    ProviderRequestPayload map(DestinationProfile destinationProfile, OutboundCandidatePayload outboundPayload);
+    ProviderRequestPayload map(
+        String executionId,
+        DestinationProfile destinationProfile,
+        OutboundCandidatePayload outboundPayload
+    );
 }
