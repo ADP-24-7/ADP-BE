@@ -60,6 +60,12 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         if ("asset-critical-mismatch".equals(assetId)) {
             actual.put("amount", "999999");
         }
+        if ("asset-mismatch".equals(assetId)) {
+            actual.put("kycStatus", "REVIEW");
+        }
+        if ("asset-unexpected-field".equals(assetId)) {
+            actual.put("customer-100-sensitive-value", "unexpected");
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("externalRequestId", "asset-correlation-mismatch".equals(assetId)
             ? "asset_req_wrong_" + UUID.randomUUID()

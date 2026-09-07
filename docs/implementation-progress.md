@@ -18,7 +18,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 
 ## BE-8 Tracking
 
-BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.md)와 [BE-8 Digital Asset Recovery](be-8-digital-asset-recovery.md)에서 관리한다.
+BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.md), [BE-8 Digital Asset Recovery](be-8-digital-asset-recovery.md), [BE-8 Digital Asset Mismatch Recovery](be-8-digital-asset-mismatch-recovery.md)에서 관리한다.
 
 - [x] 기존 단일 Runtime API의 Digital Asset Pack 연결
 - [x] Input-only 최소 Retrieval Profile과 명시적 입력 Schema
@@ -33,7 +33,7 @@ BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.
 - [x] 정상 Settlement `SETTLED`/`MATCH` Thin E2E
 - [x] Versioned Local Profile 기반 KYC/AML/Wallet Review 및 Amount Limit Policy Gate
 - [x] `SENT_UNKNOWN` Digital Asset Local Provider Status Query Adapter와 공통 Recovery 수렴
-- [ ] Mismatch/Critical Mismatch Recovery E2E
+- [x] Mismatch/Critical Mismatch privacy-safe case 격리와 자동 재시도 금지 E2E
 - [ ] FE Digital Asset Lab fixture 연결
 
 ## BE-11 Parallel Tracking

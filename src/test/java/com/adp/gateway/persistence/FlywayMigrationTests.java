@@ -620,6 +620,30 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v20MigrationCreatesDigitalAssetMismatchCase() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime' and table_name = 'digital_asset_mismatch_case'
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'digital_asset_mismatch_case'
+                  and constraint_name in (
+                    'digital_asset_mismatch_case_execution_id_fkey',
+                    'chk_digital_asset_mismatch_severity',
+                    'chk_digital_asset_mismatch_status',
+                    'chk_digital_asset_mismatch_no_auto_retry',
+                    'chk_digital_asset_mismatch_digests',
+                    'chk_digital_asset_mismatch_fields'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(constraintCount).isEqualTo(6);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
