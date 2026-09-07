@@ -3,6 +3,7 @@ package com.adp.gateway.policy.infrastructure;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.AnalysisStatus;
@@ -31,9 +32,24 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     private static final String LEGACY_FIXTURE_WORKLOAD_ID = "workload_be0";
     private static final String LEGACY_FIXTURE_PURPOSE = "BE-0 local E2E";
     private static final OffsetDateTime FIXTURE_EFFECTIVE_AT = OffsetDateTime.parse("2026-01-01T00:00:00Z");
+    private final AiModelProfileCatalog aiModelProfiles;
+
+    public ProjectProvisionalPolicySnapshotAdapter(AiModelProfileCatalog aiModelProfiles) {
+        this.aiModelProfiles = aiModelProfiles;
+    }
 
     @Override
     public PolicySnapshot load(PolicySelectionContext context) {
+        var aiModelProfile = aiModelProfiles.findByProfileId(context.providerProfileId());
+        if (FIXTURE_WORKLOAD_ID.equals(context.workloadId()) && FIXTURE_PURPOSE.equals(context.purposeCode())
+            && aiModelProfile.isPresent()) {
+            return fixtureSnapshot(
+                PolicyAction.TRANSFORM,
+                FIXTURE_WORKLOAD_ID,
+                FIXTURE_PURPOSE,
+                aiModelProfiles.policySnapshotDigest()
+            );
+        }
         if (ASSET_WORKLOAD_ID.equals(context.workloadId()) && ASSET_PURPOSE.equals(context.purposeCode())
             && ASSET_PROVIDER.equals(context.providerProfileId())) {
             return fixtureSnapshot(PolicyAction.TRANSFORM, ASSET_WORKLOAD_ID, ASSET_PURPOSE,

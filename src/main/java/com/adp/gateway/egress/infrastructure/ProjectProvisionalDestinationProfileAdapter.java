@@ -3,6 +3,8 @@ package com.adp.gateway.egress.infrastructure;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.ai.domain.AiModelProfile;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.domain.DestinationBinding;
@@ -20,9 +22,14 @@ import org.springframework.stereotype.Component;
 public class ProjectProvisionalDestinationProfileAdapter implements DestinationProfilePort {
 
     private final MeterRegistry meterRegistry;
+    private final AiModelProfileCatalog aiModelProfiles;
 
-    public ProjectProvisionalDestinationProfileAdapter(MeterRegistry meterRegistry) {
+    public ProjectProvisionalDestinationProfileAdapter(
+        MeterRegistry meterRegistry,
+        AiModelProfileCatalog aiModelProfiles
+    ) {
         this.meterRegistry = meterRegistry;
+        this.aiModelProfiles = aiModelProfiles;
     }
 
     @Override
@@ -30,6 +37,11 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
         if ("dest_mock_asset_platform_v1".equals(destinationProfileId)) {
             meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
             return digitalAssetProfile(destinationProfileId);
+        }
+        var modelProfile = aiModelProfiles.findByDestinationProfileId(destinationProfileId);
+        if (modelProfile.isPresent()) {
+            meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
+            return nvidiaProfile(modelProfile.get());
         }
         if (!"dest_internal_provider_project_provisional".equals(destinationProfileId)) {
             meterRegistry.counter("destination.profile.lookup.total", "result", "NOT_FOUND").increment();
@@ -50,6 +62,27 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             false,
             "ACTIVE",
             OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+            null,
+            List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            fieldContracts()
+        );
+    }
+
+    private DestinationProfile nvidiaProfile(AiModelProfile modelProfile) {
+        return new DestinationProfile(
+            modelProfile.destinationProfileId(),
+            modelProfile.destinationProfileVersion(),
+            modelProfile.destinationProfileDigest(),
+            "nvidia-nim-chat-completions/2026-09-07",
+            modelProfile.profileId(),
+            ExecutionPackType.AI,
+            "ai-provider-response/v1",
+            "tenant_local_ai_evaluation",
+            "NVIDIA_HOSTED",
+            "PROVIDER_CONTROLLED",
+            false,
+            "ACTIVE",
+            OffsetDateTime.parse("2026-09-07T00:00:00Z"),
             null,
             List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
             fieldContracts()

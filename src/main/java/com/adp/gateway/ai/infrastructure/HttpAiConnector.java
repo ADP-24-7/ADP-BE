@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 
+import com.adp.gateway.ai.application.AiProviderConnectionRegistry;
+import com.adp.gateway.ai.domain.AiProviderConnection;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
@@ -36,27 +38,29 @@ public class HttpAiConnector implements RuntimeConnectorPort {
     private static final String DEFAULT_RESPONSE_SCHEMA = "ai-provider-response/v1";
     private static final Logger log = LoggerFactory.getLogger(HttpAiConnector.class);
 
-    private final RestClient restClient;
+    private final RestClient.Builder restClientBuilder;
     private final ObjectMapper objectMapper;
     private final CanonicalValueHasher hasher;
     private final MeterRegistry meterRegistry;
+    private final AiProviderConnectionRegistry connections;
 
     public HttpAiConnector(
         RestClient.Builder restClientBuilder,
         ObjectMapper objectMapper,
         CanonicalValueHasher hasher,
         MeterRegistry meterRegistry,
-        @Value("${adp.ai-connector.base-url:http://localhost:8090}") String baseUrl,
+        AiProviderConnectionRegistry connections,
         @Value("${adp.ai-connector.connect-timeout:2s}") Duration connectTimeout,
         @Value("${adp.ai-connector.read-timeout:5s}") Duration readTimeout
     ) {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(readTimeout);
-        this.restClient = restClientBuilder.baseUrl(baseUrl).requestFactory(requestFactory).build();
+        this.restClientBuilder = restClientBuilder.requestFactory(requestFactory);
         this.objectMapper = objectMapper;
         this.hasher = hasher;
         this.meterRegistry = meterRegistry;
+        this.connections = connections;
     }
 
     @Override
@@ -72,10 +76,21 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         ProviderRequestPayload providerRequest
     ) {
         String connectorExecutionId = "con_" + UUID.randomUUID();
+        var connection = connections.resolve(providerRequest.providerProfileId());
+        if (connection.isEmpty() || credentialMissing(connection.get())) {
+            log.warn("AI provider connection resolution failed for an approved provider profile");
+            record(ConnectorStatus.FAILED);
+            return failed(connectorExecutionId, payload);
+        }
         try {
-            var response = restClient.post()
+            AiProviderConnection resolved = connection.get();
+            var request = restClientBuilder.clone().baseUrl(resolved.baseUrl()).build().post()
                 .uri("/v1/chat/completions")
-                .header("X-Idempotency-Key", providerRequest.providerCorrelationKey())
+                .header("X-Idempotency-Key", providerRequest.providerCorrelationKey());
+            if (resolved.credentialType() == AiProviderConnection.CredentialType.NVIDIA_API_KEY) {
+                request = request.header("Authorization", "Bearer " + resolved.credential());
+            }
+            var response = request
                 .body(providerRequest.payload())
                 .retrieve()
                 .toEntity(Map.class);
@@ -121,6 +136,25 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 null
             );
         }
+    }
+
+    private boolean credentialMissing(AiProviderConnection connection) {
+        return connection.baseUrl() == null || connection.baseUrl().isBlank()
+            || (connection.credentialType() == AiProviderConnection.CredentialType.NVIDIA_API_KEY
+                && connection.credential().isBlank());
+    }
+
+    private ConnectorResult failed(String connectorExecutionId, OutboundCandidatePayload payload) {
+        return new ConnectorResult(
+            connectorExecutionId,
+            "ai-http-connector",
+            ConnectorStatus.FAILED,
+            payload.outboundPayloadId(),
+            payload.candidatePayloadDigest(),
+            null,
+            null,
+            null
+        );
     }
 
     private String canonicalJson(Object value) {

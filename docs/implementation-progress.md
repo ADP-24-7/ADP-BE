@@ -17,6 +17,19 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 
+## AI Runtime Evaluation Tracking
+
+AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidia-model-profiles.md)에서 관리한다.
+
+- [x] NVIDIA NIM Chat Completions 호환 HTTP Connector 인증
+- [x] Nemotron 3.5 Lightning, Muse Glimmer 30B, Gemma 4 31B IT 서버 소유 Profile Allowlist
+- [x] Runtime Request의 임의 Model ID 비수용 및 Destination/Approval 기반 선택
+- [x] 동일 AI Full E2E Runtime을 통한 세 Profile local smoke test
+- [x] Timeout/HTTP Error/Success의 `SENT_UNKNOWN`/`FAILED`/`ACKNOWLEDGED` 정규화
+- [ ] AI-EVAL-1 Evaluation Run/Case/Dataset Version 계약
+- [ ] AI-EVAL-2 TTFT/Latency/Token/Failure Evidence
+- [ ] AI-EVAL-3 DA Evaluation Bundle Export
+
 ## Security Cross-cutting Tracking
 
 SEC-0 상세 계약은 [SEC-0 Security Contract](sec-0-security-contract.md)에서 관리한다. Security Track은 공식 BE Phase 진행률과 분리한다.
