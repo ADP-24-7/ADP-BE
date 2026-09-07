@@ -25,6 +25,8 @@ BE Runtime DB에 직접 접근하지 않고도 DA가 Evaluation Run별 모델·�
 
 DA Artifact 관례에 맞춰 Bundle JSON field는 `snake_case`를 사용한다. 상세 계약은
 [`contracts/ai-evaluation-bundle.schema.json`](contracts/ai-evaluation-bundle.schema.json)에서 관리한다.
+성공 Bundle Schema는 authoritative provenance digest를 non-null로 요구하고 Runtime/Provider/Evidence 상태를
+Producer enum으로 제한한다. `evidence_status`는 `COMPLETE`만 허용한다.
 
 `manifest.bundle_id`는 동일 Evaluation Run/version을 나타내는 logical identifier다. 최신 Case x Model 실행이
 바뀌어도 이 값은 유지된다. `manifest.content_digest`는 해당 응답에 포함된 immutable Bundle snapshot의
@@ -33,13 +35,15 @@ identifier이므로 DA는 평가 결과에 두 값을 모두 저장해야 한다
 `manifest.content_digest`는 manifest를 제외한 `schema_version`, `execution_config`, `case_results`,
 `runtime_metrics`, `failure_summary`, `trace_index`를 key 오름차순, null 포함, ISO-8601 date-time,
 compact UTF-8 JSON으로 canonicalize한 뒤 SHA-256으로 계산한다. 전자서명이나 외부 anchoring을 의미하지 않는다.
-`manifest.generated_at`은 실제 Export 응답 생성 시각이며 digest 대상이 아니다. `manifest.evidence_cutoff_at`은
-선택된 최신 Evidence들의 `updated_at` 최댓값으로, snapshot의 데이터 기준 시각을 의미한다.
+`manifest.generated_at`은 실제 Export 응답 생성 시각이며 digest 대상이 아니다. `manifest.execution_from`과
+`manifest.execution_cutoff_at`은 선택된 Runtime Execution의 `created_at` 최솟값과 `updated_at` 최댓값이다.
+Evidence 테이블의 기록 시각이 아니라 선택된 실행의 처리 기간을 나타낸다.
 
 ## 완전성 및 신뢰 경계
 
 - `AiEvaluationRunCatalog`의 등록 Case × Model Profile Cartesian Product를 기대 집합으로 사용한다.
 - 각 Pair는 최신 `created_at`, `execution_id` 기준 Execution 1건만 선택해 재실행 횟수에 따른 평가 왜곡을 막는다.
+- Port 반환 순서와 무관하게 Case ID, Model Profile ID, Execution ID 순으로 정렬해 digest 결정성을 보장한다.
 - 기대 Pair 누락, 최신 Evidence의 `PARTIAL`, 중복 projection은 `AI_EVALUATION_BUNDLE_INCOMPLETE`로 거부한다.
 - 따라서 성공한 Bundle에는 PARTIAL Evidence가 없으며 `failure_summary`에도 상수인 partial count를 제공하지 않는다.
 - Run/Dataset/Policy/Case input provenance는 `AiEvaluationRunCatalog`와 다시 비교한다.
@@ -52,6 +56,7 @@ compact UTF-8 JSON으로 canonicalize한 뒤 SHA-256으로 계산한다. 전자�
 - Subject, Idempotency Key, Provider Credential을 Export하지 않는다.
 - caller-provided Request ID와 Trace ID 대신 server-owned Execution ID를 Trace 기준으로 사용한다.
 - Bundle 사본이나 Export 상태를 별도 저장하지 않고 V22~V24의 실행 시점 Evidence를 조회한다.
+- DA 소비자는 섹션별 Execution ID 집합, manifest 집계, Case×Model 유일성, input digest 일치를 재검증한다.
 - 서로 다른 Run/Dataset/Policy provenance 또는 동일 Profile의 상충 설정이 섞이면 fail closed한다.
 
 ## 운영 한계
@@ -59,6 +64,8 @@ compact UTF-8 JSON으로 canonicalize한 뒤 SHA-256으로 계산한다. 전자�
 현재 Bundle은 동기 JSON 응답이며 등록 Case × Model 수가 10,000건을 넘으면
 `AI_EVALUATION_BUNDLE_SIZE_LIMIT_EXCEEDED`로 거부한다. Dataset 확장으로 상한을 넘는 Bundle은 NCP Object
 Storage 비동기 Export로 전환한다. 전환 전에는 전체 실행 이력을 메모리에 적재하는 API로 확장하지 않는다.
+크기 검증은 Institution/Workload scope 조회에서 접근 가능한 Evidence가 확인된 뒤 수행해 접근 불가 Run의
+존재 여부나 규모를 오류 코드로 노출하지 않는다.
 
 ## DB
 

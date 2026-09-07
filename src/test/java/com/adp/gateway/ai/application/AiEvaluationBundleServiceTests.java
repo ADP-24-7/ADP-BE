@@ -9,10 +9,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
+import com.adp.gateway.ai.domain.AiEvaluationCaseDefinition;
 import com.adp.gateway.ai.domain.AiEvaluationBundleSource;
+import com.adp.gateway.ai.domain.AiEvaluationRunDefinition;
 import com.adp.gateway.ai.domain.AiModelProfile;
 import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
@@ -101,7 +108,7 @@ class AiEvaluationBundleServiceTests {
 
         assertThat(bundle.manifest().generatedAt())
             .isEqualTo(OffsetDateTime.parse("2026-09-07T00:00:02Z"));
-        assertThat(bundle.manifest().evidenceCutoffAt())
+        assertThat(bundle.manifest().executionCutoffAt())
             .isEqualTo(OffsetDateTime.parse("2026-09-07T00:00:01Z"));
         assertThat(bundle.failureSummary().evaluatedExecutionCount()).isEqualTo(3);
         assertThat(bundle.failureSummary().failed()).isEqualTo(1);
@@ -110,6 +117,53 @@ class AiEvaluationBundleServiceTests {
         assertThat(bundle.failureSummary().byErrorCategory())
             .containsEntry("CONNECTION_CONFIGURATION", 1)
             .containsEntry("TRANSPORT", 1);
+    }
+
+    @Test
+    void digestIsIndependentOfPortRowOrdering() {
+        var shuffled = new ArrayList<>(completeRows);
+        Collections.reverse(shuffled);
+        when(port.load(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("customer_summary"), 10_001
+        )).thenReturn(shuffled).thenReturn(completeRows);
+
+        var first = service.export(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+        var second = service.export(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+
+        assertThat(first.manifest().contentDigest()).isEqualTo(second.manifest().contentDigest());
+        assertThat(first.caseResults().stream().map(result -> result.executionId()).toList())
+            .isEqualTo(second.caseResults().stream().map(result -> result.executionId()).toList());
+    }
+
+    @Test
+    void inaccessibleOversizedRunDoesNotDiscloseSize() {
+        String runId = "oversized-run";
+        AiEvaluationRunDefinition oversizedRun = mock(AiEvaluationRunDefinition.class);
+        Map<String, AiEvaluationCaseDefinition> oversizedCases = new AbstractMap<>() {
+            @Override
+            public Set<Entry<String, AiEvaluationCaseDefinition>> entrySet() {
+                return Set.of();
+            }
+
+            @Override
+            public int size() {
+                return AiEvaluationBundleService.MAX_EXECUTION_COUNT + 1;
+            }
+        };
+        when(oversizedRun.cases()).thenReturn(oversizedCases);
+        when(oversizedRun.modelProfileIds()).thenReturn(Set.of("model"));
+        AiEvaluationRunCatalog oversizedRuns = mock(AiEvaluationRunCatalog.class);
+        when(oversizedRuns.find(runId)).thenReturn(Optional.of(oversizedRun));
+        AiEvaluationBundlePort scopedPort = mock(AiEvaluationBundlePort.class);
+        when(scopedPort.load(runId, "institution_local", Set.of("customer_summary"), 10_001))
+            .thenReturn(List.of());
+        var scopedService = new AiEvaluationBundleService(
+            scopedPort, oversizedRuns, models, new AiEvaluationBundleCanonicalizer(objectMapper),
+            new GatewayObservability(new SimpleMeterRegistry()), Clock.systemUTC()
+        );
+
+        assertThatThrownBy(() -> scopedService.export(principal(), runId))
+            .isInstanceOf(AiEvaluationBundleNotFoundException.class);
     }
 
     @Test

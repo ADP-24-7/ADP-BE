@@ -1,6 +1,7 @@
 package com.adp.gateway.ai.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -58,7 +59,7 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.manifest.content_digest")
                 .value(org.hamcrest.Matchers.matchesPattern("sha256:[0-9a-f]{64}")))
             .andExpect(jsonPath("$.manifest.generated_at").isString())
-            .andExpect(jsonPath("$.manifest.evidence_cutoff_at").isString())
+            .andExpect(jsonPath("$.manifest.execution_cutoff_at").isString())
             .andExpect(jsonPath("$.execution_config.evaluation_run_id")
                 .value(AiEvaluationRunCatalog.BASELINE_RUN_ID))
             .andExpect(jsonPath("$.execution_config.dataset_digest")
@@ -93,6 +94,7 @@ class AiEvaluationBundleControllerTests {
         );
         String recomputedDigest = canonicalizer.digest(digestContent);
         assertThat(first.path("manifest").path("content_digest").asText()).isEqualTo(recomputedDigest);
+        assertDaParserRejectsInconsistentIdentity(first);
         executionIds.forEach(executionId -> {
             assertThat(first.path("case_results").toString()).contains(executionId);
             assertThat(first.path("runtime_metrics").toString()).contains(executionId);
@@ -124,6 +126,38 @@ class AiEvaluationBundleControllerTests {
             .isEqualTo(first.path("manifest").path("bundle_id").asText());
         assertThat(latest.path("manifest").path("content_digest").asText())
             .isNotEqualTo(first.path("manifest").path("content_digest").asText());
+    }
+
+    private void assertDaParserRejectsInconsistentIdentity(JsonNode validBundle) throws Exception {
+        var parser = new DaEvaluationBundleParserFixture(objectMapper);
+
+        JsonNode mismatchedExecution = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) mismatchedExecution.path("runtime_metrics").get(0))
+            .put("execution_id", "exec-mismatched");
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(mismatchedExecution)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("execution identity");
+
+        JsonNode mismatchedDigest = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) mismatchedDigest.path("case_results").get(0))
+            .put("actual_input_digest", "sha256:" + "f".repeat(64));
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(mismatchedDigest)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("input digest");
+
+        JsonNode invalidStatus = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalidStatus.path("runtime_metrics").get(0))
+            .put("provider_status", "UNKNOWN");
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(invalidStatus)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("JSON Schema");
+
+        JsonNode missingProvenance = validBundle.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) missingProvenance.path("execution_config"))
+            .putNull("dataset_digest");
+        assertThatThrownBy(() -> parser.parse(objectMapper.writeValueAsString(missingProvenance)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("JSON Schema");
     }
 
     @Test

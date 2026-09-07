@@ -57,7 +57,6 @@ public class AiEvaluationBundleService {
             observability.aiEvaluationBundleExport(AiEvaluationBundleExportOutcome.NOT_FOUND);
             throw new AiEvaluationBundleNotFoundException(evaluationRunId);
         }
-        validateExpectedSize(run);
         List<AiEvaluationBundleSource> rows = bundlePort.load(
             evaluationRunId, principal.institutionId(), principal.workloadIds(), MAX_EXECUTION_COUNT + 1
         );
@@ -65,9 +64,15 @@ public class AiEvaluationBundleService {
             observability.aiEvaluationBundleExport(AiEvaluationBundleExportOutcome.NOT_FOUND);
             throw new AiEvaluationBundleNotFoundException(evaluationRunId);
         }
+        validateExpectedSize(run);
         validateCompleteness(run, rows);
         validateRunIdentity(run, rows);
         validateModelIdentity(run, rows);
+        rows = rows.stream()
+            .sorted(Comparator.comparing(AiEvaluationBundleSource::evalCaseId)
+                .thenComparing(AiEvaluationBundleSource::profileId)
+                .thenComparing(AiEvaluationBundleSource::executionId))
+            .toList();
 
         AiEvaluationBundleSource first = rows.getFirst();
         List<AiEvaluationBundle.ModelConfig> models = modelConfigs(rows);
@@ -88,9 +93,9 @@ public class AiEvaluationBundleService {
         String contentDigest = canonicalizer.digest(new BundleContent(
             SCHEMA_VERSION, executionConfig, caseResults, runtimeMetrics, failureSummary, traceIndex
         ));
-        OffsetDateTime evidenceFrom = rows.stream().map(AiEvaluationBundleSource::createdAt)
+        OffsetDateTime executionFrom = rows.stream().map(AiEvaluationBundleSource::createdAt)
             .min(Comparator.naturalOrder()).orElseThrow();
-        OffsetDateTime evidenceTo = rows.stream().map(AiEvaluationBundleSource::updatedAt)
+        OffsetDateTime executionCutoffAt = rows.stream().map(AiEvaluationBundleSource::updatedAt)
             .max(Comparator.naturalOrder()).orElseThrow();
         int caseCount = (int) rows.stream().map(AiEvaluationBundleSource::evalCaseId).distinct().count();
         String bundleId = "AI-EVAL-BUNDLE:" + first.evaluationRunId() + ":" + first.evaluationRunVersion();
@@ -99,7 +104,7 @@ public class AiEvaluationBundleService {
             new AiEvaluationBundle.Manifest(
                 SCHEMA_VERSION, bundleId, "1.0.0", contentDigest,
                 first.evaluationRunId(), first.evaluationRunVersion(),
-                rows.size(), caseCount, models.size(), OffsetDateTime.now(clock), evidenceFrom, evidenceTo
+                rows.size(), caseCount, models.size(), OffsetDateTime.now(clock), executionFrom, executionCutoffAt
             ),
             executionConfig,
             caseResults,

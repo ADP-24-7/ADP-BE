@@ -34,8 +34,8 @@ public record AiEvaluationBundle(
         int caseCount,
         int modelCount,
         OffsetDateTime generatedAt,
-        OffsetDateTime evidenceFrom,
-        OffsetDateTime evidenceCutoffAt
+        OffsetDateTime executionFrom,
+        OffsetDateTime executionCutoffAt
     ) {
     }
 
