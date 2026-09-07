@@ -17,6 +17,19 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 
+## Security Cross-cutting Tracking
+
+SEC-0 상세 계약은 [SEC-0 Security Contract](sec-0-security-contract.md)에서 관리한다. Security Track은 공식 BE Phase 진행률과 분리한다.
+
+- [x] FPG와 기존 WAF/API Gateway/IAM/Network 보안 책임 경계
+- [x] 보호 자산과 Caller/DB/Policy/Connector/Provider/Recovery/Admin 신뢰 경계
+- [x] Default Deny, Context Authorization, Minimum Retrieval, Destination, Integrity, Audit 불변조건
+- [x] 기존 보안 테스트 증적과 잔여 위협을 연결한 Negative Test Matrix
+- [x] HTTP 공개 endpoint allowlist와 default-deny 통합 테스트
+- [ ] SEC-1 Destination SSRF Negative Test와 Request Freshness
+- [ ] SEC-1 Denied Attempt Evidence
+- [ ] SEC-2 Secret/SAST/Dependency/Container Scan과 SBOM CI Gate
+
 ## BE-8 Tracking
 
 BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.md), [BE-8 Digital Asset Recovery](be-8-digital-asset-recovery.md), [BE-8 Digital Asset Mismatch Recovery](be-8-digital-asset-mismatch-recovery.md)에서 관리한다.
