@@ -57,6 +57,8 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.manifest.schema_version").value("adp-ai-evaluation-bundle/v1"))
             .andExpect(jsonPath("$.manifest.content_digest")
                 .value(org.hamcrest.Matchers.matchesPattern("sha256:[0-9a-f]{64}")))
+            .andExpect(jsonPath("$.manifest.generated_at").isString())
+            .andExpect(jsonPath("$.manifest.evidence_cutoff_at").isString())
             .andExpect(jsonPath("$.execution_config.evaluation_run_id")
                 .value(AiEvaluationRunCatalog.BASELINE_RUN_ID))
             .andExpect(jsonPath("$.execution_config.dataset_digest")
@@ -64,7 +66,7 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.manifest.execution_count").value(3))
             .andExpect(jsonPath("$.manifest.model_count").value(3))
             .andExpect(jsonPath("$.manifest.case_count").value(1))
-            .andExpect(jsonPath("$.failure_summary.total").value(3))
+            .andExpect(jsonPath("$.failure_summary.evaluated_execution_count").value(3))
             .andExpect(jsonPath("$.failure_summary.failed").value(0))
             .andReturn().getResponse().getContentAsString();
 
@@ -78,7 +80,7 @@ class AiEvaluationBundleControllerTests {
         assertThat(daBundle.evaluationRunId()).isEqualTo(AiEvaluationRunCatalog.BASELINE_RUN_ID);
         assertThat(daBundle.executionCount()).isEqualTo(3);
         assertThat(daBundle.modelCount()).isEqualTo(3);
-        assertThat(daBundle.failureTotal()).isEqualTo(3);
+        assertThat(daBundle.evaluatedExecutionCount()).isEqualTo(3);
         assertThat(first.path("manifest").path("content_digest").asText())
             .isEqualTo(second.path("manifest").path("content_digest").asText());
         Map<String, Object> digestContent = Map.of(
@@ -118,6 +120,10 @@ class AiEvaluationBundleControllerTests {
         JsonNode latest = objectMapper.readTree(latestResponse);
         assertThat(latest.path("case_results").toString()).contains(latestFirstModelExecution);
         assertThat(latest.path("case_results").toString()).doesNotContain(executionIds.getFirst());
+        assertThat(latest.path("manifest").path("bundle_id").asText())
+            .isEqualTo(first.path("manifest").path("bundle_id").asText());
+        assertThat(latest.path("manifest").path("content_digest").asText())
+            .isNotEqualTo(first.path("manifest").path("content_digest").asText());
     }
 
     @Test

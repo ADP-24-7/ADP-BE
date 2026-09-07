@@ -35,4 +35,4 @@ streaming Provider Contract를 도입한 뒤 별도 measurement type과 컬럼�
 ## 다음 단계
 
 AI-EVAL-3에서 이 Evidence와 immutable Evaluation Contract를 사용해
-`manifest + execution-config + case-results + runtime-metrics + trace-index` Bundle을 생성한다.
+`manifest + execution-config + case-results + runtime-metrics + failure-summary + trace-index` Bundle을 생성한다.

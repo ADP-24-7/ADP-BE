@@ -1,5 +1,6 @@
 package com.adp.gateway.ai.application;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -31,19 +32,22 @@ public class AiEvaluationBundleService {
     private final AiModelProfileCatalog modelProfileCatalog;
     private final AiEvaluationBundleCanonicalizer canonicalizer;
     private final GatewayObservability observability;
+    private final Clock clock;
 
     public AiEvaluationBundleService(
         AiEvaluationBundlePort bundlePort,
         AiEvaluationRunCatalog runCatalog,
         AiModelProfileCatalog modelProfileCatalog,
         AiEvaluationBundleCanonicalizer canonicalizer,
-        GatewayObservability observability
+        GatewayObservability observability,
+        Clock clock
     ) {
         this.bundlePort = bundlePort;
         this.runCatalog = runCatalog;
         this.modelProfileCatalog = modelProfileCatalog;
         this.canonicalizer = canonicalizer;
         this.observability = observability;
+        this.clock = clock;
     }
 
     public AiEvaluationBundle export(AuthPrincipal principal, String evaluationRunId) {
@@ -95,7 +99,7 @@ public class AiEvaluationBundleService {
             new AiEvaluationBundle.Manifest(
                 SCHEMA_VERSION, bundleId, "1.0.0", contentDigest,
                 first.evaluationRunId(), first.evaluationRunVersion(),
-                rows.size(), caseCount, models.size(), evidenceTo, evidenceFrom, evidenceTo
+                rows.size(), caseCount, models.size(), OffsetDateTime.now(clock), evidenceFrom, evidenceTo
             ),
             executionConfig,
             caseResults,
@@ -224,7 +228,6 @@ public class AiEvaluationBundleService {
             count(rows, row -> "FAILED".equals(row.providerStatus())),
             count(rows, row -> "SENT_UNKNOWN".equals(row.providerStatus())),
             count(rows, row -> "NOT_ATTEMPTED".equals(row.measurementType())),
-            count(rows, row -> "PARTIAL".equals(row.evidenceStatus())),
             byErrorCategory
         );
     }

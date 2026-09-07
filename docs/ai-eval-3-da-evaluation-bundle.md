@@ -16,25 +16,32 @@ BE Runtime DB에 직접 접근하지 않고도 DA가 Evaluation Run별 모델·�
 
 ## Bundle 구성
 
-- `manifest`: Bundle ID/version/created-at, Schema/Run version, content digest, 실행·케이스·모델 수, Evidence 기간
+- `manifest`: Bundle ID/version, Schema/Run version, content digest, 생성 시각, 실행·케이스·모델 수, Evidence 기간
 - `execution_config`: Dataset/Policy/Evaluation Contract provenance와 모델별 고정 설정
 - `case_results`: Runtime/Policy/Response Guard/Delivery 결과와 input digest 일치 증적
 - `runtime_metrics`: full-response 또는 attempt latency, token usage 상태, Provider 상태와 오류 분류
-- `failure_summary`: failed/sent-unknown/not-attempted/partial 및 error category별 집계
+- `failure_summary`: 전체 평가 Execution 수, failed/sent-unknown/not-attempted 및 error category별 집계
 - `trace_index`: server-owned Execution/Decision/Connector reference와 request/response digest
 
 DA Artifact 관례에 맞춰 Bundle JSON field는 `snake_case`를 사용한다. 상세 계약은
 [`contracts/ai-evaluation-bundle.schema.json`](contracts/ai-evaluation-bundle.schema.json)에서 관리한다.
 
+`manifest.bundle_id`는 동일 Evaluation Run/version을 나타내는 logical identifier다. 최신 Case x Model 실행이
+바뀌어도 이 값은 유지된다. `manifest.content_digest`는 해당 응답에 포함된 immutable Bundle snapshot의
+identifier이므로 DA는 평가 결과에 두 값을 모두 저장해야 한다.
+
 `manifest.content_digest`는 manifest를 제외한 `schema_version`, `execution_config`, `case_results`,
 `runtime_metrics`, `failure_summary`, `trace_index`를 key 오름차순, null 포함, ISO-8601 date-time,
 compact UTF-8 JSON으로 canonicalize한 뒤 SHA-256으로 계산한다. 전자서명이나 외부 anchoring을 의미하지 않는다.
+`manifest.generated_at`은 실제 Export 응답 생성 시각이며 digest 대상이 아니다. `manifest.evidence_cutoff_at`은
+선택된 최신 Evidence들의 `updated_at` 최댓값으로, snapshot의 데이터 기준 시각을 의미한다.
 
 ## 완전성 및 신뢰 경계
 
 - `AiEvaluationRunCatalog`의 등록 Case × Model Profile Cartesian Product를 기대 집합으로 사용한다.
 - 각 Pair는 최신 `created_at`, `execution_id` 기준 Execution 1건만 선택해 재실행 횟수에 따른 평가 왜곡을 막는다.
 - 기대 Pair 누락, 최신 Evidence의 `PARTIAL`, 중복 projection은 `AI_EVALUATION_BUNDLE_INCOMPLETE`로 거부한다.
+- 따라서 성공한 Bundle에는 PARTIAL Evidence가 없으며 `failure_summary`에도 상수인 partial count를 제공하지 않는다.
 - Run/Dataset/Policy/Case input provenance는 `AiEvaluationRunCatalog`와 다시 비교한다.
 - Model/Sampling/Destination provenance는 `AiModelProfileCatalog`와 다시 비교한다.
 - 상충 시 각각 `AI_EVALUATION_BUNDLE_PROVENANCE_MISMATCH`, `AI_EVALUATION_BUNDLE_MODEL_MISMATCH`로 거부한다.
@@ -57,3 +64,6 @@ Storage 비동기 Export로 전환한다. 전환 전에는 전체 실행 이력�
 
 V25는 `evaluation_run_id, eval_case_id, profile_id, execution_id` 부분 인덱스만 추가한다.
 평가 원문 또는 별도 Bundle payload 테이블은 추가하지 않는다.
+
+동일 Case x Model 재실행 누적 시 latest-selection query 비용은 후속 운영 검증에서
+`EXPLAIN (ANALYZE, BUFFERS)`로 측정한다. 현재 동기 Export 상한 내에서는 별도 인덱스를 추정으로 추가하지 않는다.

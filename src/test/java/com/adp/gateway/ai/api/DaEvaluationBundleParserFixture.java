@@ -56,10 +56,15 @@ final class DaEvaluationBundleParserFixture {
             root.path("execution_config").path("evaluation_run_id").asText(),
             executionCount,
             manifest.path("model_count").asInt(),
-            root.path("failure_summary").path("total").asInt()
+            root.path("failure_summary").path("evaluated_execution_count").asInt()
         );
     }
 
-    record ParsedBundle(String evaluationRunId, int executionCount, int modelCount, int failureTotal) {
+    record ParsedBundle(
+        String evaluationRunId,
+        int executionCount,
+        int modelCount,
+        int evaluatedExecutionCount
+    ) {
     }
 }

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -34,7 +36,7 @@ class AiEvaluationBundleServiceTests {
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final AiEvaluationBundleService service = new AiEvaluationBundleService(
         port, runs, models, new AiEvaluationBundleCanonicalizer(objectMapper),
-        new GatewayObservability(meterRegistry)
+        new GatewayObservability(meterRegistry), Clock.fixed(Instant.parse("2026-09-07T00:00:02Z"), ZoneOffset.UTC)
     );
 
     private List<AiEvaluationBundleSource> completeRows;
@@ -97,7 +99,11 @@ class AiEvaluationBundleServiceTests {
 
         var bundle = service.export(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
 
-        assertThat(bundle.failureSummary().total()).isEqualTo(3);
+        assertThat(bundle.manifest().generatedAt())
+            .isEqualTo(OffsetDateTime.parse("2026-09-07T00:00:02Z"));
+        assertThat(bundle.manifest().evidenceCutoffAt())
+            .isEqualTo(OffsetDateTime.parse("2026-09-07T00:00:01Z"));
+        assertThat(bundle.failureSummary().evaluatedExecutionCount()).isEqualTo(3);
         assertThat(bundle.failureSummary().failed()).isEqualTo(1);
         assertThat(bundle.failureSummary().notAttempted()).isEqualTo(1);
         assertThat(bundle.failureSummary().sentUnknown()).isEqualTo(1);

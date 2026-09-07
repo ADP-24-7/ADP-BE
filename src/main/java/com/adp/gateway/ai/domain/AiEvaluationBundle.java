@@ -33,19 +33,18 @@ public record AiEvaluationBundle(
         int executionCount,
         int caseCount,
         int modelCount,
-        OffsetDateTime createdAt,
+        OffsetDateTime generatedAt,
         OffsetDateTime evidenceFrom,
-        OffsetDateTime evidenceTo
+        OffsetDateTime evidenceCutoffAt
     ) {
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record FailureSummary(
-        int total,
+        int evaluatedExecutionCount,
         int failed,
         int sentUnknown,
         int notAttempted,
-        int partialEvidence,
         Map<String, Integer> byErrorCategory
     ) {
         public FailureSummary {
