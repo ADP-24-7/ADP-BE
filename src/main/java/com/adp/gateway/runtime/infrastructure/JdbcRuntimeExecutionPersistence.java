@@ -613,54 +613,64 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("connectorStatus", connectorResult.status().name())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
-        if (connectorResult.executionEvidence() != null) {
-            var evidence = connectorResult.executionEvidence();
-            jdbcClient.sql("""
-                update runtime.ai_model_execution_evidence
-                set measurement_type = :measurementType,
-                    full_response_latency_ms = :fullResponseLatencyMillis,
-                    attempt_elapsed_ms = :attemptElapsedMillis,
-                    input_tokens = :inputTokens,
-                    output_tokens = :outputTokens,
-                    total_tokens = :totalTokens,
-                    token_usage_status = :tokenUsageStatus,
-                    provider_status = :providerStatus,
-                    error_category = :errorCategory
-                where execution_id = :executionId
-                """)
-                .param("executionId", executionId)
-                .param("measurementType", evidence.measurementType().name())
-                .param("fullResponseLatencyMillis", evidence.fullResponseLatencyMillis())
-                .param("attemptElapsedMillis", evidence.attemptElapsedMillis())
-                .param("inputTokens", evidence.inputTokens())
-                .param("outputTokens", evidence.outputTokens())
-                .param("totalTokens", evidence.totalTokens())
-                .param("tokenUsageStatus", evidence.tokenUsageStatus().name())
-                .param("providerStatus", connectorResult.status().name())
-                .param("errorCategory", evidence.errorCategory().name())
-                .update();
-        }
         if (connectorResult.status() == com.adp.gateway.connector.domain.ConnectorStatus.SENT_UNKNOWN) {
             recoveryPersistence.scheduleUnknown(executionId, connectorResult, OffsetDateTime.now(clock));
         }
     }
 
     @Override
-    public void recordInitialAiRuntimeLatency(String executionId) {
-        jdbcClient.sql("""
+    public boolean recordAiConnectorExecutionEvidence(String executionId, ConnectorResult connectorResult) {
+        if (connectorResult.executionEvidence() == null) {
+            return false;
+        }
+        var evidence = connectorResult.executionEvidence();
+        return jdbcClient.sql("""
+            update runtime.ai_model_execution_evidence
+            set measurement_type = :measurementType,
+                full_response_latency_ms = :fullResponseLatencyMillis,
+                attempt_elapsed_ms = :attemptElapsedMillis,
+                input_tokens = :inputTokens,
+                output_tokens = :outputTokens,
+                total_tokens = :totalTokens,
+                token_usage_status = :tokenUsageStatus,
+                provider_status = :providerStatus,
+                error_category = :errorCategory,
+                provider_http_status = :providerHttpStatus,
+                evidence_status = 'PARTIAL'
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("measurementType", evidence.measurementType().name())
+            .param("fullResponseLatencyMillis", evidence.fullResponseLatencyMillis())
+            .param("attemptElapsedMillis", evidence.attemptElapsedMillis())
+            .param("inputTokens", evidence.inputTokens())
+            .param("outputTokens", evidence.outputTokens())
+            .param("totalTokens", evidence.totalTokens())
+            .param("tokenUsageStatus", evidence.tokenUsageStatus().name())
+            .param("providerStatus", connectorResult.status().name())
+            .param("errorCategory", evidence.errorCategory().name())
+            .param("providerHttpStatus", evidence.providerHttpStatus())
+            .update() == 1;
+    }
+
+    @Override
+    public boolean recordInitialAiRuntimeLatency(String executionId) {
+        return jdbcClient.sql("""
             update runtime.ai_model_execution_evidence evidence
             set initial_runtime_latency_ms = greatest(
                 0,
                 floor(extract(epoch from (:recordedAt - execution.created_at)) * 1000)::bigint
-            )
+            ),
+                evidence_status = 'COMPLETE'
             from runtime.runtime_execution execution
             where evidence.execution_id = :executionId
               and execution.execution_id = evidence.execution_id
               and evidence.initial_runtime_latency_ms is null
+              and evidence.evidence_status = 'PARTIAL'
             """)
             .param("executionId", executionId)
             .param("recordedAt", OffsetDateTime.now(clock))
-            .update();
+            .update() == 1;
     }
 
     @Override
@@ -884,6 +894,10 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where ame.execution_id = runtime_execution.execution_id) as ai_provider_status,
                    (select error_category from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_error_category,
+                   (select provider_http_status from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_provider_http_status,
+                   (select evidence_status from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_evidence_status,
                    (select initial_runtime_latency_ms from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_initial_runtime_latency_millis,
                    status, created_at, updated_at

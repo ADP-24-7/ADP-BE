@@ -35,6 +35,8 @@ public record AiModelExecutionEvidenceResponse(
     String responseGuardStatus,
     String providerStatus,
     String errorCategory,
+    Integer providerHttpStatus,
+    String evidenceStatus,
     String traceReference
 ) {
 
@@ -75,6 +77,8 @@ public record AiModelExecutionEvidenceResponse(
             trace.responseGuardStatus(),
             trace.aiProviderStatus(),
             trace.aiErrorCategory(),
+            trace.aiProviderHttpStatus(),
+            trace.aiEvidenceStatus(),
             trace.executionId()
         );
     }

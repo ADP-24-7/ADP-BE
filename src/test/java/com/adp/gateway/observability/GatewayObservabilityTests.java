@@ -3,6 +3,7 @@ package com.adp.gateway.observability;
 import static org.assertj.core.api.Assertions.assertThat;
 import com.adp.gateway.observability.GatewayObservability.IdempotencyOutcome;
 import com.adp.gateway.observability.GatewayObservability.RecoveryOutcome;
+import com.adp.gateway.observability.GatewayObservability.AiEvaluationEvidenceOutcome;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -17,10 +18,13 @@ class GatewayObservabilityTests {
         observability.runtimeExecution(RuntimeExecutionStatus.COMPLETED);
         observability.idempotency(IdempotencyOutcome.REPLAY);
         observability.recovery(RecoveryOutcome.RECONCILED);
+        observability.aiEvaluationEvidence(AiEvaluationEvidenceOutcome.PERSISTENCE_FAILED);
 
         assertThat(registry.get("adp.runtime.terminal.transition.total")
             .tag("status", "COMPLETED").counter().count())
             .isEqualTo(1);
+        assertThat(registry.get("adp.ai.evaluation.evidence.total")
+            .tag("outcome", "PERSISTENCE_FAILED").counter().count()).isEqualTo(1);
         assertThat(registry.get("adp.idempotency.resolution.total").tag("outcome", "REPLAY").counter().count())
             .isEqualTo(1);
         assertThat(registry.get("adp.recovery.processing.total").tag("outcome", "RECONCILED").counter().count())

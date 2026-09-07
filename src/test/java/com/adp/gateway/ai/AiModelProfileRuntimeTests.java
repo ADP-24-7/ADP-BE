@@ -126,6 +126,7 @@ class AiModelProfileRuntimeTests {
             .andExpect(jsonPath("$.evidence.aiModel.responseGuardStatus").value("PASSED"))
             .andExpect(jsonPath("$.evidence.aiModel.providerStatus").value("ACKNOWLEDGED"))
             .andExpect(jsonPath("$.evidence.aiModel.errorCategory").value("NONE"))
+            .andExpect(jsonPath("$.evidence.aiModel.evidenceStatus").value("COMPLETE"))
             .andExpect(jsonPath("$.evidence.aiModel.traceReference").value(executionId));
     }
 

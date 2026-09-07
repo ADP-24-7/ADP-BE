@@ -8,12 +8,13 @@ public record ConnectorExecutionEvidence(
     Integer outputTokens,
     Integer totalTokens,
     TokenUsageStatus tokenUsageStatus,
-    ConnectorErrorCategory errorCategory
+    ConnectorErrorCategory errorCategory,
+    Integer providerHttpStatus
 ) {
     public static ConnectorExecutionEvidence mock() {
         return new ConnectorExecutionEvidence(
             ConnectorMeasurementType.MOCK, 0L, null, null, null, null,
-            TokenUsageStatus.NOT_PROVIDED, ConnectorErrorCategory.NONE
+            TokenUsageStatus.NOT_PROVIDED, ConnectorErrorCategory.NONE, null
         );
     }
 }

@@ -763,7 +763,8 @@ class FlywayMigrationTests {
                     'measurement_type', 'full_response_latency_ms', 'attempt_elapsed_ms',
                     'initial_runtime_latency_ms',
                     'input_tokens', 'output_tokens', 'total_tokens',
-                    'token_usage_status', 'provider_status', 'error_category'
+                    'token_usage_status', 'provider_status', 'error_category',
+                    'provider_http_status', 'evidence_status'
                   )
                 """).query(Integer.class).single();
         Integer constraintCount = jdbcClient.sql("""
@@ -773,12 +774,13 @@ class FlywayMigrationTests {
                   and constraint_name in (
                     'chk_ai_runtime_evidence_timing', 'chk_ai_initial_runtime_latency',
                     'chk_ai_runtime_evidence_tokens',
-                    'chk_ai_runtime_evidence_provider_status', 'chk_ai_runtime_evidence_error_category'
+                    'chk_ai_runtime_evidence_provider_status', 'chk_ai_runtime_evidence_error_category',
+                    'chk_ai_runtime_evidence_http_status', 'chk_ai_runtime_evidence_status'
                   )
                 """).query(Integer.class).single();
 
-        assertThat(columnCount).isEqualTo(10);
-        assertThat(constraintCount).isEqualTo(5);
+        assertThat(columnCount).isEqualTo(12);
+        assertThat(constraintCount).isEqualTo(7);
     }
 
     @Test

@@ -70,7 +70,7 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.SENT_UNKNOWN);
             assertThat(result.responseDigest()).isNull();
-            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_ATTEMPT_TIMEOUT");
+            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_ATTEMPT_NO_RESPONSE");
             assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNull();
             assertThat(result.executionEvidence().attemptElapsedMillis()).isNotNegative();
             assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("TRANSPORT");
@@ -94,6 +94,7 @@ class HttpAiConnectorTests {
             assertThat(result.responsePayload()).isNull();
             assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_FULL_RESPONSE");
             assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("PROVIDER_SERVER_ERROR");
+            assertThat(result.executionEvidence().providerHttpStatus()).isEqualTo(503);
         } finally {
             server.stop(0);
         }
@@ -200,6 +201,7 @@ class HttpAiConnectorTests {
         assertThat(result.executionEvidence().measurementType().name()).isEqualTo("NOT_ATTEMPTED");
         assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNull();
         assertThat(result.executionEvidence().attemptElapsedMillis()).isNull();
+        assertThat(result.executionEvidence().providerHttpStatus()).isNull();
     }
 
     @Test

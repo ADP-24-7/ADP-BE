@@ -8,13 +8,15 @@ alter table runtime.ai_model_execution_evidence
     add column total_tokens integer,
     add column token_usage_status varchar(40),
     add column provider_status varchar(40),
-    add column error_category varchar(80);
+    add column error_category varchar(80),
+    add column provider_http_status integer,
+    add column evidence_status varchar(40);
 
 alter table runtime.ai_model_execution_evidence
     add constraint chk_ai_runtime_evidence_timing check (
         (measurement_type is null and full_response_latency_ms is null and attempt_elapsed_ms is null)
         or (measurement_type = 'HTTP_FULL_RESPONSE' and full_response_latency_ms >= 0 and attempt_elapsed_ms is null)
-        or (measurement_type = 'HTTP_ATTEMPT_TIMEOUT' and full_response_latency_ms is null and attempt_elapsed_ms >= 0)
+        or (measurement_type = 'HTTP_ATTEMPT_NO_RESPONSE' and full_response_latency_ms is null and attempt_elapsed_ms >= 0)
         or (measurement_type = 'NOT_ATTEMPTED' and full_response_latency_ms is null and attempt_elapsed_ms is null)
         or (measurement_type = 'MOCK' and full_response_latency_ms = 0 and attempt_elapsed_ms is null)
     ),
@@ -36,4 +38,10 @@ alter table runtime.ai_model_execution_evidence
             'NONE', 'CONNECTION_CONFIGURATION', 'TRANSPORT', 'PROVIDER_CLIENT_ERROR',
             'PROVIDER_SERVER_ERROR', 'RESPONSE_PARSE_ERROR'
         )
+    ),
+    add constraint chk_ai_runtime_evidence_http_status check (
+        provider_http_status is null or provider_http_status between 100 and 599
+    ),
+    add constraint chk_ai_runtime_evidence_status check (
+        evidence_status is null or evidence_status in ('PARTIAL', 'COMPLETE')
     );

@@ -118,7 +118,8 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 fullResponseEvidence(
                     providerLatencyMillis,
                     usage,
-                    ConnectorErrorCategory.NONE
+                    ConnectorErrorCategory.NONE,
+                    response.getStatusCode().value()
                 )
             );
         } catch (ResourceAccessException exception) {
@@ -150,7 +151,10 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 null,
                 null,
                 null,
-                fullResponseEvidence(elapsedMillis(startedAt), TokenUsage.notProvided(), errorCategory)
+                fullResponseEvidence(
+                    elapsedMillis(startedAt), TokenUsage.notProvided(), errorCategory,
+                    exception.getStatusCode().value()
+                )
             );
         } catch (IllegalStateException exception) {
             log.warn("AI provider response could not be normalized: {}", exception.getClass().getSimpleName());
@@ -180,7 +184,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             null,
             new ConnectorExecutionEvidence(
                 ConnectorMeasurementType.NOT_ATTEMPTED, null, null, null, null, null,
-                TokenUsageStatus.NOT_PROVIDED, ConnectorErrorCategory.CONNECTION_CONFIGURATION
+                TokenUsageStatus.NOT_PROVIDED, ConnectorErrorCategory.CONNECTION_CONFIGURATION, null
             )
         );
     }
@@ -194,7 +198,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             connectorExecutionId, "ai-http-connector", ConnectorStatus.FAILED,
             payload.outboundPayloadId(), payload.candidatePayloadDigest(), null, null, null,
             fullResponseEvidence(
-                elapsedMillis(startedAt), TokenUsage.notProvided(), ConnectorErrorCategory.RESPONSE_PARSE_ERROR
+                elapsedMillis(startedAt), TokenUsage.notProvided(), ConnectorErrorCategory.RESPONSE_PARSE_ERROR, null
             )
         );
     }
@@ -202,18 +206,20 @@ public class HttpAiConnector implements RuntimeConnectorPort {
     private ConnectorExecutionEvidence fullResponseEvidence(
         long latencyMillis,
         TokenUsage usage,
-        ConnectorErrorCategory errorCategory
+        ConnectorErrorCategory errorCategory,
+        Integer providerHttpStatus
     ) {
         return new ConnectorExecutionEvidence(
             ConnectorMeasurementType.HTTP_FULL_RESPONSE, latencyMillis, null,
-            usage.inputTokens(), usage.outputTokens(), usage.totalTokens(), usage.status(), errorCategory
+            usage.inputTokens(), usage.outputTokens(), usage.totalTokens(), usage.status(), errorCategory,
+            providerHttpStatus
         );
     }
 
     private ConnectorExecutionEvidence attemptEvidence(long elapsedMillis, ConnectorErrorCategory errorCategory) {
         return new ConnectorExecutionEvidence(
-            ConnectorMeasurementType.HTTP_ATTEMPT_TIMEOUT, null, elapsedMillis, null, null, null,
-            TokenUsageStatus.NOT_PROVIDED, errorCategory
+            ConnectorMeasurementType.HTTP_ATTEMPT_NO_RESPONSE, null, elapsedMillis, null, null, null,
+            TokenUsageStatus.NOT_PROVIDED, errorCategory, null
         );
     }
 
@@ -228,11 +234,15 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         if (!(response.get("usage") instanceof Map<?, ?> usage)) {
             return TokenUsage.invalid();
         }
+        if (!usage.containsKey("prompt_tokens") || !usage.containsKey("completion_tokens")
+            || !usage.containsKey("total_tokens")) {
+            return new TokenUsage(null, null, null, TokenUsageStatus.INCOMPLETE);
+        }
         Long input = nonNegativeLong(usage.get("prompt_tokens"));
         Long output = nonNegativeLong(usage.get("completion_tokens"));
         Long total = nonNegativeLong(usage.get("total_tokens"));
         if (input == null || output == null || total == null) {
-            return new TokenUsage(null, null, null, TokenUsageStatus.INCOMPLETE);
+            return TokenUsage.invalid();
         }
         if (input > Integer.MAX_VALUE || output > Integer.MAX_VALUE || total > Integer.MAX_VALUE
             || input + output != total) {

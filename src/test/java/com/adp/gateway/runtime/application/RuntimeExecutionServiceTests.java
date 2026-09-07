@@ -144,6 +144,9 @@ class RuntimeExecutionServiceTests {
             mock(com.adp.gateway.observability.GatewayObservability.class),
             new com.adp.gateway.ai.application.AiEvaluationRunCatalog(
                 modelProfiles, new RuntimeInputHasher(objectMapper), objectMapper, hasher
+            ),
+            new com.adp.gateway.ai.application.AiEvaluationEvidenceRecorder(
+                persistence, mock(com.adp.gateway.observability.GatewayObservability.class)
             )
         );
     }
