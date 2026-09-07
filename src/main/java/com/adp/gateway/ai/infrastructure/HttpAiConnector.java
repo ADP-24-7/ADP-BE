@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
@@ -156,6 +157,10 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                     exception.getStatusCode().value()
                 )
             );
+        } catch (RestClientException exception) {
+            log.warn("AI provider response body could not be decoded: {}", exception.getClass().getSimpleName());
+            record(ConnectorStatus.FAILED);
+            return failedAfterResponse(connectorExecutionId, payload, startedAt);
         } catch (IllegalStateException exception) {
             log.warn("AI provider response could not be normalized: {}", exception.getClass().getSimpleName());
             record(ConnectorStatus.FAILED);

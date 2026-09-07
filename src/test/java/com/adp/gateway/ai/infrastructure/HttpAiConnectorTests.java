@@ -227,6 +227,27 @@ class HttpAiConnectorTests {
     }
 
     @Test
+    void normalizesMalformedSuccessfulResponseAsParseFailureEvidence() throws Exception {
+        HttpServer server = server(200, "{\"choices\":[", Duration.ZERO);
+        try {
+            var result = connector(server, Duration.ofSeconds(1)).execute(
+                context(), mock(RuntimeDecision.class), outbound(), providerRequest()
+            );
+
+            assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
+            assertThat(result.responsePayload()).isNull();
+            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_FULL_RESPONSE");
+            assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNotNegative();
+            assertThat(result.executionEvidence().attemptElapsedMillis()).isNull();
+            assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("RESPONSE_PARSE_ERROR");
+            assertThat(result.executionEvidence().tokenUsageStatus().name()).isEqualTo("NOT_PROVIDED");
+            assertThat(result.executionEvidence().providerHttpStatus()).isNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void failsClosedBeforeNetworkForUnregisteredProviderProfile() {
         var connections = new AiProviderConnectionRegistry(
             catalog(), "http://127.0.0.1:1", "http://127.0.0.1:1", "secret"
