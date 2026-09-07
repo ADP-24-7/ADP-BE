@@ -1,6 +1,7 @@
 package com.adp.gateway.ai.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import java.time.OffsetDateTime;
@@ -8,7 +9,11 @@ import java.util.List;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.adp.gateway.ai.application.AiModelExecutionEvidencePort;
+import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
+import com.adp.gateway.ai.application.AiEvaluationRunMismatchException;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.adp.gateway.context.application.CanonicalValueHasher;
+import com.adp.gateway.runtime.application.RuntimeInputHasher;
 import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
@@ -25,8 +30,10 @@ class AiExternalSchemaMapperTests {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final CanonicalValueHasher hasher = new CanonicalValueHasher();
     private final AiModelProfileCatalog catalog = new AiModelProfileCatalog(objectMapper, hasher);
+    private final AiModelExecutionEvidencePort evidencePort = mock(AiModelExecutionEvidencePort.class);
     private final AiExternalSchemaMapper mapper = new AiExternalSchemaMapper(
-        objectMapper, hasher, catalog, mock(AiModelExecutionEvidencePort.class)
+        objectMapper, hasher, catalog, evidencePort,
+        new AiEvaluationRunCatalog(catalog, new RuntimeInputHasher(objectMapper), objectMapper, hasher)
     );
 
     @Test
@@ -38,6 +45,38 @@ class AiExternalSchemaMapperTests {
                 "meta/muse-glimmer-30b",
                 "google/gemma-4-31b-it"
             );
+    }
+
+    @Test
+    void rejectsUnknownEvaluationRunBeforeProviderRequestCreation() {
+        var profile = catalog.profiles().getFirst();
+
+        assertThatThrownBy(() -> mapper.map(
+            "exec",
+            new AiEvaluationReference("unknown-run", AiEvaluationRunCatalog.BASELINE_CASE_ID,
+                catalog.policySnapshotDigest(), "sha256:unknown", "input", "input"),
+            destination(profile.profileId(), profile.destinationProfileId()),
+            outbound()
+        )).isInstanceOf(AiEvaluationRunMismatchException.class);
+    }
+
+    @Test
+    void rejectsEvaluationWhenPinnedPolicyDoesNotMatch() {
+        var profile = catalog.profiles().getFirst();
+
+        assertThatThrownBy(() -> mapper.map(
+            "exec",
+            new AiEvaluationReference(AiEvaluationRunCatalog.BASELINE_RUN_ID,
+                AiEvaluationRunCatalog.BASELINE_CASE_ID, "sha256:different",
+                evaluationRuns().find(AiEvaluationRunCatalog.BASELINE_RUN_ID).orElseThrow().contractDigest(),
+                "input", "input"),
+            destination(profile.profileId(), profile.destinationProfileId()),
+            outbound()
+        )).isInstanceOf(AiEvaluationRunMismatchException.class);
+    }
+
+    private AiEvaluationRunCatalog evaluationRuns() {
+        return new AiEvaluationRunCatalog(catalog, new RuntimeInputHasher(objectMapper), objectMapper, hasher);
     }
 
     @Test
@@ -64,7 +103,9 @@ class AiExternalSchemaMapperTests {
     @Test
     void mapsCatalogModelAndFixedEvaluationParametersIntoNvidiaRequest() {
         var profile = catalog.profiles().getFirst();
-        var request = mapper.map("exec", destination(profile.profileId(), profile.destinationProfileId()), outbound());
+        var request = mapper.map(
+            "exec", null, destination(profile.profileId(), profile.destinationProfileId()), outbound()
+        );
 
         assertThat(request.providerProfileId()).isEqualTo(profile.profileId());
         assertThat(request.payload())

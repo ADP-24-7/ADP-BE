@@ -11,7 +11,18 @@ public record AiModelExecutionEvidenceResponse(
     String connectionProfileId,
     Integer maxTokens,
     Double temperature,
-    String samplingProfileVersion
+    String samplingProfileVersion,
+    String evaluationRunId,
+    String evaluationRunVersion,
+    String evalCaseId,
+    String evaluationContractDigest,
+    String expectedInputDigest,
+    String actualInputDigest,
+    String datasetId,
+    String datasetVersion,
+    String datasetDigest,
+    String policySnapshotDigest,
+    String destinationProfileDigest
 ) {
 
     public static AiModelExecutionEvidenceResponse from(RuntimeExecutionTrace trace) {
@@ -27,7 +38,18 @@ public record AiModelExecutionEvidenceResponse(
             trace.aiConnectionProfileId(),
             trace.aiMaxTokens(),
             trace.aiTemperature(),
-            trace.aiSamplingProfileVersion()
+            trace.aiSamplingProfileVersion(),
+            trace.aiEvaluationRunId(),
+            trace.aiEvaluationRunVersion(),
+            trace.aiEvalCaseId(),
+            trace.aiEvaluationContractDigest(),
+            trace.aiExpectedInputDigest(),
+            trace.aiActualInputDigest(),
+            trace.aiDatasetId(),
+            trace.aiDatasetVersion(),
+            trace.aiDatasetDigest(),
+            trace.aiPolicySnapshotDigest(),
+            trace.aiDestinationProfileDigest()
         );
     }
 }

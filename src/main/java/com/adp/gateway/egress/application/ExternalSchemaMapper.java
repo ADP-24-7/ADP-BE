@@ -4,6 +4,7 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 
 public interface ExternalSchemaMapper {
 
@@ -11,6 +12,7 @@ public interface ExternalSchemaMapper {
 
     ProviderRequestPayload map(
         String executionId,
+        AiEvaluationReference evaluationReference,
         DestinationProfile destinationProfile,
         OutboundCandidatePayload outboundPayload
     );

@@ -26,7 +26,10 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
 - [x] Runtime Request의 임의 Model ID 비수용 및 Destination/Approval 기반 선택
 - [x] 동일 AI Full E2E Runtime을 통한 세 Profile local smoke test
 - [x] Timeout/HTTP Error/Success의 `SENT_UNKNOWN`/`FAILED`/`ACKNOWLEDGED` 정규화
-- [ ] AI-EVAL-1 Evaluation Run/Case/Dataset Version 계약
+- [x] AI-EVAL-1 Evaluation Run/Case/Dataset Version 계약
+  - Branch: `feature/ai-eval-1-evaluation-run-contract`
+  - Migration: V23
+  - Runtime request hash와 AI execution evidence에 서버 소유 평가 조건 고정
 - [ ] AI-EVAL-2 TTFT/Latency/Token/Failure Evidence
 - [ ] AI-EVAL-3 DA Evaluation Bundle Export
 

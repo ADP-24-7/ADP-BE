@@ -5,6 +5,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
+import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 
 import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.audit.domain.AuditContext;
@@ -96,6 +98,7 @@ public class RuntimeExecutionService {
     private final ExecutionOutcomeFinalizer outcomeFinalizer;
     private final Clock clock;
     private final GatewayObservability observability;
+    private final AiEvaluationRunCatalog evaluationRuns;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -124,7 +127,8 @@ public class RuntimeExecutionService {
         ExternalSchemaMapperResolver externalSchemaMapperResolver,
         ExecutionOutcomeFinalizer outcomeFinalizer,
         Clock clock,
-        GatewayObservability observability
+        GatewayObservability observability,
+        AiEvaluationRunCatalog evaluationRuns
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -153,6 +157,7 @@ public class RuntimeExecutionService {
         this.outcomeFinalizer = outcomeFinalizer;
         this.clock = clock;
         this.observability = observability;
+        this.evaluationRuns = evaluationRuns;
     }
 
     public RuntimeExecutionResult execute(
@@ -164,8 +169,46 @@ public class RuntimeExecutionService {
         List<String> processingContexts,
         Map<String, Object> input
     ) {
+        return execute(requestContext, principal, institutionId, approvalReference, destinationProfileId,
+            processingContexts, input, null);
+    }
+
+    public RuntimeExecutionResult execute(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        String approvalReference,
+        String destinationProfileId,
+        List<String> processingContexts,
+        Map<String, Object> input,
+        AiEvaluationReference evaluationReference
+    ) {
+        validateAuthorization(
+            requestContext, principal, institutionId, SubjectRef.from(requestContext.subject())
+        );
+        return executeAuthorizedResolved(
+            requestContext,
+            principal,
+            institutionId,
+            approvalReference,
+            destinationProfileId,
+            processingContexts,
+            input,
+            evaluationRuns.resolve(evaluationReference, input)
+        );
+    }
+
+    private RuntimeExecutionResult executeAuthorizedResolved(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        String approvalReference,
+        String destinationProfileId,
+        List<String> processingContexts,
+        Map<String, Object> input,
+        AiEvaluationReference resolvedEvaluation
+    ) {
         SubjectRef subject = SubjectRef.from(requestContext.subject());
-        validateAuthorization(requestContext, principal, institutionId, subject);
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
@@ -177,7 +220,8 @@ public class RuntimeExecutionService {
             requestContext.subject(),
             destinationProfileId,
             processingContexts,
-            input
+            input,
+            resolvedEvaluation
         );
         String subjectRefDigest = subject == null ? null : subjectRefHasher.hash(subject);
         persistence.recordReceived(RuntimeExecutionTrace.received(
@@ -391,7 +435,19 @@ public class RuntimeExecutionService {
                 );
             }
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
-            var providerRequest = externalSchemaMapper.map(executionId, destinationProfile, outboundPayload);
+            var providerRequest = externalSchemaMapper.map(
+                executionId,
+                resolvedEvaluation == null ? null : new AiEvaluationReference(
+                    resolvedEvaluation.evaluationRunId(),
+                    resolvedEvaluation.evalCaseId(),
+                    snapshot.snapshotDigest(),
+                    resolvedEvaluation.evaluationContractDigest(),
+                    resolvedEvaluation.expectedInputDigest(),
+                    resolvedEvaluation.actualInputDigest()
+                ),
+                destinationProfile,
+                outboundPayload
+            );
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
             updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(
@@ -446,31 +502,24 @@ public class RuntimeExecutionService {
         String approvalReference,
         String destinationProfileId,
         List<String> processingContexts,
-        Map<String, Object> input
+        Map<String, Object> input,
+        AiEvaluationReference evaluationReference
     ) {
+        SubjectRef subject = SubjectRef.from(requestContext.subject());
+        validateAuthorization(requestContext, principal, institutionId, subject);
+        AiEvaluationReference resolvedEvaluation = evaluationRuns.resolve(evaluationReference, input);
         try {
-            return RuntimeExecutionSubmission.created(execute(
+            return RuntimeExecutionSubmission.created(executeAuthorizedResolved(
                 requestContext,
                 principal,
                 institutionId,
                 approvalReference,
                 destinationProfileId,
                 processingContexts,
-                input
+                input,
+                resolvedEvaluation
             ));
         } catch (DuplicateRuntimeExecutionException exception) {
-            SubjectRef subject = SubjectRef.from(requestContext.subject());
-            if (principal.institutionId() == null
-                || !principal.institutionId().equals(institutionId)
-                || !authorizationService.authorize(new AuthorizationRequest(
-                    principal,
-                    requestContext.workloadId(),
-                    RuntimeAction.RUNTIME_EXECUTE,
-                    requestContext.purpose(),
-                    subject
-                )).allowed()) {
-                throw new AccessDeniedException("Runtime execution replay is not allowed");
-            }
             String requestHash = runtimeRequestHasher.hash(
                 institutionId,
                 approvalReference,
@@ -479,7 +528,8 @@ public class RuntimeExecutionService {
                 requestContext.subject(),
                 destinationProfileId,
                 processingContexts,
-                input
+                input,
+                resolvedEvaluation
             );
             IdempotentExecutionReplay replay = persistence.findIdempotentExecution(
                     institutionId,

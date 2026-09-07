@@ -1,6 +1,7 @@
 package com.adp.gateway.runtime.api;
 
 import java.util.List;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
@@ -53,11 +54,25 @@ public class RuntimeExecutionController {
                 request.approvalReference(),
                 request.destinationProfileId(),
                 request.processingContexts() == null ? List.of() : request.processingContexts(),
-                request.input()
+                request.input(),
+                evaluationReference(request)
             );
         return ResponseEntity.ok(submission.isReplay()
             ? RuntimeExecutionResponse.from(submission.replay())
             : RuntimeExecutionResponse.from(submission.result()));
+    }
+
+    private AiEvaluationReference evaluationReference(RuntimeExecutionRequest request) {
+        if (request.evaluationRunId() == null && request.evalCaseId() == null) {
+            return null;
+        }
+        if (request.evaluationRunId() == null || request.evaluationRunId().isBlank()
+            || request.evalCaseId() == null || request.evalCaseId().isBlank()) {
+            throw new com.adp.gateway.ai.application.AiEvaluationRunMismatchException(
+                "AI_EVALUATION_REFERENCE_INCOMPLETE"
+            );
+        }
+        return new AiEvaluationReference(request.evaluationRunId(), request.evalCaseId(), null, null, null, null);
     }
 
     @GetMapping("/{executionId}")

@@ -130,7 +130,10 @@ class RuntimeExecutionServiceTests {
             new PolicyHarnessEvaluator(hasher),
             new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(
                 objectMapper, hasher, modelProfiles,
-                mock(com.adp.gateway.ai.application.AiModelExecutionEvidencePort.class)
+                mock(com.adp.gateway.ai.application.AiModelExecutionEvidencePort.class),
+                new com.adp.gateway.ai.application.AiEvaluationRunCatalog(
+                    modelProfiles, new RuntimeInputHasher(objectMapper), objectMapper, hasher
+                )
             ))),
             new ExecutionOutcomeFinalizer(
                 persistence,
@@ -138,7 +141,10 @@ class RuntimeExecutionServiceTests {
                 auditRecorder
             ),
             clock,
-            mock(com.adp.gateway.observability.GatewayObservability.class)
+            mock(com.adp.gateway.observability.GatewayObservability.class),
+            new com.adp.gateway.ai.application.AiEvaluationRunCatalog(
+                modelProfiles, new RuntimeInputHasher(objectMapper), objectMapper, hasher
+            )
         );
     }
 

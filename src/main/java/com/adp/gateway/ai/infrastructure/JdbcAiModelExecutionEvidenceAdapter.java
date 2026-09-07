@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.ai.application.AiModelExecutionEvidencePort;
 import com.adp.gateway.ai.domain.AiModelProfile;
+import com.adp.gateway.ai.domain.AiEvaluationRunDefinition;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -20,16 +21,32 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
     }
 
     @Override
-    public void record(String executionId, AiModelProfile profile) {
+    public void record(
+        String executionId,
+        AiModelProfile profile,
+        AiEvaluationRunDefinition evaluationRun,
+        String evalCaseId,
+        String expectedInputDigest,
+        String actualInputDigest,
+        String destinationProfileDigest
+    ) {
         jdbcClient.sql("""
             insert into runtime.ai_model_execution_evidence (
                 execution_id, profile_id, profile_version, profile_digest,
                 provider_model_id, provider_model_version, connection_profile_id,
-                max_tokens, temperature, sampling_profile_version, recorded_at
+                max_tokens, temperature, sampling_profile_version,
+                evaluation_run_id, evaluation_run_version, eval_case_id,
+                evaluation_contract_digest, expected_input_digest, actual_input_digest,
+                dataset_id, dataset_version, dataset_digest,
+                policy_snapshot_digest, destination_profile_digest, recorded_at
             ) values (
                 :executionId, :profileId, :profileVersion, :profileDigest,
                 :providerModelId, :providerModelVersion, :connectionProfileId,
-                :maxTokens, :temperature, :samplingProfileVersion, :recordedAt
+                :maxTokens, :temperature, :samplingProfileVersion,
+                :evaluationRunId, :evaluationRunVersion, :evalCaseId,
+                :evaluationContractDigest, :expectedInputDigest, :actualInputDigest,
+                :datasetId, :datasetVersion, :datasetDigest,
+                :policySnapshotDigest, :destinationProfileDigest, :recordedAt
             )
             """)
             .param("executionId", executionId)
@@ -42,6 +59,17 @@ public class JdbcAiModelExecutionEvidenceAdapter implements AiModelExecutionEvid
             .param("maxTokens", profile.maxTokens())
             .param("temperature", profile.temperature())
             .param("samplingProfileVersion", profile.profileVersion())
+            .param("evaluationRunId", evaluationRun == null ? null : evaluationRun.evaluationRunId())
+            .param("evaluationRunVersion", evaluationRun == null ? null : evaluationRun.runVersion())
+            .param("evalCaseId", evalCaseId)
+            .param("evaluationContractDigest", evaluationRun == null ? null : evaluationRun.contractDigest())
+            .param("expectedInputDigest", expectedInputDigest)
+            .param("actualInputDigest", actualInputDigest)
+            .param("datasetId", evaluationRun == null ? null : evaluationRun.datasetId())
+            .param("datasetVersion", evaluationRun == null ? null : evaluationRun.datasetVersion())
+            .param("datasetDigest", evaluationRun == null ? null : evaluationRun.datasetDigest())
+            .param("policySnapshotDigest", evaluationRun == null ? null : evaluationRun.policySnapshotDigest())
+            .param("destinationProfileDigest", evaluationRun == null ? null : destinationProfileDigest)
             .param("recordedAt", OffsetDateTime.now(clock))
             .update();
     }
