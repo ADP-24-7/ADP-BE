@@ -118,14 +118,15 @@ class AiModelProfileRuntimeTests {
             .andExpect(jsonPath("$.evidence.aiModel.destinationProfileDigest")
                 .value(profile.destinationProfileDigest()))
             .andExpect(jsonPath("$.evidence.aiModel.measurementType").value("MOCK"))
-            .andExpect(jsonPath("$.evidence.aiModel.timeToFirstResponseMillis").value(0))
-            .andExpect(jsonPath("$.evidence.aiModel.providerLatencyMillis").value(0))
-            .andExpect(jsonPath("$.evidence.aiModel.totalLatencyMillis").isNumber())
-            .andExpect(jsonPath("$.evidence.aiModel.runtimeDecision").value("TRANSFORM"))
+            .andExpect(jsonPath("$.evidence.aiModel.fullResponseLatencyMillis").value(0))
+            .andExpect(jsonPath("$.evidence.aiModel.attemptElapsedMillis").doesNotExist())
+            .andExpect(jsonPath("$.evidence.aiModel.tokenUsageStatus").value("NOT_PROVIDED"))
+            .andExpect(jsonPath("$.evidence.aiModel.initialRuntimeLatencyMillis").isNumber())
+            .andExpect(jsonPath("$.evidence.aiModel.runtimeFinalAction").value("TRANSFORM"))
             .andExpect(jsonPath("$.evidence.aiModel.responseGuardStatus").value("PASSED"))
             .andExpect(jsonPath("$.evidence.aiModel.providerStatus").value("ACKNOWLEDGED"))
             .andExpect(jsonPath("$.evidence.aiModel.errorCategory").value("NONE"))
-            .andExpect(jsonPath("$.evidence.aiModel.traceReference").value("trace_eval_" + modelIndex));
+            .andExpect(jsonPath("$.evidence.aiModel.traceReference").value(executionId));
     }
 
     private static Stream<Integer> modelIndexes() {

@@ -43,12 +43,14 @@ class HttpAiConnectorTests {
             assertThat(result.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
             assertThat(result.responseDigest()).hasSize(64);
             assertThat(result.responseSchemaVersion()).isEqualTo("ai-provider-response/v1");
-            assertThat(result.executionEvidence().measurementType()).isEqualTo("HTTP_RESPONSE");
-            assertThat(result.executionEvidence().providerLatencyMillis()).isNotNegative();
+            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_FULL_RESPONSE");
+            assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNotNegative();
+            assertThat(result.executionEvidence().attemptElapsedMillis()).isNull();
             assertThat(result.executionEvidence().inputTokens()).isEqualTo(11);
             assertThat(result.executionEvidence().outputTokens()).isEqualTo(7);
             assertThat(result.executionEvidence().totalTokens()).isEqualTo(18);
-            assertThat(result.executionEvidence().errorCategory()).isEqualTo("NONE");
+            assertThat(result.executionEvidence().tokenUsageStatus().name()).isEqualTo("COMPLETE");
+            assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("NONE");
             assertThat(result.toString()).doesNotContain("safe");
         } finally {
             server.stop(0);
@@ -68,7 +70,10 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.SENT_UNKNOWN);
             assertThat(result.responseDigest()).isNull();
-            assertThat(result.executionEvidence().errorCategory()).isEqualTo("TRANSPORT");
+            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_ATTEMPT_TIMEOUT");
+            assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNull();
+            assertThat(result.executionEvidence().attemptElapsedMillis()).isNotNegative();
+            assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("TRANSPORT");
         } finally {
             server.stop(0);
         }
@@ -87,7 +92,8 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
             assertThat(result.responsePayload()).isNull();
-            assertThat(result.executionEvidence().errorCategory()).isEqualTo("PROVIDER_SERVER_ERROR");
+            assertThat(result.executionEvidence().measurementType().name()).isEqualTo("HTTP_FULL_RESPONSE");
+            assertThat(result.executionEvidence().errorCategory().name()).isEqualTo("PROVIDER_SERVER_ERROR");
         } finally {
             server.stop(0);
         }
@@ -191,6 +197,31 @@ class HttpAiConnectorTests {
             providerRequest(catalog.profiles().getFirst().profileId())
         );
         assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
+        assertThat(result.executionEvidence().measurementType().name()).isEqualTo("NOT_ATTEMPTED");
+        assertThat(result.executionEvidence().fullResponseLatencyMillis()).isNull();
+        assertThat(result.executionEvidence().attemptElapsedMillis()).isNull();
+    }
+
+    @Test
+    void keepsSuccessfulResponseWhenProviderTokenUsageIsInconsistent() throws Exception {
+        HttpServer server = server(200, """
+            {"answer":"safe","usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":16}}
+            """, Duration.ZERO);
+        try {
+            var result = connector(server, Duration.ofSeconds(1)).execute(
+                context(), mock(RuntimeDecision.class), outbound(), providerRequest()
+            );
+
+            assertThat(result.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
+            assertThat(result.responseDigest()).hasSize(64);
+            assertThat(result.responsePayload()).isNotNull();
+            assertThat(result.executionEvidence().tokenUsageStatus().name()).isEqualTo("INVALID");
+            assertThat(result.executionEvidence().inputTokens()).isNull();
+            assertThat(result.executionEvidence().outputTokens()).isNull();
+            assertThat(result.executionEvidence().totalTokens()).isNull();
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

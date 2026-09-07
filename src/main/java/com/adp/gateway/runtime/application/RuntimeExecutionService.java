@@ -461,6 +461,9 @@ public class RuntimeExecutionService {
                 executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
                 destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
             );
+            if (resolvedEvaluation != null) {
+                persistence.recordInitialAiRuntimeLatency(executionId);
+            }
             recordTerminalTransition(result.status());
             return result;
         } catch (AccessDeniedException exception) {
