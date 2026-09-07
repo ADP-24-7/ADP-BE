@@ -11,6 +11,7 @@ import java.util.TreeMap;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -33,6 +34,21 @@ public class RuntimeRequestHasher {
         List<String> processingContexts,
         Map<String, Object> input
     ) {
+        return hash(institutionId, approvalReference, workloadId, purposeCode, subjectScope,
+            destinationProfileId, processingContexts, input, null);
+    }
+
+    public String hash(
+        String institutionId,
+        String approvalReference,
+        String workloadId,
+        String purposeCode,
+        String subjectScope,
+        String destinationProfileId,
+        List<String> processingContexts,
+        Map<String, Object> input,
+        AiEvaluationReference evaluationReference
+    ) {
         Map<String, Object> canonical = new TreeMap<>();
         canonical.put("approvalReference", approvalReference);
         canonical.put("destinationProfileId", destinationProfileId);
@@ -44,6 +60,8 @@ public class RuntimeRequestHasher {
         canonical.put("purposeCode", purposeCode);
         canonical.put("subjectScope", subjectScope);
         canonical.put("workloadId", workloadId);
+        canonical.put("evaluationRunId", evaluationReference == null ? null : evaluationReference.evaluationRunId());
+        canonical.put("evalCaseId", evaluationReference == null ? null : evaluationReference.evalCaseId());
         try {
             String json = objectMapper.writeValueAsString(canonical);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -90,6 +90,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [구현 진행 현황](docs/implementation-progress.md)
 - [SEC-0 Security Contract](docs/sec-0-security-contract.md)
 - [AI-EVAL-0 NVIDIA Model Connector And Profiles](docs/ai-eval-0-nvidia-model-profiles.md)
+- [AI-EVAL-1 Evaluation Run Contract](docs/ai-eval-1-evaluation-run-contract.md)
 - [BE-4 Policy & Decision Core](docs/be-4-policy-decision-core.md)
 - [BE-5 Transform Engine & Vault](docs/be-5-transform-vault.md)
 - [BE-6 Common Egress Boundary](docs/be-6-common-egress-boundary.md)

@@ -10,6 +10,7 @@ import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -30,7 +31,17 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
     }
 
     @Override
-    public ProviderRequestPayload map(String executionId, DestinationProfile profile, OutboundCandidatePayload outbound) {
+    public ProviderRequestPayload map(
+        String executionId,
+        AiEvaluationReference evaluationReference,
+        DestinationProfile profile,
+        OutboundCandidatePayload outbound
+    ) {
+        if (evaluationReference != null) {
+            throw new com.adp.gateway.context.application.ExecutionPackInputRejectedException(
+                ExecutionPackType.DIGITAL_ASSET, "AI_EVALUATION_REFERENCE_NOT_ALLOWED"
+            );
+        }
         Map<String, Object> fields = new TreeMap<>();
         outbound.fields().forEach(field -> fields.put(providerField(field.path()), field.value()));
         String externalRequestId = "asset_req_" + UUID.randomUUID();

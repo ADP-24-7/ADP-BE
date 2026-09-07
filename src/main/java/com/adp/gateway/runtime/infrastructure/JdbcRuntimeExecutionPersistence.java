@@ -799,6 +799,22 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where ame.execution_id = runtime_execution.execution_id) as ai_temperature,
                    (select sampling_profile_version from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_sampling_profile_version,
+                   (select evaluation_run_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_evaluation_run_id,
+                   (select evaluation_run_version from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_evaluation_run_version,
+                   (select eval_case_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_eval_case_id,
+                   (select dataset_id from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_dataset_id,
+                   (select dataset_version from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_dataset_version,
+                   (select dataset_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_dataset_digest,
+                   (select policy_snapshot_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_policy_snapshot_digest,
+                   (select destination_profile_digest from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_destination_profile_digest,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

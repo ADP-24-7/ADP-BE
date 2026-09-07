@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 import org.junit.jupiter.api.Test;
 
 class RuntimeRequestHasherTests {
@@ -47,6 +48,24 @@ class RuntimeRequestHasherTests {
     void duplicateProcessingContextsHaveSetSemantics() {
         assertThat(hash(List.of("AI_USE", "AI_USE"), Map.of("prompt", "ticket-100")))
             .isEqualTo(hash(List.of("AI_USE"), Map.of("prompt", "ticket-100")));
+    }
+
+    @Test
+    void hashChangesWhenEvaluationRunOrCaseChanges() {
+        String first = hasher.hash(
+            "institution_local", "approval_ai_customer_support_v1", "customer_summary",
+            "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
+            List.of("AI_USE"), Map.of("prompt", "ticket-100"),
+            new AiEvaluationReference("run-1", "case-1", null)
+        );
+        String second = hasher.hash(
+            "institution_local", "approval_ai_customer_support_v1", "customer_summary",
+            "CUSTOMER_SUPPORT", "customer:customer-100", "dest_internal_provider_project_provisional",
+            List.of("AI_USE"), Map.of("prompt", "ticket-100"),
+            new AiEvaluationReference("run-1", "case-2", null)
+        );
+
+        assertThat(first).isNotEqualTo(second);
     }
 
     private String hash(List<String> processingContexts, Map<String, Object> input) {

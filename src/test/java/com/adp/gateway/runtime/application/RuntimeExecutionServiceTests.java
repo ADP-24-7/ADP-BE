@@ -130,7 +130,8 @@ class RuntimeExecutionServiceTests {
             new PolicyHarnessEvaluator(hasher),
             new ExternalSchemaMapperResolver(List.of(new AiExternalSchemaMapper(
                 objectMapper, hasher, modelProfiles,
-                mock(com.adp.gateway.ai.application.AiModelExecutionEvidencePort.class)
+                mock(com.adp.gateway.ai.application.AiModelExecutionEvidencePort.class),
+                new com.adp.gateway.ai.application.AiEvaluationRunCatalog(modelProfiles)
             ))),
             new ExecutionOutcomeFinalizer(
                 persistence,

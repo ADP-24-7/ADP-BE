@@ -14,6 +14,8 @@ public record RuntimeExecutionRequest(
     @NotBlank @Size(max = 240) String subjectScope,
     @NotBlank @Size(max = 120) String destinationProfileId,
     @NotBlank @Size(max = 120) String idempotencyKey,
+    @Size(max = 120) String evaluationRunId,
+    @Size(max = 120) String evalCaseId,
     @Size(max = 10) List<@NotBlank @Size(max = 80) String> processingContexts,
     Map<String, Object> input
 ) {

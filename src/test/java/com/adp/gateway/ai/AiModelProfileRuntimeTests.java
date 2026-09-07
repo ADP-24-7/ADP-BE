@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.adp.gateway.ai.domain.AiModelProfile;
+import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -52,10 +53,15 @@ class AiModelProfileRuntimeTests {
                       "subjectScope":"customer:customer-100",
                       "destinationProfileId":"%s",
                       "idempotencyKey":"idem_eval_%s",
+                      "evaluationRunId":"%s",
+                      "evalCaseId":"%s",
                       "processingContexts":["AI_USE"],
                       "input":{"prompt":"승인된 고객 정보를 간단히 요약하세요"}
                     }
-                    """.formatted(catalog.approvalReference(profile), profile.destinationProfileId(), suffix)))
+                    """.formatted(
+                        catalog.approvalReference(profile), profile.destinationProfileId(), suffix,
+                        AiEvaluationRunCatalog.BASELINE_RUN_ID, AiEvaluationRunCatalog.BASELINE_CASE_ID
+                    )))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
@@ -79,7 +85,17 @@ class AiModelProfileRuntimeTests {
                 .value(profile.providerConnectionProfileId()))
             .andExpect(jsonPath("$.evidence.aiModel.maxTokens").value(profile.maxTokens()))
             .andExpect(jsonPath("$.evidence.aiModel.temperature").value(profile.temperature()))
-            .andExpect(jsonPath("$.evidence.aiModel.samplingProfileVersion").value(profile.profileVersion()));
+            .andExpect(jsonPath("$.evidence.aiModel.samplingProfileVersion").value(profile.profileVersion()))
+            .andExpect(jsonPath("$.evidence.aiModel.evaluationRunId")
+                .value(AiEvaluationRunCatalog.BASELINE_RUN_ID))
+            .andExpect(jsonPath("$.evidence.aiModel.evalCaseId")
+                .value(AiEvaluationRunCatalog.BASELINE_CASE_ID))
+            .andExpect(jsonPath("$.evidence.aiModel.datasetVersion")
+                .value("financial_synthetic_processed_v1"))
+            .andExpect(jsonPath("$.evidence.aiModel.policySnapshotDigest")
+                .value(catalog.policySnapshotDigest()))
+            .andExpect(jsonPath("$.evidence.aiModel.destinationProfileDigest")
+                .value(profile.destinationProfileDigest()));
     }
 
     private static Stream<Integer> modelIndexes() {
