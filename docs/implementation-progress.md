@@ -30,7 +30,10 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
   - Branch: `feature/ai-eval-1-evaluation-run-contract`
   - Migration: V23
   - Runtime request hash와 AI execution evidence에 서버 소유 평가 조건 고정
-- [ ] AI-EVAL-2 TTFT/Latency/Token/Failure Evidence
+- [x] AI-EVAL-2 Runtime Timing/Token/Failure Evidence
+  - Branch: `feature/ai-eval-2-runtime-evidence`
+  - Migration: V24
+  - HTTP response timing, provider latency, token usage, provider status/error category와 Runtime trace 결합
 - [ ] AI-EVAL-3 DA Evaluation Bundle Export
 
 ## Security Cross-cutting Tracking

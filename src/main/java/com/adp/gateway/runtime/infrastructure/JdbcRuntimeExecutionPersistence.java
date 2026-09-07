@@ -613,6 +613,31 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("connectorStatus", connectorResult.status().name())
             .param("updatedAt", OffsetDateTime.now(clock))
             .update();
+        if (connectorResult.executionEvidence() != null) {
+            var evidence = connectorResult.executionEvidence();
+            jdbcClient.sql("""
+                update runtime.ai_model_execution_evidence
+                set measurement_type = :measurementType,
+                    time_to_first_response_ms = :timeToFirstResponseMillis,
+                    provider_latency_ms = :providerLatencyMillis,
+                    input_tokens = :inputTokens,
+                    output_tokens = :outputTokens,
+                    total_tokens = :totalTokens,
+                    provider_status = :providerStatus,
+                    error_category = :errorCategory
+                where execution_id = :executionId
+                """)
+                .param("executionId", executionId)
+                .param("measurementType", evidence.measurementType())
+                .param("timeToFirstResponseMillis", evidence.timeToFirstResponseMillis())
+                .param("providerLatencyMillis", evidence.providerLatencyMillis())
+                .param("inputTokens", evidence.inputTokens())
+                .param("outputTokens", evidence.outputTokens())
+                .param("totalTokens", evidence.totalTokens())
+                .param("providerStatus", connectorResult.status().name())
+                .param("errorCategory", evidence.errorCategory())
+                .update();
+        }
         if (connectorResult.status() == com.adp.gateway.connector.domain.ConnectorStatus.SENT_UNKNOWN) {
             recoveryPersistence.scheduleUnknown(executionId, connectorResult, OffsetDateTime.now(clock));
         }
@@ -821,6 +846,27 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where ame.execution_id = runtime_execution.execution_id) as ai_policy_snapshot_digest,
                    (select destination_profile_digest from runtime.ai_model_execution_evidence ame
                     where ame.execution_id = runtime_execution.execution_id) as ai_destination_profile_digest,
+                   (select measurement_type from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_measurement_type,
+                   (select time_to_first_response_ms from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_time_to_first_response_millis,
+                   (select provider_latency_ms from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_provider_latency_millis,
+                   (select input_tokens from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_input_tokens,
+                   (select output_tokens from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_output_tokens,
+                   (select total_tokens from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_total_tokens,
+                   (select provider_status from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_provider_status,
+                   (select error_category from runtime.ai_model_execution_evidence ame
+                    where ame.execution_id = runtime_execution.execution_id) as ai_error_category,
+                   case when exists (
+                       select 1 from runtime.ai_model_execution_evidence ame
+                       where ame.execution_id = runtime_execution.execution_id
+                   ) then greatest(0, floor(extract(epoch from (updated_at - created_at)) * 1000)::bigint)
+                   end as ai_total_latency_millis,
                    status, created_at, updated_at
             from runtime.runtime_execution
             where execution_id = :executionId

@@ -22,7 +22,19 @@ public record AiModelExecutionEvidenceResponse(
     String datasetVersion,
     String datasetDigest,
     String policySnapshotDigest,
-    String destinationProfileDigest
+    String destinationProfileDigest,
+    String measurementType,
+    Long timeToFirstResponseMillis,
+    Long providerLatencyMillis,
+    Integer inputTokens,
+    Integer outputTokens,
+    Integer totalTokens,
+    Long totalLatencyMillis,
+    String runtimeDecision,
+    String responseGuardStatus,
+    String providerStatus,
+    String errorCategory,
+    String traceReference
 ) {
 
     public static AiModelExecutionEvidenceResponse from(RuntimeExecutionTrace trace) {
@@ -49,7 +61,19 @@ public record AiModelExecutionEvidenceResponse(
             trace.aiDatasetVersion(),
             trace.aiDatasetDigest(),
             trace.aiPolicySnapshotDigest(),
-            trace.aiDestinationProfileDigest()
+            trace.aiDestinationProfileDigest(),
+            trace.aiMeasurementType(),
+            trace.aiTimeToFirstResponseMillis(),
+            trace.aiProviderLatencyMillis(),
+            trace.aiInputTokens(),
+            trace.aiOutputTokens(),
+            trace.aiTotalTokens(),
+            trace.aiTotalLatencyMillis(),
+            trace.finalAction(),
+            trace.responseGuardStatus(),
+            trace.aiProviderStatus(),
+            trace.aiErrorCategory(),
+            trace.traceId()
         );
     }
 }

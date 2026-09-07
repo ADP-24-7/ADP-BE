@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorExecutionEvidence;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
@@ -54,7 +55,8 @@ public class FakeConnector implements RuntimeConnectorPort {
             payload.candidatePayloadDigest(),
             responseDigest,
             "ai-provider-response/v1",
-            responsePayload
+            responsePayload,
+            ConnectorExecutionEvidence.mock()
         );
     }
 

@@ -12,6 +12,7 @@ import com.adp.gateway.ai.domain.AiProviderConnection;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorExecutionEvidence;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
@@ -76,11 +77,12 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         ProviderRequestPayload providerRequest
     ) {
         String connectorExecutionId = "con_" + UUID.randomUUID();
+        long startedAt = System.nanoTime();
         var connection = connections.resolve(providerRequest.providerProfileId());
         if (connection.isEmpty() || credentialMissing(connection.get())) {
             log.warn("AI provider connection resolution failed for an approved provider profile");
             record(ConnectorStatus.FAILED);
-            return failed(connectorExecutionId, payload);
+            return failed(connectorExecutionId, payload, "CONNECTION_CONFIGURATION", startedAt);
         }
         try {
             AiProviderConnection resolved = connection.get();
@@ -99,6 +101,8 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             String schemaVersion = response.getHeaders().getFirst("X-ADP-Response-Schema-Version");
             ConnectorStatus status = ConnectorStatus.ACKNOWLEDGED;
             record(status);
+            long providerLatencyMillis = elapsedMillis(startedAt);
+            Map<String, Object> usage = nestedMap(responsePayload, "usage");
             return new ConnectorResult(
                 connectorExecutionId,
                 "ai-http-connector",
@@ -107,7 +111,14 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 responseDigest,
                 schemaVersion == null ? DEFAULT_RESPONSE_SCHEMA : schemaVersion,
-                responsePayload
+                responsePayload,
+                evidence(
+                    providerLatencyMillis,
+                    integer(usage, "prompt_tokens"),
+                    integer(usage, "completion_tokens"),
+                    integer(usage, "total_tokens"),
+                    "NONE"
+                )
             );
         } catch (ResourceAccessException exception) {
             log.warn("AI provider request result is unknown due to transport failure: {}", exception.getClass().getSimpleName());
@@ -120,11 +131,15 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 null,
                 null,
-                null
+                null,
+                evidence(elapsedMillis(startedAt), null, null, null, "TRANSPORT")
             );
         } catch (RestClientResponseException exception) {
             log.warn("AI provider returned an unsuccessful HTTP status: {}", exception.getStatusCode().value());
             record(ConnectorStatus.FAILED);
+            String errorCategory = exception.getStatusCode().is4xxClientError()
+                ? "PROVIDER_CLIENT_ERROR"
+                : "PROVIDER_SERVER_ERROR";
             return new ConnectorResult(
                 connectorExecutionId,
                 "ai-http-connector",
@@ -133,8 +148,13 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 null,
                 null,
-                null
+                null,
+                evidence(elapsedMillis(startedAt), null, null, null, errorCategory)
             );
+        } catch (RuntimeException exception) {
+            log.warn("AI provider response could not be normalized: {}", exception.getClass().getSimpleName());
+            record(ConnectorStatus.FAILED);
+            return failed(connectorExecutionId, payload, "RESPONSE_PARSE_ERROR", startedAt);
         }
     }
 
@@ -144,7 +164,12 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 && connection.credential().isBlank());
     }
 
-    private ConnectorResult failed(String connectorExecutionId, OutboundCandidatePayload payload) {
+    private ConnectorResult failed(
+        String connectorExecutionId,
+        OutboundCandidatePayload payload,
+        String errorCategory,
+        long startedAt
+    ) {
         return new ConnectorResult(
             connectorExecutionId,
             "ai-http-connector",
@@ -153,8 +178,44 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             payload.candidatePayloadDigest(),
             null,
             null,
-            null
+            null,
+            evidence(elapsedMillis(startedAt), null, null, null, errorCategory)
         );
+    }
+
+    private ConnectorExecutionEvidence evidence(
+        long providerLatencyMillis,
+        Integer inputTokens,
+        Integer outputTokens,
+        Integer totalTokens,
+        String errorCategory
+    ) {
+        boolean completeUsage = inputTokens != null && outputTokens != null && totalTokens != null;
+        return new ConnectorExecutionEvidence(
+            "HTTP_RESPONSE",
+            providerLatencyMillis,
+            providerLatencyMillis,
+            completeUsage ? inputTokens : null,
+            completeUsage ? outputTokens : null,
+            completeUsage ? totalTokens : null,
+            errorCategory
+        );
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> nestedMap(Object value, String key) {
+        if (value instanceof Map<?, ?> map && map.get(key) instanceof Map<?, ?> nested) {
+            return (Map<String, Object>) nested;
+        }
+        return Map.of();
+    }
+
+    private Integer integer(Map<String, Object> values, String key) {
+        return values.get(key) instanceof Number value ? value.intValue() : null;
     }
 
     private String canonicalJson(Object value) {

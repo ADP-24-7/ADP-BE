@@ -754,6 +754,32 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v24MigrationAddsPrivacySafeAiRuntimeEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'ai_model_execution_evidence'
+                  and column_name in (
+                    'measurement_type', 'time_to_first_response_ms', 'provider_latency_ms',
+                    'input_tokens', 'output_tokens', 'total_tokens',
+                    'provider_status', 'error_category'
+                  )
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'ai_model_execution_evidence'
+                  and constraint_name in (
+                    'chk_ai_runtime_evidence_timing', 'chk_ai_runtime_evidence_tokens',
+                    'chk_ai_runtime_evidence_provider_status', 'chk_ai_runtime_evidence_error_category'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(columnCount).isEqualTo(8);
+        assertThat(constraintCount).isEqualTo(4);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

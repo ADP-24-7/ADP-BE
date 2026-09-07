@@ -29,7 +29,9 @@ class HttpAiConnectorTests {
 
     @Test
     void normalizesSuccessfulProviderResponseAndCreatesCanonicalDigest() throws Exception {
-        HttpServer server = server(200, "{\"answer\":\"safe\"}", Duration.ZERO);
+        HttpServer server = server(200, """
+            {"answer":"safe","usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}
+            """, Duration.ZERO);
         try {
             var result = connector(server, Duration.ofSeconds(1)).execute(
                 context(),
@@ -41,6 +43,12 @@ class HttpAiConnectorTests {
             assertThat(result.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
             assertThat(result.responseDigest()).hasSize(64);
             assertThat(result.responseSchemaVersion()).isEqualTo("ai-provider-response/v1");
+            assertThat(result.executionEvidence().measurementType()).isEqualTo("HTTP_RESPONSE");
+            assertThat(result.executionEvidence().providerLatencyMillis()).isNotNegative();
+            assertThat(result.executionEvidence().inputTokens()).isEqualTo(11);
+            assertThat(result.executionEvidence().outputTokens()).isEqualTo(7);
+            assertThat(result.executionEvidence().totalTokens()).isEqualTo(18);
+            assertThat(result.executionEvidence().errorCategory()).isEqualTo("NONE");
             assertThat(result.toString()).doesNotContain("safe");
         } finally {
             server.stop(0);
@@ -60,6 +68,7 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.SENT_UNKNOWN);
             assertThat(result.responseDigest()).isNull();
+            assertThat(result.executionEvidence().errorCategory()).isEqualTo("TRANSPORT");
         } finally {
             server.stop(0);
         }
@@ -78,6 +87,7 @@ class HttpAiConnectorTests {
 
             assertThat(result.status()).isEqualTo(ConnectorStatus.FAILED);
             assertThat(result.responsePayload()).isNull();
+            assertThat(result.executionEvidence().errorCategory()).isEqualTo("PROVIDER_SERVER_ERROR");
         } finally {
             server.stop(0);
         }
