@@ -60,6 +60,9 @@ SEC-0 상세 계약은 [SEC-0 Security Contract](sec-0-security-contract.md)에�
 
 BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.md), [BE-8 Digital Asset Recovery](be-8-digital-asset-recovery.md), [BE-8 Digital Asset Mismatch Recovery](be-8-digital-asset-mismatch-recovery.md)에서 관리한다.
 
+최신 DA Handoff에 따른 책임경계 변경은 [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를
+Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적 baseline이며 Active Runtime은 P0-2부터 재정렬한다.
+
 - [x] 기존 단일 Runtime API의 Digital Asset Pack 연결
 - [x] Input-only 최소 Retrieval Profile과 명시적 입력 Schema
 - [x] Digital Asset Policy/Approval/Destination Profile local fixture
@@ -75,6 +78,19 @@ BE-8 상세 계약은 [BE-8 Digital Asset Thin E2E](be-8-digital-asset-thin-e2e.
 - [x] `SENT_UNKNOWN` Digital Asset Local Provider Status Query Adapter와 공통 Recovery 수렴
 - [x] Mismatch/Critical Mismatch privacy-safe case 격리와 자동 재시도 금지 E2E
 - [ ] FE Digital Asset Lab fixture 연결
+
+## Digital Asset Runtime Realignment Tracking
+
+- [x] DA-P0-1 PR #14~#17 코드/DB/Test 영향도 분류
+- [x] V16~V20 비파괴 additive migration 원칙 확정
+- [x] Eligibility Reason Code retain/deprecated 목록 확정
+- [ ] DA-P0-2 KYC/AML/Wallet Active Eligibility Gate 분리
+- [ ] DA-P0-3 ApprovedTransaction/OutboundRequest/ExternalExecutionResult 계약
+- [ ] DA-P0-4 Canonical Identifier/Enum/Schema Freeze
+- [ ] DA-P0-5 Artifact Loader v1
+- [ ] DA-P0-6 Versioned Runtime Snapshot
+- [ ] DA-P0-7 6 Runtime Controls
+- [ ] DA-P0-8 External Adapter/Recovery 재연결
 
 ## BE-10 Parallel Tracking
 

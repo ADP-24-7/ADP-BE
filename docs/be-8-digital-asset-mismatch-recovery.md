@@ -1,5 +1,8 @@
 # BE-8 Digital Asset Mismatch Recovery
 
+> Historical baseline: Mismatch 격리 구조는 재사용하되 비교 필드 변경은
+> [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를 따른다.
+
 이 Slice는 완료 상태로 응답한 Asset Platform의 거래 내용이 FPG가 전송 직전에 고정한 거래 내용과 다를 때 자동 완료하거나 재전송하지 않고 검토 대상으로 격리한다.
 
 ## Classification
