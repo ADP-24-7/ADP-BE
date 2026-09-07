@@ -1,5 +1,6 @@
 package com.adp.gateway.ai;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +13,7 @@ import com.adp.gateway.ai.domain.AiModelProfile;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -32,6 +34,19 @@ class AiModelProfileRuntimeTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    void replaysIdenticalEvaluationRequestWithTheResolvedContract() throws Exception {
+        AiModelProfile profile = catalog.profiles().getFirst();
+        String idempotencyKey = "idem_eval_replay";
+
+        String first = submitEvaluation(profile, idempotencyKey, "req_eval_replay_1", "trace_eval_replay_1");
+        String replay = submitEvaluation(profile, idempotencyKey, "req_eval_replay_2", "trace_eval_replay_2");
+
+        assertThat(objectMapper.readTree(replay).path("executionId").asText())
+            .isEqualTo(objectMapper.readTree(first).path("executionId").asText());
+        assertThat(objectMapper.readTree(replay).path("replayed").asBoolean()).isTrue();
+    }
 
     @ParameterizedTest
     @MethodSource("modelIndexes")
@@ -106,5 +121,40 @@ class AiModelProfileRuntimeTests {
 
     private static Stream<Integer> modelIndexes() {
         return Stream.of(0, 1, 2);
+    }
+
+    private String submitEvaluation(
+        AiModelProfile profile,
+        String idempotencyKey,
+        String requestId,
+        String traceId
+    ) throws Exception {
+        return mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", requestId)
+                .header("X-Trace-Id", traceId)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "institutionId":"institution_local",
+                      "approvalReference":"%s",
+                      "workloadId":"customer_summary",
+                      "purposeCode":"CUSTOMER_SUPPORT",
+                      "subjectScope":"customer:customer-100",
+                      "destinationProfileId":"%s",
+                      "idempotencyKey":"%s",
+                      "evaluationRunId":"%s",
+                      "evalCaseId":"%s",
+                      "processingContexts":["AI_USE"],
+                      "input":{"prompt":"승인된 고객 정보를 간단히 요약하세요"}
+                    }
+                    """.formatted(
+                        catalog.approvalReference(profile), profile.destinationProfileId(), idempotencyKey,
+                        AiEvaluationRunCatalog.BASELINE_RUN_ID, AiEvaluationRunCatalog.BASELINE_CASE_ID
+                    )))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
     }
 }

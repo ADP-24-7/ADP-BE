@@ -183,9 +183,32 @@ public class RuntimeExecutionService {
         Map<String, Object> input,
         AiEvaluationReference evaluationReference
     ) {
+        validateAuthorization(
+            requestContext, principal, institutionId, SubjectRef.from(requestContext.subject())
+        );
+        return executeAuthorizedResolved(
+            requestContext,
+            principal,
+            institutionId,
+            approvalReference,
+            destinationProfileId,
+            processingContexts,
+            input,
+            evaluationRuns.resolve(evaluationReference, input)
+        );
+    }
+
+    private RuntimeExecutionResult executeAuthorizedResolved(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        String institutionId,
+        String approvalReference,
+        String destinationProfileId,
+        List<String> processingContexts,
+        Map<String, Object> input,
+        AiEvaluationReference resolvedEvaluation
+    ) {
         SubjectRef subject = SubjectRef.from(requestContext.subject());
-        validateAuthorization(requestContext, principal, institutionId, subject);
-        AiEvaluationReference resolvedEvaluation = evaluationRuns.resolve(evaluationReference, input);
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
         String inputDigest = runtimeInputHasher.hash(input);
@@ -482,8 +505,11 @@ public class RuntimeExecutionService {
         Map<String, Object> input,
         AiEvaluationReference evaluationReference
     ) {
+        SubjectRef subject = SubjectRef.from(requestContext.subject());
+        validateAuthorization(requestContext, principal, institutionId, subject);
+        AiEvaluationReference resolvedEvaluation = evaluationRuns.resolve(evaluationReference, input);
         try {
-            return RuntimeExecutionSubmission.created(execute(
+            return RuntimeExecutionSubmission.created(executeAuthorizedResolved(
                 requestContext,
                 principal,
                 institutionId,
@@ -491,21 +517,9 @@ public class RuntimeExecutionService {
                 destinationProfileId,
                 processingContexts,
                 input,
-                evaluationRuns.resolve(evaluationReference, input)
+                resolvedEvaluation
             ));
         } catch (DuplicateRuntimeExecutionException exception) {
-            SubjectRef subject = SubjectRef.from(requestContext.subject());
-            if (principal.institutionId() == null
-                || !principal.institutionId().equals(institutionId)
-                || !authorizationService.authorize(new AuthorizationRequest(
-                    principal,
-                    requestContext.workloadId(),
-                    RuntimeAction.RUNTIME_EXECUTE,
-                    requestContext.purpose(),
-                    subject
-                )).allowed()) {
-                throw new AccessDeniedException("Runtime execution replay is not allowed");
-            }
             String requestHash = runtimeRequestHasher.hash(
                 institutionId,
                 approvalReference,
@@ -515,7 +529,7 @@ public class RuntimeExecutionService {
                 destinationProfileId,
                 processingContexts,
                 input,
-                evaluationReference
+                resolvedEvaluation
             );
             IdempotentExecutionReplay replay = persistence.findIdempotentExecution(
                     institutionId,
