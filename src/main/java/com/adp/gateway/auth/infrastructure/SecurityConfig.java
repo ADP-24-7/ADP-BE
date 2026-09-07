@@ -53,6 +53,7 @@ public class SecurityConfig {
                 auth.requestMatchers("/api/internal/info").permitAll()
                     .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
                     .permitAll()
+                    .requestMatchers("/api/internal/auth/**").authenticated()
                     .requestMatchers("/api/admin/audit/executions/*/evidence")
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/policy-lifecycle/**")
@@ -61,7 +62,7 @@ public class SecurityConfig {
                     .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/api/admin/**").hasRole("OPERATOR")
                     .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
-                    .anyRequest().authenticated();
+                    .anyRequest().denyAll();
             })
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) ->

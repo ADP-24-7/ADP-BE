@@ -26,8 +26,10 @@ SEC-0 상세 계약은 [SEC-0 Security Contract](sec-0-security-contract.md)에�
 - [x] Default Deny, Context Authorization, Minimum Retrieval, Destination, Integrity, Audit 불변조건
 - [x] 기존 보안 테스트 증적과 잔여 위협을 연결한 Negative Test Matrix
 - [x] HTTP 공개 endpoint allowlist와 default-deny 통합 테스트
+- [x] Security matcher 누락 endpoint의 인증 Principal 접근도 `denyAll`로 차단
 - [ ] SEC-1 Destination SSRF Negative Test와 Request Freshness
 - [ ] SEC-1 Denied Attempt Evidence
+- [ ] SEC-1 Caller Trace ID의 server-owned internal ID 또는 digest correlation
 - [ ] SEC-2 Secret/SAST/Dependency/Container Scan과 SBOM CI Gate
 
 ## BE-8 Tracking

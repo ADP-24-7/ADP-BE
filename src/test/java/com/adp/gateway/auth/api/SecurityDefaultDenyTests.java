@@ -2,7 +2,9 @@ package com.adp.gateway.auth.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.stream.Stream;
@@ -15,7 +17,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.observability.prometheus-public=false")
+@SpringBootTest(properties = {
+    "adp.observability.prometheus-public=false",
+    "adp.local-fixtures.enabled=true",
+    "adp.local-user-auth.enabled=true"
+})
 @AutoConfigureMockMvc
 class SecurityDefaultDenyTests {
     @Autowired
@@ -36,16 +42,33 @@ class SecurityDefaultDenyTests {
             .andExpect(jsonPath("$.reasonCode").value("AUTHENTICATION_FAILED"));
     }
 
+    @Test
+    void deniesUnmatchedEndpointToAuthenticatedServicePrincipal() throws Exception {
+        mockMvc.perform(get("/not-explicitly-matched")
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"));
+    }
+
+    @Test
+    void deniesUnmatchedEndpointToAuthenticatedAdminPrincipal() throws Exception {
+        mockMvc.perform(get("/not-explicitly-matched")
+                .with(user("admin-local").roles("OPERATOR")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"));
+    }
+
     @ParameterizedTest
-    @MethodSource("publicPaths")
-    void permitsExplicitPublicEndpoints(String path) throws Exception {
-        mockMvc.perform(get(path))
-            .andExpect(result -> {
-                int status = result.getResponse().getStatus();
-                if (status == 401 || status == 403) {
-                    throw new AssertionError("Public endpoint was blocked: " + path + " status=" + status);
-                }
-            });
+    @MethodSource("publicOkPaths")
+    void servesExplicitPublicEndpoints(String path) throws Exception {
+        mockMvc.perform(get(path)).andExpect(status().isOk());
+    }
+
+    @Test
+    void redirectsPublicDocsShortcutToSwaggerUi() throws Exception {
+        mockMvc.perform(get("/docs"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/swagger-ui/index.html"));
     }
 
     private static Stream<String> protectedPaths() {
@@ -58,14 +81,12 @@ class SecurityDefaultDenyTests {
         );
     }
 
-    private static Stream<String> publicPaths() {
+    private static Stream<String> publicOkPaths() {
         return Stream.of(
             "/actuator/health",
             "/actuator/info",
             "/api/internal/info",
-            "/docs",
             "/v3/api-docs"
         );
     }
 }
-
