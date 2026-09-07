@@ -54,6 +54,10 @@ public interface RuntimeExecutionPersistence {
 
     void recordConnector(String executionId, ConnectorResult connectorResult);
 
+    boolean recordAiConnectorExecutionEvidence(String executionId, ConnectorResult connectorResult);
+
+    boolean recordInitialAiRuntimeLatency(String executionId);
+
     void recordResponseGuard(String executionId, ConnectorResult connectorResult, ResponseGuardResult responseGuardResult);
 
     void recordRetrieved(String executionId, CanonicalContext context);

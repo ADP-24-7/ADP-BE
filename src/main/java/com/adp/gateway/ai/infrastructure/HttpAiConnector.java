@@ -12,7 +12,11 @@ import com.adp.gateway.ai.domain.AiProviderConnection;
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
 import com.adp.gateway.connector.domain.ConnectorResult;
+import com.adp.gateway.connector.domain.ConnectorExecutionEvidence;
+import com.adp.gateway.connector.domain.ConnectorErrorCategory;
+import com.adp.gateway.connector.domain.ConnectorMeasurementType;
 import com.adp.gateway.connector.domain.ConnectorStatus;
+import com.adp.gateway.connector.domain.TokenUsageStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
@@ -29,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
@@ -76,11 +81,12 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         ProviderRequestPayload providerRequest
     ) {
         String connectorExecutionId = "con_" + UUID.randomUUID();
+        long startedAt = System.nanoTime();
         var connection = connections.resolve(providerRequest.providerProfileId());
         if (connection.isEmpty() || credentialMissing(connection.get())) {
             log.warn("AI provider connection resolution failed for an approved provider profile");
             record(ConnectorStatus.FAILED);
-            return failed(connectorExecutionId, payload);
+            return failedNotAttempted(connectorExecutionId, payload);
         }
         try {
             AiProviderConnection resolved = connection.get();
@@ -99,6 +105,8 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             String schemaVersion = response.getHeaders().getFirst("X-ADP-Response-Schema-Version");
             ConnectorStatus status = ConnectorStatus.ACKNOWLEDGED;
             record(status);
+            long providerLatencyMillis = elapsedMillis(startedAt);
+            TokenUsage usage = tokenUsage(responsePayload);
             return new ConnectorResult(
                 connectorExecutionId,
                 "ai-http-connector",
@@ -107,7 +115,13 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 responseDigest,
                 schemaVersion == null ? DEFAULT_RESPONSE_SCHEMA : schemaVersion,
-                responsePayload
+                responsePayload,
+                fullResponseEvidence(
+                    providerLatencyMillis,
+                    usage,
+                    ConnectorErrorCategory.NONE,
+                    response.getStatusCode().value()
+                )
             );
         } catch (ResourceAccessException exception) {
             log.warn("AI provider request result is unknown due to transport failure: {}", exception.getClass().getSimpleName());
@@ -120,11 +134,15 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 null,
                 null,
-                null
+                null,
+                attemptEvidence(elapsedMillis(startedAt), ConnectorErrorCategory.TRANSPORT)
             );
         } catch (RestClientResponseException exception) {
             log.warn("AI provider returned an unsuccessful HTTP status: {}", exception.getStatusCode().value());
             record(ConnectorStatus.FAILED);
+            ConnectorErrorCategory errorCategory = exception.getStatusCode().is4xxClientError()
+                ? ConnectorErrorCategory.PROVIDER_CLIENT_ERROR
+                : ConnectorErrorCategory.PROVIDER_SERVER_ERROR;
             return new ConnectorResult(
                 connectorExecutionId,
                 "ai-http-connector",
@@ -133,8 +151,20 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 payload.candidatePayloadDigest(),
                 null,
                 null,
-                null
+                null,
+                fullResponseEvidence(
+                    elapsedMillis(startedAt), TokenUsage.notProvided(), errorCategory,
+                    exception.getStatusCode().value()
+                )
             );
+        } catch (RestClientException exception) {
+            log.warn("AI provider response body could not be decoded: {}", exception.getClass().getSimpleName());
+            record(ConnectorStatus.FAILED);
+            return failedAfterResponse(connectorExecutionId, payload, startedAt);
+        } catch (IllegalStateException exception) {
+            log.warn("AI provider response could not be normalized: {}", exception.getClass().getSimpleName());
+            record(ConnectorStatus.FAILED);
+            return failedAfterResponse(connectorExecutionId, payload, startedAt);
         }
     }
 
@@ -144,7 +174,10 @@ public class HttpAiConnector implements RuntimeConnectorPort {
                 && connection.credential().isBlank());
     }
 
-    private ConnectorResult failed(String connectorExecutionId, OutboundCandidatePayload payload) {
+    private ConnectorResult failedNotAttempted(
+        String connectorExecutionId,
+        OutboundCandidatePayload payload
+    ) {
         return new ConnectorResult(
             connectorExecutionId,
             "ai-http-connector",
@@ -153,8 +186,93 @@ public class HttpAiConnector implements RuntimeConnectorPort {
             payload.candidatePayloadDigest(),
             null,
             null,
-            null
+            null,
+            new ConnectorExecutionEvidence(
+                ConnectorMeasurementType.NOT_ATTEMPTED, null, null, null, null, null,
+                TokenUsageStatus.NOT_PROVIDED, ConnectorErrorCategory.CONNECTION_CONFIGURATION, null
+            )
         );
+    }
+
+    private ConnectorResult failedAfterResponse(
+        String connectorExecutionId,
+        OutboundCandidatePayload payload,
+        long startedAt
+    ) {
+        return new ConnectorResult(
+            connectorExecutionId, "ai-http-connector", ConnectorStatus.FAILED,
+            payload.outboundPayloadId(), payload.candidatePayloadDigest(), null, null, null,
+            fullResponseEvidence(
+                elapsedMillis(startedAt), TokenUsage.notProvided(), ConnectorErrorCategory.RESPONSE_PARSE_ERROR, null
+            )
+        );
+    }
+
+    private ConnectorExecutionEvidence fullResponseEvidence(
+        long latencyMillis,
+        TokenUsage usage,
+        ConnectorErrorCategory errorCategory,
+        Integer providerHttpStatus
+    ) {
+        return new ConnectorExecutionEvidence(
+            ConnectorMeasurementType.HTTP_FULL_RESPONSE, latencyMillis, null,
+            usage.inputTokens(), usage.outputTokens(), usage.totalTokens(), usage.status(), errorCategory,
+            providerHttpStatus
+        );
+    }
+
+    private ConnectorExecutionEvidence attemptEvidence(long elapsedMillis, ConnectorErrorCategory errorCategory) {
+        return new ConnectorExecutionEvidence(
+            ConnectorMeasurementType.HTTP_ATTEMPT_NO_RESPONSE, null, elapsedMillis, null, null, null,
+            TokenUsageStatus.NOT_PROVIDED, errorCategory, null
+        );
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    private TokenUsage tokenUsage(Object responsePayload) {
+        if (!(responsePayload instanceof Map<?, ?> response) || !response.containsKey("usage")) {
+            return TokenUsage.notProvided();
+        }
+        if (!(response.get("usage") instanceof Map<?, ?> usage)) {
+            return TokenUsage.invalid();
+        }
+        if (!usage.containsKey("prompt_tokens") || !usage.containsKey("completion_tokens")
+            || !usage.containsKey("total_tokens")) {
+            return new TokenUsage(null, null, null, TokenUsageStatus.INCOMPLETE);
+        }
+        Long input = nonNegativeLong(usage.get("prompt_tokens"));
+        Long output = nonNegativeLong(usage.get("completion_tokens"));
+        Long total = nonNegativeLong(usage.get("total_tokens"));
+        if (input == null || output == null || total == null) {
+            return TokenUsage.invalid();
+        }
+        if (input > Integer.MAX_VALUE || output > Integer.MAX_VALUE || total > Integer.MAX_VALUE
+            || input + output != total) {
+            return TokenUsage.invalid();
+        }
+        return new TokenUsage(input.intValue(), output.intValue(), total.intValue(), TokenUsageStatus.COMPLETE);
+    }
+
+    private Long nonNegativeLong(Object value) {
+        return value instanceof Number number && number.longValue() >= 0 ? number.longValue() : null;
+    }
+
+    private record TokenUsage(
+        Integer inputTokens,
+        Integer outputTokens,
+        Integer totalTokens,
+        TokenUsageStatus status
+    ) {
+        private static TokenUsage notProvided() {
+            return new TokenUsage(null, null, null, TokenUsageStatus.NOT_PROVIDED);
+        }
+
+        private static TokenUsage invalid() {
+            return new TokenUsage(null, null, null, TokenUsageStatus.INVALID);
+        }
     }
 
     private String canonicalJson(Object value) {

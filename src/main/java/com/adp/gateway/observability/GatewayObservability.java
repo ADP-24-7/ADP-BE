@@ -29,6 +29,10 @@ public class GatewayObservability {
         recovery(outcome, 1);
     }
 
+    public void aiEvaluationEvidence(AiEvaluationEvidenceOutcome outcome) {
+        meterRegistry.counter("adp.ai.evaluation.evidence.total", "outcome", outcome.name()).increment();
+    }
+
     public void recovery(RecoveryOutcome outcome, int count) {
         increment("adp.recovery.processing.total", "outcome", outcome.name(), count);
     }
@@ -53,5 +57,11 @@ public class GatewayObservability {
         EXHAUSTED,
         MANUAL_REVIEW,
         STALE_LEASE
+    }
+
+    public enum AiEvaluationEvidenceOutcome {
+        CONNECTOR_RECORDED,
+        COMPLETE,
+        PERSISTENCE_FAILED
     }
 }

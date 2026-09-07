@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
+import com.adp.gateway.ai.application.AiEvaluationEvidenceRecorder;
 
 import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.audit.domain.AuditContext;
@@ -99,6 +100,7 @@ public class RuntimeExecutionService {
     private final Clock clock;
     private final GatewayObservability observability;
     private final AiEvaluationRunCatalog evaluationRuns;
+    private final AiEvaluationEvidenceRecorder evaluationEvidenceRecorder;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -128,7 +130,8 @@ public class RuntimeExecutionService {
         ExecutionOutcomeFinalizer outcomeFinalizer,
         Clock clock,
         GatewayObservability observability,
-        AiEvaluationRunCatalog evaluationRuns
+        AiEvaluationRunCatalog evaluationRuns,
+        AiEvaluationEvidenceRecorder evaluationEvidenceRecorder
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -158,6 +161,7 @@ public class RuntimeExecutionService {
         this.clock = clock;
         this.observability = observability;
         this.evaluationRuns = evaluationRuns;
+        this.evaluationEvidenceRecorder = evaluationEvidenceRecorder;
     }
 
     public RuntimeExecutionResult execute(
@@ -457,10 +461,16 @@ public class RuntimeExecutionService {
                 providerRequest
             );
             persistence.recordConnector(executionId, connectorResult);
+            if (resolvedEvaluation != null) {
+                evaluationEvidenceRecorder.recordConnectorEvidence(executionId, connectorResult);
+            }
             RuntimeExecutionResult result = outcomeFinalizer.finalizeOutcome(
                 executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
                 destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
             );
+            if (resolvedEvaluation != null) {
+                evaluationEvidenceRecorder.recordInitialRuntimeLatency(executionId);
+            }
             recordTerminalTransition(result.status());
             return result;
         } catch (AccessDeniedException exception) {
