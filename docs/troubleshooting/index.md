@@ -8,42 +8,17 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [BE-5 Deep Dives](be-5-deep-dives.md)
 - [BE-6 이후 플랫폼 트러블슈팅](be-6-and-platform-evolution.md)
 - [AI Evaluation 트러블슈팅](ai-evaluation.md)
+- [Approved Transaction Trust Boundary 트러블슈팅](approved-transaction-trust-boundary.md)
 - [Digital Asset Canonical Contract 트러블슈팅](digital-asset-contract-freeze.md)
 - [Digital Asset Artifact Loader 트러블슈팅](digital-asset-artifact-loader.md)
 - [Digital Asset Runtime Snapshot 트러블슈팅](digital-asset-runtime-snapshot.md)
+- [Digital Asset PRE_EXECUTION Guard 트러블슈팅](digital-asset-pre-execution-guard.md)
+- [NCP Artifact ContentStore 트러블슈팅](ncp-artifact-content-store.md)
+- [PR #1~#31 Troubleshooting Coverage Audit](pr-history-audit.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)
 
-## 기준 커밋
+## 이력 관리 기준
 
-- `bfb912e` BE-0 Spring Boot service bootstrap
-- `43e7c3c` BE-1 authentication/authorization
-- `2cfe418` BE-2 internal data access
-- `7db3734` BE-3 context detection
-- `a95f500` BE-4 policy decision core
-- `3822de4` BE-5 transform/vault baseline
-- `4128b55` BE-5 transform/vault contract hardening
-- `c87caad` BE-5 transform wiring gap close
-- `b012902` BE-5 transform invariant enforcement
-- `b144d36` BE-5 transform scope isolation
-- `9fc4b61` BE-6 common egress boundary
-- `5425490` Multi-repository Docker development stack
-- `29788da` BE-7 AI Full E2E and policy harness
-- `5d5dd3d` Pack-neutral runtime resolvers
-- `2216e84` BE-9A idempotency core
-- `49a80ae` BE-9B external interaction recovery
-- `d3f3973` BE-11A observability foundation
-- `08d7bcc` BE-11B audit read model
-- `32fb67e` Digital Asset Thin E2E
-- `f83028c` Digital Asset recovery
-- `2791f55` Digital Asset policy gate
-- `f948cbd` Digital Asset mismatch quarantine
-- `f7286aa` BE-10 policy lifecycle skeleton
-- `80912ac` SEC-0 security baseline
-- `b5d8d28` AI-EVAL-0 model profiles
-- `96ea184` AI-EVAL-1 run contract
-- `f565503` AI-EVAL-2 runtime evidence
-- `dc8338d` AI-EVAL-3 evaluation bundle initial export
-- `02168c2` DA-P0-3 Digital Asset domain contracts
-- `feature/da-p0-4-canonical-contract` DA-P0-4 canonical contract freeze
-- `feature/da-p0-5-artifact-loader` DA-P0-5 artifact loader
-- `feature/da-p0-6-runtime-snapshot` DA-P0-6 versioned runtime snapshot
+PR별 main squash commit과 리뷰 보완 commit은 서로 다른 Git identity다. 전체 main PR coverage와 문서 위치는
+[PR Troubleshooting Coverage Audit](pr-history-audit.md)에서 관리한다. 이후 PR을 병합할 때 해당 표와 발표용 Highlight를
+함께 검토한다.

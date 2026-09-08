@@ -97,7 +97,7 @@ Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적
 - [x] DA-P0-6 Versioned Runtime Snapshot
 - [x] NCP-5 BE NCP ContentStore Adapter와 fail-closed storage boundary
 - [x] NCP-5 실제 QA Object Storage ingest E2E 증적
-- [ ] DA-P0-7 6 Runtime Controls
+- [x] DA-P0-7 PRE_EXECUTION 6 Runtime Controls와 Connector 직전 TOCTOU 재검증
 - [ ] DA-P0-8 External Adapter/Recovery 재연결
 
 DA-P0-2의 Active Runtime 계약과 fail-closed 증적은
@@ -110,10 +110,12 @@ P0-5의 Bundle/Schema/digest/reference 검증, scoped metadata 저장과 Lifecyc
 [DA-P0-5 Artifact Loader](da-p0-5-artifact-loader.md)에서 관리한다.
 P0-6의 ACTIVE 선택, 실행별 불변 Snapshot, Replay/Recovery 재사용과 Trace/Audit 증적은
 [DA-P0-6 Versioned Runtime Snapshot](da-p0-6-versioned-runtime-snapshot.md)에서 관리한다.
+P0-7의 Approved/Requested 재검증, exact/transform 분리, destination payload와 trace binding은
+[DA-P0-7 PRE_EXECUTION Guard](da-p0-7-pre-execution-guard.md)에서 관리한다.
 NCP-5의 server-owned Object Storage 설정, content-addressed reference와 실제 ingest 절차는
 [NCP-5 BE ContentStore](ncp-5-be-content-store.md)에서 관리한다.
-`regulatoryOutboundData`의 non-empty allowlist와 typed Provider `SENT_UNKNOWN` recovery 연결은 각각 P0-7과
-P0-8에서 완료한다.
+`regulatoryOutboundData`는 source/allowlist/provider mapping이 별도로 고정될 때까지 empty-only를 유지한다.
+typed Provider `SENT_UNKNOWN` recovery 연결은 P0-8에서 완료한다.
 
 ## BE-10 Parallel Tracking
 

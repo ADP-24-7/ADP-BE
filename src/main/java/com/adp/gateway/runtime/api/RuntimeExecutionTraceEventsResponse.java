@@ -11,12 +11,14 @@ public record RuntimeExecutionTraceEventsResponse(
     String status,
     List<RuntimeExecutionStageResponse> stages,
     DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
+    DigitalAssetPreExecutionGuardResponse digitalAssetPreExecutionGuard,
     RuntimeExecutionEvidenceResponse evidence
 ) {
 
     public static RuntimeExecutionTraceEventsResponse from(
         RuntimeExecutionTrace trace,
-        com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot
+        com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot,
+        com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult preExecutionGuard
     ) {
         List<RuntimeExecutionStageResponse> stages = new ArrayList<>();
         stages.add(new RuntimeExecutionStageResponse("RECEIVED", "COMPLETED", trace.createdAt()));
@@ -42,6 +44,13 @@ public record RuntimeExecutionTraceEventsResponse(
         }
         if ("PASSED".equals(trace.outboundGuardStatus())) {
             stages.add(new RuntimeExecutionStageResponse("OUTBOUND_GUARD", "COMPLETED", trace.updatedAt()));
+        }
+        if (preExecutionGuard != null) {
+            stages.add(new RuntimeExecutionStageResponse(
+                "PRE_EXECUTION_GUARD",
+                "PASSED".equals(preExecutionGuard.status()) ? "COMPLETED" : preExecutionGuard.status(),
+                preExecutionGuard.evaluatedAt()
+            ));
         }
         if (trace.connectorExecutionId() != null) {
             stages.add(new RuntimeExecutionStageResponse("PROVIDER_REQUEST", "COMPLETED", trace.updatedAt()));
@@ -70,6 +79,7 @@ public record RuntimeExecutionTraceEventsResponse(
             trace.status(),
             List.copyOf(stages),
             DigitalAssetRuntimeSnapshotResponse.from(snapshot),
+            DigitalAssetPreExecutionGuardResponse.from(preExecutionGuard),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
     }

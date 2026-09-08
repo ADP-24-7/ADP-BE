@@ -154,6 +154,20 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(snapshotCount).isEqualTo(1);
+        Integer preExecutionGuardCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_pre_execution_guard
+                where execution_id = :executionId
+                  and status = 'PASSED'
+                  and (select count(*) from jsonb_each_text(control_results)) = 6
+                  and not exists (
+                    select 1 from jsonb_each_text(control_results) control where control.value <> 'PASSED'
+                  )
+                  and reason_codes = '[]'::jsonb
+                  and outbound_payload_digest is not null
+                  and provider_payload_digest is not null
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(preExecutionGuardCount).isEqualTo(1);
         assertThat(terminalTransitions("COMPLETED")).isEqualTo(completedBefore + 1);
 
         mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
@@ -165,6 +179,9 @@ class DigitalAssetThinE2ETests {
                 .value("DA-DIGITAL-ASSET-RUNTIME-LOCAL-ACTIVE-001"))
             .andExpect(jsonPath("$.digitalAssetRuntimeSnapshot.destinationProfileId")
                 .value("dest_mock_asset_platform_v1"))
+            .andExpect(jsonPath("$.digitalAssetPreExecutionGuard.status").value("PASSED"))
+            .andExpect(jsonPath("$.digitalAssetPreExecutionGuard.controlResults.length()").value(6))
+            .andExpect(jsonPath("$.stages[?(@.stage == 'PRE_EXECUTION_GUARD')].status").value("COMPLETED"))
             .andExpect(jsonPath("$.evidence.destinationProfileId").value("dest_mock_asset_platform_v1"))
             .andExpect(jsonPath("$.stages[?(@.stage == 'CONNECTOR')].status").value("COMPLETED"));
 
