@@ -27,11 +27,19 @@ public class DigitalAssetReconciliationEvaluator {
         Map<String, Object> requestPayload,
         ExternalExecutionResult result
     ) {
+        return evaluate(requestPayload, result.executionProjection(), result.isFinalSuccess());
+    }
+
+    public DigitalAssetReconciliationAssessment evaluate(
+        Map<String, Object> requestPayload,
+        Map<String, Object> actualProjection,
+        boolean finalSuccess
+    ) {
         Map<String, Object> expected = projection(map(requestPayload.get("transaction")));
-        Map<String, Object> actual = result.executionProjection();
+        Map<String, Object> actual = projection(actualProjection);
         String expectedDigest = digest(expected);
         String actualDigest = digest(actual);
-        if (!result.isFinalSuccess()) {
+        if (!finalSuccess) {
             return new DigitalAssetReconciliationAssessment(
                 DigitalAssetReconciliationResult.WAIT, java.util.List.of(), expectedDigest, actualDigest
             );

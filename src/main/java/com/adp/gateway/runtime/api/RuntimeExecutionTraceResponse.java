@@ -37,13 +37,15 @@ public record RuntimeExecutionTraceResponse(
     OffsetDateTime updatedAt,
     DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
     DigitalAssetPreExecutionGuardResponse digitalAssetPreExecutionGuard,
+    DigitalAssetPostExecutionEvidenceResponse digitalAssetPostExecutionEvidence,
     RuntimeExecutionEvidenceResponse evidence
 ) {
 
     public static RuntimeExecutionTraceResponse from(
         RuntimeExecutionTrace trace,
         com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot,
-        com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult preExecutionGuard
+        com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult preExecutionGuard,
+        com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence postExecutionEvidence
     ) {
         return new RuntimeExecutionTraceResponse(
             trace.executionId(),
@@ -78,6 +80,7 @@ public record RuntimeExecutionTraceResponse(
             trace.updatedAt(),
             DigitalAssetRuntimeSnapshotResponse.from(snapshot),
             DigitalAssetPreExecutionGuardResponse.from(preExecutionGuard),
+            DigitalAssetPostExecutionEvidenceResponse.from(postExecutionEvidence),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
     }

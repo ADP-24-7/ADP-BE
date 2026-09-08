@@ -98,7 +98,8 @@ public class RuntimeExecutionController {
         return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(
             trace,
             runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null),
-            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null)
+            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null),
+            runtimeExecutionService.loadDigitalAssetPostExecutionEvidence(executionId).orElse(null)
         ));
     }
 
@@ -112,7 +113,8 @@ public class RuntimeExecutionController {
         return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(
             trace,
             runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null),
-            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null)
+            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null),
+            runtimeExecutionService.loadDigitalAssetPostExecutionEvidence(executionId).orElse(null)
         ));
     }
 

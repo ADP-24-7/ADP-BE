@@ -619,6 +619,11 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void scheduleExternalOutcomeRecovery(String executionId, ConnectorResult connectorResult) {
+        recoveryPersistence.scheduleUnknown(executionId, connectorResult, OffsetDateTime.now(clock));
+    }
+
+    @Override
     public boolean recordAiConnectorExecutionEvidence(String executionId, ConnectorResult connectorResult) {
         if (connectorResult.executionEvidence() == null) {
             return false;

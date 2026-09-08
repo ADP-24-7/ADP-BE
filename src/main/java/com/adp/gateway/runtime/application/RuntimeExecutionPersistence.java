@@ -54,6 +54,8 @@ public interface RuntimeExecutionPersistence {
 
     void recordConnector(String executionId, ConnectorResult connectorResult);
 
+    void scheduleExternalOutcomeRecovery(String executionId, ConnectorResult connectorResult);
+
     boolean recordAiConnectorExecutionEvidence(String executionId, ConnectorResult connectorResult);
 
     boolean recordInitialAiRuntimeLatency(String executionId);

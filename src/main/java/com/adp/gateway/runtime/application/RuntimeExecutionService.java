@@ -532,10 +532,20 @@ public class RuntimeExecutionService {
             if (resolvedEvaluation != null) {
                 evaluationEvidenceRecorder.recordConnectorEvidence(executionId, connectorResult);
             }
-            RuntimeExecutionResult result = outcomeFinalizer.finalizeOutcome(
-                executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
-                destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
-            );
+            RuntimeExecutionResult result;
+            try {
+                result = outcomeFinalizer.finalizeOutcome(
+                    executionId, requestContext, decision, transformResult, outboundGuardResult.status(),
+                    destinationProfile, outboundPayload, providerRequest, connectorResult, responseGuard
+                );
+            } catch (RuntimeException exception) {
+                if (connectorResult.status() == ConnectorStatus.ACKNOWLEDGED
+                    || connectorResult.status() == ConnectorStatus.COMPLETED
+                    || connectorResult.status() == ConnectorStatus.SENT_UNKNOWN) {
+                    persistence.scheduleExternalOutcomeRecovery(executionId, connectorResult);
+                }
+                throw exception;
+            }
             if (resolvedEvaluation != null) {
                 evaluationEvidenceRecorder.recordInitialRuntimeLatency(executionId);
             }
@@ -640,6 +650,11 @@ public class RuntimeExecutionService {
     public Optional<com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult>
         loadDigitalAssetPreExecutionGuard(String executionId) {
         return digitalAssetRuntimeSnapshotService.findPreExecutionGuard(executionId);
+    }
+
+    public Optional<com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence>
+        loadDigitalAssetPostExecutionEvidence(String executionId) {
+        return digitalAssetRuntimeSnapshotService.findPostExecutionEvidence(executionId);
     }
 
     private RuntimeExecutionStatus finalStatus(FinalAction finalAction, TransformResult transformResult) {
