@@ -53,6 +53,17 @@ class AiEvaluationBundleControllerTests {
             executionIds.add(submitEvaluation(suffix + "_" + index, index));
         }
 
+        readiness("PRIVILEGED_OPERATOR")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("READY"))
+            .andExpect(jsonPath("$.bundle_available").value(true))
+            .andExpect(jsonPath("$.expected_execution_count").value(3))
+            .andExpect(jsonPath("$.stored_execution_count").isNumber())
+            .andExpect(jsonPath("$.observed_execution_count").value(3))
+            .andExpect(jsonPath("$.complete_evidence_count").value(3))
+            .andExpect(jsonPath("$.missing_execution_count").value(0))
+            .andExpect(jsonPath("$.case_models.length()").value(3));
+
         String firstResponse = export("PRIVILEGED_OPERATOR")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.manifest.schema_version").value("adp-ai-evaluation-bundle/v1"))
@@ -218,6 +229,7 @@ class AiEvaluationBundleControllerTests {
     @Test
     void operatorCannotExportEvaluationBundle() throws Exception {
         export("OPERATOR").andExpect(status().isForbidden());
+        readiness("OPERATOR").andExpect(status().isForbidden());
     }
 
     @Test
@@ -232,6 +244,14 @@ class AiEvaluationBundleControllerTests {
     private org.springframework.test.web.servlet.ResultActions export(String role) throws Exception {
         return mockMvc.perform(get(
                 "/api/admin/ai/evaluation-runs/{runId}/bundle", AiEvaluationRunCatalog.BASELINE_RUN_ID
+            )
+            .header("X-ADP-User-Id", "bundle-exporter")
+            .header("X-ADP-User-Roles", role));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions readiness(String role) throws Exception {
+        return mockMvc.perform(get(
+                "/api/admin/ai/evaluation-runs/{runId}/readiness", AiEvaluationRunCatalog.BASELINE_RUN_ID
             )
             .header("X-ADP-User-Id", "bundle-exporter")
             .header("X-ADP-User-Roles", role));

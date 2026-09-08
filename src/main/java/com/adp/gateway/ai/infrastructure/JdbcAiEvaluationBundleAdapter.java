@@ -66,4 +66,29 @@ public class JdbcAiEvaluationBundleAdapter implements AiEvaluationBundlePort {
         }
         return statement.query(AiEvaluationBundleSource.class).list();
     }
+
+    @Override
+    public long countStored(
+        String evaluationRunId,
+        String institutionId,
+        Set<String> allowedWorkloads
+    ) {
+        String workloadScope = allowedWorkloads.contains("*")
+            ? ""
+            : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and re.workload_id in (:allowedWorkloads)";
+        JdbcClient.StatementSpec statement = jdbcClient.sql("""
+            select count(*)
+            from runtime.ai_model_execution_evidence evidence
+            join runtime.runtime_execution re on re.execution_id = evidence.execution_id
+            where evidence.evaluation_run_id = :evaluationRunId
+              and re.institution_id = :institutionId
+            """ + workloadScope)
+            .param("evaluationRunId", evaluationRunId)
+            .param("institutionId", institutionId);
+        if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
+            statement = statement.param("allowedWorkloads", allowedWorkloads);
+        }
+        Long count = statement.query(Long.class).single();
+        return count == null ? 0 : count;
+    }
 }

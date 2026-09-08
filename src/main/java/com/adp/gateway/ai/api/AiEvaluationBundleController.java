@@ -2,6 +2,7 @@ package com.adp.gateway.ai.api;
 
 import com.adp.gateway.ai.application.AiEvaluationBundleService;
 import com.adp.gateway.ai.domain.AiEvaluationBundle;
+import com.adp.gateway.ai.domain.AiEvaluationRunReadiness;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import jakarta.validation.constraints.Size;
 import org.springframework.security.core.Authentication;
@@ -27,5 +28,13 @@ public class AiEvaluationBundleController {
         Authentication authentication
     ) {
         return bundleService.export((AuthPrincipal) authentication.getPrincipal(), evaluationRunId);
+    }
+
+    @GetMapping("/{evaluationRunId}/readiness")
+    AiEvaluationRunReadiness readiness(
+        @PathVariable @Size(max = 120) String evaluationRunId,
+        Authentication authentication
+    ) {
+        return bundleService.readiness((AuthPrincipal) authentication.getPrincipal(), evaluationRunId);
     }
 }

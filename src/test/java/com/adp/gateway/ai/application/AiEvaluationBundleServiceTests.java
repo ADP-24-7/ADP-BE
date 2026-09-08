@@ -55,6 +55,9 @@ class AiEvaluationBundleServiceTests {
             AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("customer_summary"), 10_001
         ))
             .thenReturn(completeRows);
+        when(port.countStored(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("customer_summary")
+        )).thenReturn(3L);
     }
 
     @Test
@@ -65,6 +68,67 @@ class AiEvaluationBundleServiceTests {
             .thenReturn(completeRows.subList(0, 2));
 
         assertReason("AI_EVALUATION_BUNDLE_INCOMPLETE");
+    }
+
+    @Test
+    void reportsCaseModelReadinessWithoutExportingRawData() {
+        var readiness = service.readiness(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+
+        assertThat(readiness.status()).isEqualTo(
+            com.adp.gateway.ai.domain.AiEvaluationRunReadiness.Status.READY
+        );
+        assertThat(readiness.bundleAvailable()).isTrue();
+        assertThat(readiness.expectedExecutionCount()).isEqualTo(3);
+        assertThat(readiness.storedExecutionCount()).isEqualTo(3);
+        assertThat(readiness.observedExecutionCount()).isEqualTo(3);
+        assertThat(readiness.completeEvidenceCount()).isEqualTo(3);
+        assertThat(readiness.missingExecutionCount()).isZero();
+        assertThat(readiness.unexpectedExecutionCount()).isZero();
+        assertThat(readiness.caseModels())
+            .allSatisfy(entry -> {
+                assertThat(entry.executionId()).startsWith("exec-");
+                assertThat(entry.evidenceStatus()).isEqualTo("COMPLETE");
+            });
+    }
+
+    @Test
+    void reportsNotStartedAndIncompleteRuns() {
+        when(port.load(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("customer_summary"), 10_001
+        )).thenReturn(List.of()).thenReturn(completeRows.subList(0, 2));
+        when(port.countStored(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, "institution_local", Set.of("customer_summary")
+        )).thenReturn(0L).thenReturn(2L);
+
+        var notStarted = service.readiness(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+        var incomplete = service.readiness(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+
+        assertThat(notStarted.status()).isEqualTo(
+            com.adp.gateway.ai.domain.AiEvaluationRunReadiness.Status.NOT_STARTED
+        );
+        assertThat(notStarted.bundleAvailable()).isFalse();
+        assertThat(notStarted.storedExecutionCount()).isZero();
+        assertThat(notStarted.missingExecutionCount()).isEqualTo(3);
+        assertThat(incomplete.status()).isEqualTo(
+            com.adp.gateway.ai.domain.AiEvaluationRunReadiness.Status.INCOMPLETE
+        );
+        assertThat(incomplete.bundleAvailable()).isFalse();
+        assertThat(incomplete.observedExecutionCount()).isEqualTo(2);
+        assertThat(incomplete.storedExecutionCount()).isEqualTo(2);
+        assertThat(incomplete.missingExecutionCount()).isEqualTo(1);
+        assertThat(incomplete.caseModels()).anyMatch(entry -> entry.executionId() == null);
+    }
+
+    @Test
+    void reportsIntegrityMismatchBeforeBundleExport() {
+        when(completeRows.getFirst().datasetDigest()).thenReturn("sha256:" + "f".repeat(64));
+
+        var readiness = service.readiness(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+
+        assertThat(readiness.status()).isEqualTo(
+            com.adp.gateway.ai.domain.AiEvaluationRunReadiness.Status.PROVENANCE_MISMATCH
+        );
+        assertThat(readiness.bundleAvailable()).isFalse();
     }
 
     @Test

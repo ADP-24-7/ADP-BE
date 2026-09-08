@@ -12,7 +12,12 @@ insert into auth_principal (
     'institution_local',
     true,
     true
-) on conflict (principal_id) do nothing;
+) on conflict (principal_id) do update set
+    principal_type = excluded.principal_type,
+    display_name = excluded.display_name,
+    institution_id = excluded.institution_id,
+    subject_authorization_required = excluded.subject_authorization_required,
+    enabled = excluded.enabled;
 
 insert into auth_principal_role (principal_id, role_name) values
     ('svc_local_runtime', 'RUNTIME_EXECUTOR'),

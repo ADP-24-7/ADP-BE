@@ -4,10 +4,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.adp.gateway.auth.infrastructure.LocalAuthFixtureLoader;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = "adp.local-fixtures.enabled=true")
@@ -16,6 +18,12 @@ class AuthContextControllerTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcClient jdbcClient;
+
+    @Autowired
+    private LocalAuthFixtureLoader fixtureLoader;
 
     @Test
     void returnsAuthenticatedPrincipalContext() throws Exception {
@@ -54,5 +62,20 @@ class AuthContextControllerTests {
             .andExpect(jsonPath("$.message").value("Authentication required"))
             .andExpect(jsonPath("$.requestId").value("req_invalid_auth"))
             .andExpect(jsonPath("$.traceId").value("trace_invalid_auth"));
+    }
+
+    @Test
+    void repairsLocalPrincipalInstitutionAfterPreviousVersionUpgrade() {
+        jdbcClient.sql("update auth_principal set institution_id = null where principal_id = 'svc_local_runtime'")
+            .update();
+
+        fixtureLoader.onApplicationEvent(null);
+
+        String institutionId = jdbcClient.sql("""
+                select institution_id from auth_principal where principal_id = 'svc_local_runtime'
+                """)
+            .query(String.class)
+            .single();
+        org.assertj.core.api.Assertions.assertThat(institutionId).isEqualTo("institution_local");
     }
 }
