@@ -18,6 +18,7 @@ import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.PrincipalType;
 import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactIngestion;
+import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactFileRole;
 import com.adp.gateway.policy.application.PolicyLifecycleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,9 @@ class DigitalAssetArtifactLoaderServiceTests {
             "institution-local", candidate.artifactId(), candidate.artifactVersion(), "a".repeat(64),
             candidate.manifestSchemaVersion(), candidate.manifestReference(), candidate.canonicalContractVersion(),
             candidate.canonicalContractDigest(), candidate.workloadId(), candidate.purposeCode(),
-            candidate.destinationProfileId(), 5, com.adp.gateway.policy.domain.PolicyLifecycleStage.CANDIDATE,
+            candidate.destinationProfileId(), "1.0.0", "sha256:" + "d".repeat(64),
+            "1.0.0", "sha256:" + "e".repeat(64), 5,
+            com.adp.gateway.policy.domain.PolicyLifecycleStage.CANDIDATE,
             "previous-maker", java.time.OffsetDateTime.parse("2026-09-07T00:00:00Z")
         )));
 
@@ -102,7 +105,16 @@ class DigitalAssetArtifactLoaderServiceTests {
             "DA-DIGITAL-ASSET-RUNTIME-CANDIDATE-001", "1.0.0", digest,
             DigitalAssetArtifactBundleValidator.MANIFEST_SCHEMA_VERSION, "manifest.json",
             institutionId, workloadId, "DIGITAL_ASSET_PURCHASE", "dest_mock_asset_platform_v1",
-            "1.0.0", "sha256:" + "c".repeat(64), List.of()
+            "1.0.0", "sha256:" + "c".repeat(64), List.of(
+                new ValidatedDigitalAssetArtifactBundle.ArtifactFile(
+                    DigitalAssetArtifactFileRole.OUTBOUND_REQUIREMENT_MATRIX, "1.0.0", "control.json",
+                    "sha256:" + "d".repeat(64), "control.schema.json", "sha256:" + "f".repeat(64)
+                ),
+                new ValidatedDigitalAssetArtifactBundle.ArtifactFile(
+                    DigitalAssetArtifactFileRole.RUNTIME_DATA_CROSSWALK, "1.0.0", "crosswalk.json",
+                    "sha256:" + "e".repeat(64), "crosswalk.schema.json", "sha256:" + "f".repeat(64)
+                )
+            )
         );
     }
 

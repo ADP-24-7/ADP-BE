@@ -147,7 +147,8 @@ class RuntimeExecutionServiceTests {
             ),
             new com.adp.gateway.ai.application.AiEvaluationEvidenceRecorder(
                 persistence, mock(com.adp.gateway.observability.GatewayObservability.class)
-            )
+            ),
+            mock(com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotService.class)
         );
     }
 

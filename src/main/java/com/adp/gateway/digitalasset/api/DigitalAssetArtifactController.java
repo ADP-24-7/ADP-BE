@@ -2,6 +2,8 @@ package com.adp.gateway.digitalasset.api;
 
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.digitalasset.application.DigitalAssetArtifactLoaderService;
+import com.adp.gateway.digitalasset.application.DigitalAssetArtifactActivationService;
+import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactIngestion;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -21,9 +23,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/digital-assets/artifacts")
 public class DigitalAssetArtifactController {
     private final DigitalAssetArtifactLoaderService service;
+    private final DigitalAssetArtifactActivationService activationService;
 
-    public DigitalAssetArtifactController(DigitalAssetArtifactLoaderService service) {
+    public DigitalAssetArtifactController(
+        DigitalAssetArtifactLoaderService service,
+        DigitalAssetArtifactActivationService activationService
+    ) {
         this.service = service;
+        this.activationService = activationService;
+    }
+
+    @PostMapping("/{artifactId}/versions/{artifactVersion}/activate")
+    DigitalAssetActiveArtifact activate(
+        @PathVariable @Size(max = 120) String artifactId,
+        @PathVariable @Size(max = 120) String artifactVersion,
+        Authentication authentication
+    ) {
+        return activationService.activate(principal(authentication), artifactId, artifactVersion);
     }
 
     @PostMapping("/ingestions")

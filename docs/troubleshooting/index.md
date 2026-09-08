@@ -10,6 +10,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [AI Evaluation 트러블슈팅](ai-evaluation.md)
 - [Digital Asset Canonical Contract 트러블슈팅](digital-asset-contract-freeze.md)
 - [Digital Asset Artifact Loader 트러블슈팅](digital-asset-artifact-loader.md)
+- [Digital Asset Runtime Snapshot 트러블슈팅](digital-asset-runtime-snapshot.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)
 
 ## 기준 커밋
@@ -45,3 +46,4 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - `02168c2` DA-P0-3 Digital Asset domain contracts
 - `feature/da-p0-4-canonical-contract` DA-P0-4 canonical contract freeze
 - `feature/da-p0-5-artifact-loader` DA-P0-5 artifact loader
+- `feature/da-p0-6-runtime-snapshot` DA-P0-6 versioned runtime snapshot

@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactIngestion;
+import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactFileRole;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.policy.application.PolicyLifecycleService;
@@ -55,11 +56,20 @@ public class DigitalAssetArtifactLoaderService {
         var existing = persistence.find(
             principal.institutionId(), principal.workloadIds(), bundle.artifactId(), bundle.artifactVersion()
         );
+        var runtimeControl = file(bundle, DigitalAssetArtifactFileRole.OUTBOUND_REQUIREMENT_MATRIX);
+        var crosswalk = file(bundle, DigitalAssetArtifactFileRole.RUNTIME_DATA_CROSSWALK);
         if (existing.isPresent()) {
             DigitalAssetArtifactIngestion value = existing.get();
             if (value.artifactDigest().equals(bundle.artifactDigest())
                 && value.manifestReference().equals(bundle.manifestReference())) {
-                return value;
+                persistence.updateRuntimeMetadata(
+                    value.institutionId(), value.artifactId(), value.artifactVersion(),
+                    runtimeControl.artifactVersion(), runtimeControl.digest(),
+                    crosswalk.artifactVersion(), crosswalk.digest()
+                );
+                return persistence.find(
+                    principal.institutionId(), principal.workloadIds(), bundle.artifactId(), bundle.artifactVersion()
+                ).orElseThrow(() -> rejected("DIGITAL_ASSET_ARTIFACT_NOT_FOUND"));
             }
             throw rejected("DIGITAL_ASSET_ARTIFACT_CONFLICT");
         }
@@ -85,7 +95,8 @@ public class DigitalAssetArtifactLoaderService {
             principal.institutionId(), bundle.artifactId(), bundle.artifactVersion(), bundle.artifactDigest(),
             bundle.manifestSchemaVersion(), bundle.manifestReference(), bundle.canonicalContractVersion(),
             bundle.canonicalContractDigest(), bundle.workloadId(), bundle.purposeCode(),
-            bundle.destinationProfileId(), bundle.files().size(), PolicyLifecycleStage.CANDIDATE,
+            bundle.destinationProfileId(), runtimeControl.artifactVersion(), runtimeControl.digest(),
+            crosswalk.artifactVersion(), crosswalk.digest(), bundle.files().size(), PolicyLifecycleStage.CANDIDATE,
             principal.principalId(), OffsetDateTime.now(clock)
         ));
     }
@@ -105,6 +116,16 @@ public class DigitalAssetArtifactLoaderService {
             || !principal.canAccessWorkload(bundle.workloadId())) {
             throw rejected("DIGITAL_ASSET_ARTIFACT_BINDING_INVALID");
         }
+    }
+
+    private ValidatedDigitalAssetArtifactBundle.ArtifactFile file(
+        ValidatedDigitalAssetArtifactBundle bundle,
+        DigitalAssetArtifactFileRole role
+    ) {
+        return bundle.files().stream()
+            .filter(file -> file.role() == role)
+            .findFirst()
+            .orElseThrow(() -> rejected("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID"));
     }
 
     private void requireOperator(AuthPrincipal principal) {

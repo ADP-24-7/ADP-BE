@@ -85,7 +85,8 @@ public class DigitalAssetArtifactBundleValidator {
             validateDocument(document, trustedSchema.schema());
             documents.put(role, document);
             files.add(new ValidatedDigitalAssetArtifactBundle.ArtifactFile(
-                role, reference, file.path("digest").asText(), schemaReference,
+                role, document.path("artifact_version").asText(), reference,
+                file.path("digest").asText(), schemaReference,
                 file.path("schema_digest").asText()
             ));
         }

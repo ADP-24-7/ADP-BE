@@ -15,6 +15,7 @@ public record ExecutionEvidencePack(
     String runtimeStatus,
     String authorizationStatus,
     PolicyEvidence policy,
+    DigitalAssetSnapshotEvidence digitalAssetRuntimeSnapshot,
     DataEvidence data,
     EgressEvidence egress,
     RecoveryEvidence recovery,
@@ -30,6 +31,26 @@ public record ExecutionEvidencePack(
         String snapshotDigest,
         String decisionId,
         String finalAction
+    ) {
+    }
+
+    public record DigitalAssetSnapshotEvidence(
+        String snapshotId,
+        String snapshotDigest,
+        String artifactId,
+        String artifactVersion,
+        String artifactDigest,
+        String approvedPolicySnapshotId,
+        String approvedPolicyVersion,
+        String approvedPolicyDigest,
+        String destinationProfileId,
+        String destinationProfileVersion,
+        String destinationProfileDigest,
+        String runtimeControlVersion,
+        String runtimeControlDigest,
+        String crosswalkVersion,
+        String crosswalkDigest,
+        OffsetDateTime selectedAt
     ) {
     }
 

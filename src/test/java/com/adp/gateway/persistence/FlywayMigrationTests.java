@@ -715,7 +715,9 @@ class FlywayMigrationTests {
                 'institution_id', 'artifact_id', 'artifact_version', 'artifact_digest',
                 'manifest_schema_version', 'manifest_reference', 'canonical_contract_version',
                 'canonical_contract_digest', 'workload_id', 'purpose_code',
-                'destination_profile_id', 'file_count', 'lifecycle_stage', 'ingested_by', 'ingested_at'
+                'destination_profile_id', 'runtime_control_version', 'runtime_control_digest',
+                'crosswalk_version', 'crosswalk_digest', 'file_count', 'lifecycle_stage',
+                'ingested_by', 'ingested_at'
               )
             """).query(Integer.class).single();
         Integer constraintCount = jdbcClient.sql("""
@@ -723,13 +725,101 @@ class FlywayMigrationTests {
             where table_schema = 'policy' and table_name = 'digital_asset_artifact_ingestion'
               and constraint_name in (
                 'chk_da_artifact_digest', 'chk_da_artifact_contract_digest',
-                'chk_da_artifact_file_count', 'chk_da_artifact_lifecycle'
+                'chk_da_artifact_file_count', 'chk_da_artifact_lifecycle',
+                'chk_da_artifact_runtime_control_digest', 'chk_da_artifact_crosswalk_digest'
               )
             """).query(Integer.class).single();
 
         assertThat(tableCount).isEqualTo(1);
-        assertThat(columnCount).isEqualTo(15);
-        assertThat(constraintCount).isEqualTo(4);
+        assertThat(columnCount).isEqualTo(19);
+        assertThat(constraintCount).isEqualTo(6);
+    }
+
+    @Test
+    void v28MigrationCreatesSingleActiveSelectionAndRuntimeSnapshot() {
+        Integer tableCount = jdbcClient.sql("""
+            select count(*) from information_schema.tables
+            where (table_schema, table_name) in (
+              ('policy', 'digital_asset_active_artifact'),
+              ('runtime', 'digital_asset_runtime_snapshot')
+            )
+            """).query(Integer.class).single();
+        Integer activePrimaryKeyColumns = jdbcClient.sql("""
+            select count(*) from information_schema.key_column_usage
+            where table_schema = 'policy' and table_name = 'digital_asset_active_artifact'
+              and constraint_name = 'digital_asset_active_artifact_pkey'
+              and column_name in ('institution_id', 'workload_id')
+            """).query(Integer.class).single();
+        Integer snapshotIdentityConstraints = jdbcClient.sql("""
+            select count(*) from information_schema.table_constraints
+            where table_schema = 'runtime' and table_name = 'digital_asset_runtime_snapshot'
+              and constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
+            """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(2);
+        assertThat(activePrimaryKeyColumns).isEqualTo(2);
+        assertThat(snapshotIdentityConstraints).isGreaterThanOrEqualTo(7);
+    }
+
+    @Test
+    void v28MigrationKeepsLegacyCandidateNonExecutableUntilRevalidated() throws Exception {
+        String databaseName = "adp_v28_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("27").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into policy.lifecycle_artifact (
+                        artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                        execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                        revision, created_at, updated_at
+                    ) values (
+                        'legacy-candidate', '1.0.0', repeat('a', 64), 'institution-local', 'WORKLOAD',
+                        'DIGITAL_ASSET', 'workload', 'PURPOSE', 'CANDIDATE', 'maker', 2, now(), now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into policy.digital_asset_artifact_ingestion (
+                        institution_id, artifact_id, artifact_version, artifact_digest,
+                        manifest_schema_version, manifest_reference, canonical_contract_version,
+                        canonical_contract_digest, workload_id, purpose_code, destination_profile_id,
+                        file_count, lifecycle_stage, ingested_by, ingested_at
+                    ) values (
+                        'institution-local', 'legacy-candidate', '1.0.0', repeat('a', 64),
+                        'bundle/v1', 'manifest.json', '1.0.0', 'sha256:' || repeat('b', 64),
+                        'workload', 'PURPOSE', 'destination', 5, 'CANDIDATE', 'maker', now()
+                    )
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select runtime_control_version, runtime_control_digest,
+                            crosswalk_version, crosswalk_digest,
+                            (select count(*) from policy.digital_asset_active_artifact) as active_count
+                     from policy.digital_asset_artifact_ingestion
+                     where artifact_id = 'legacy-candidate'
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("runtime_control_version")).isNull();
+                assertThat(resultSet.getString("runtime_control_digest")).isNull();
+                assertThat(resultSet.getString("crosswalk_version")).isNull();
+                assertThat(resultSet.getString("crosswalk_digest")).isNull();
+                assertThat(resultSet.getInt("active_count")).isZero();
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
     }
 
     @Test

@@ -54,7 +54,8 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
         if (ASSET_WORKLOAD_ID.equals(context.workloadId()) && ASSET_PURPOSE.equals(context.purposeCode())
             && ASSET_PROVIDER.equals(context.providerProfileId())) {
             return fixtureSnapshot(PolicyAction.TRANSFORM, ASSET_WORKLOAD_ID, ASSET_PURPOSE,
-                "be-snapshot-local-fixture:digital-asset-purchase:mock-asset-platform");
+                "be-snapshot-local-fixture:digital-asset-purchase:mock-asset-platform",
+                PolicyLifecycleStage.ACTIVE);
         }
         if (matchesRuntimeFixture(context)) {
             return fixtureSnapshot(
@@ -93,11 +94,29 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
         String purpose,
         String snapshotDigest
     ) {
-        SourcePolicyEvaluationArtifactRef sourceArtifact = new SourcePolicyEvaluationArtifactRef(
-            "PROJECT_PROVISIONAL_POLICY_EVALUATION",
-            "0.0.0",
-            new ArtifactDigest("sha256", "local-fixture-policy-evaluation")
+        return fixtureSnapshot(
+            policyAction, workloadId, purpose, snapshotDigest, PolicyLifecycleStage.PROJECT_PROVISIONAL
         );
+    }
+
+    private PolicySnapshot fixtureSnapshot(
+        PolicyAction policyAction,
+        String workloadId,
+        String purpose,
+        String snapshotDigest,
+        PolicyLifecycleStage lifecycleStage
+    ) {
+        boolean activeDigitalAsset = lifecycleStage == PolicyLifecycleStage.ACTIVE
+            && workloadId.equals(ASSET_WORKLOAD_ID);
+        SourcePolicyEvaluationArtifactRef sourceArtifact = activeDigitalAsset
+            ? new SourcePolicyEvaluationArtifactRef(
+                "DA-P0-5-POLICY-EVAL-001", "1.0.0",
+                new ArtifactDigest("sha256", "476e0a7573677b4c35e0dd15950a4dc38c283ea5486765fe8ae468a81148d4f1")
+            )
+            : new SourcePolicyEvaluationArtifactRef(
+                "PROJECT_PROVISIONAL_POLICY_EVALUATION", "0.0.0",
+                new ArtifactDigest("sha256", "local-fixture-policy-evaluation")
+            );
         PolicyEvaluation evaluation = new PolicyEvaluation(
             List.of(new ArtifactReference("PROJECT_PROVISIONAL_POLICY", "policy", "0.0.0")),
             List.of(new ArtifactReference("PROJECT_PROVISIONAL_RULE", "rule", "0.0.0")),
@@ -127,10 +146,10 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
         );
 
         return new PolicySnapshot(
-            "be-runtime-policy/0.0.0",
+            activeDigitalAsset ? "be-runtime-policy/digital-asset/1.0.0" : "be-runtime-policy/0.0.0",
             snapshotDigest,
             FIXTURE_EFFECTIVE_AT,
-            PolicyLifecycleStage.PROJECT_PROVISIONAL,
+            lifecycleStage,
             sourceArtifact,
             evaluation
         );

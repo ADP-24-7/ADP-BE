@@ -10,10 +10,14 @@ public record RuntimeExecutionTraceEventsResponse(
     String traceId,
     String status,
     List<RuntimeExecutionStageResponse> stages,
+    DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
     RuntimeExecutionEvidenceResponse evidence
 ) {
 
-    public static RuntimeExecutionTraceEventsResponse from(RuntimeExecutionTrace trace) {
+    public static RuntimeExecutionTraceEventsResponse from(
+        RuntimeExecutionTrace trace,
+        com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot
+    ) {
         List<RuntimeExecutionStageResponse> stages = new ArrayList<>();
         stages.add(new RuntimeExecutionStageResponse("RECEIVED", "COMPLETED", trace.createdAt()));
         if (trace.status() != null && !"RECEIVED".equals(trace.status())) {
@@ -65,6 +69,7 @@ public record RuntimeExecutionTraceEventsResponse(
             trace.traceId(),
             trace.status(),
             List.copyOf(stages),
+            DigitalAssetRuntimeSnapshotResponse.from(snapshot),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
     }

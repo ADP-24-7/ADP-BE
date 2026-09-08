@@ -95,7 +95,9 @@ public class RuntimeExecutionController {
     ) {
         var trace = runtimeExecutionService.load(executionId);
         authorizeRead(authentication, trace.workloadId(), trace.institutionId());
-        return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(trace));
+        return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(
+            trace, runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null)
+        ));
     }
 
     @GetMapping("/{executionId}/trace")
@@ -105,7 +107,9 @@ public class RuntimeExecutionController {
     ) {
         var trace = runtimeExecutionService.load(executionId);
         authorizeRead(authentication, trace.workloadId(), trace.institutionId());
-        return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(trace));
+        return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(
+            trace, runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null)
+        ));
     }
 
     private void authorizeRead(Authentication authentication, String workloadId, String institutionId) {

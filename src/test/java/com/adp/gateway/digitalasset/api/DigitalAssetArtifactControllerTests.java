@@ -73,7 +73,11 @@ class DigitalAssetArtifactControllerTests {
                 .header("X-ADP-User-Id", "artifact-auditor")
                 .header("X-ADP-User-Roles", "AUDITOR"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.artifactDigest").value(DIGEST.substring("sha256:".length())));
+            .andExpect(jsonPath("$.artifactDigest").value(DIGEST.substring("sha256:".length())))
+            .andExpect(jsonPath("$.runtimeControlVersion").value("1.0.0"))
+            .andExpect(jsonPath("$.runtimeControlDigest").exists())
+            .andExpect(jsonPath("$.crosswalkVersion").value("1.0.0"))
+            .andExpect(jsonPath("$.crosswalkDigest").exists());
 
         Integer artifactRows = jdbcClient.sql("""
             select count(*) from policy.digital_asset_artifact_ingestion where artifact_id = :artifactId
@@ -83,6 +87,7 @@ class DigitalAssetArtifactControllerTests {
             """).param("artifactId", ARTIFACT_ID).query(Integer.class).single();
         assertThat(artifactRows).isEqualTo(1);
         assertThat(transitionRows).isEqualTo(2);
+
     }
 
     @Test
@@ -94,4 +99,5 @@ class DigitalAssetArtifactControllerTests {
                 .content("{}"))
             .andExpect(status().isForbidden());
     }
+
 }
