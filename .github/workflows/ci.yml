@@ -46,6 +46,7 @@ jobs:
       - name: Validate AI Evaluation E2E harness
         run: |
           sh -n scripts/run-ai-evaluation-e2e.sh
+          sh -n scripts/run-ncp-artifact-ingest-e2e.sh
           python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - uses: actions/setup-java@v4
