@@ -2,6 +2,8 @@ package com.adp.gateway.policy.api;
 
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.policy.application.PolicyLifecycleService;
+import com.adp.gateway.policy.application.PolicyShadowService;
+import com.adp.gateway.policy.domain.PolicyShadowEvidence;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -21,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/policy-lifecycle")
 public class PolicyLifecycleController {
     private final PolicyLifecycleService service;
+    private final PolicyShadowService shadowService;
 
-    public PolicyLifecycleController(PolicyLifecycleService service) {
+    public PolicyLifecycleController(PolicyLifecycleService service, PolicyShadowService shadowService) {
         this.service = service;
+        this.shadowService = shadowService;
     }
 
     @PostMapping
@@ -56,6 +60,19 @@ public class PolicyLifecycleController {
     ) {
         return service.transition(
             principal(authentication), artifactId, artifactVersion, request.targetStage(), request.reasonCode()
+        );
+    }
+
+    @PostMapping("/{artifactId}/versions/{artifactVersion}/shadow-evaluations")
+    @ResponseStatus(HttpStatus.CREATED)
+    PolicyShadowEvidence evaluateShadow(
+        @PathVariable @Size(max = 120) String artifactId,
+        @PathVariable @Size(max = 120) String artifactVersion,
+        @Valid @RequestBody RunPolicyShadowEvaluationRequest request,
+        Authentication authentication
+    ) {
+        return shadowService.evaluate(
+            principal(authentication), artifactId, artifactVersion, request.evaluationCaseId()
         );
     }
 

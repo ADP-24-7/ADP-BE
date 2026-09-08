@@ -141,4 +141,52 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             .update();
         return load(current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion());
     }
+
+    @Override
+    public PolicyLifecycleRecord loadActive(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        PolicyLayer policyLayer,
+        ExecutionPackType executionPack,
+        String workloadId,
+        String purposeCode
+    ) {
+        if (allowedWorkloads == null || allowedWorkloads.isEmpty()
+            || (!allowedWorkloads.contains("*") && !allowedWorkloads.contains(workloadId))) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_BASELINE_NOT_FOUND");
+        }
+        var candidates = jdbcClient.sql("""
+                select artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                       execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                       revision, created_at, updated_at
+                from policy.lifecycle_artifact
+                where institution_id = :institutionId
+                  and execution_pack = :executionPack
+                  and policy_layer = :policyLayer
+                  and workload_id = :workloadId
+                  and purpose_code = :purposeCode
+                  and lifecycle_stage = 'ACTIVE'
+                order by updated_at desc, artifact_id, artifact_version
+                limit 2
+                """)
+            .param("institutionId", institutionId)
+            .param("executionPack", executionPack.name())
+            .param("policyLayer", policyLayer.name())
+            .param("workloadId", workloadId)
+            .param("purposeCode", purposeCode)
+            .query((rs, rowNum) -> new PolicyLifecycleRecord(
+                rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),
+                rs.getString("institution_id"), PolicyLayer.valueOf(rs.getString("policy_layer")),
+                ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
+                rs.getString("purpose_code"), PolicyLifecycleStage.valueOf(rs.getString("lifecycle_stage")),
+                rs.getString("created_by"), rs.getLong("revision"),
+                rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
+            )).list();
+        if (candidates.size() != 1) {
+            throw new PolicyLifecycleException(
+                candidates.isEmpty() ? "POLICY_SHADOW_BASELINE_NOT_FOUND" : "POLICY_SHADOW_BASELINE_AMBIGUOUS"
+            );
+        }
+        return candidates.getFirst();
+    }
 }
