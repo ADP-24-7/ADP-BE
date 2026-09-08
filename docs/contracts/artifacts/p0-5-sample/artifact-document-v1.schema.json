@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "artifact_id", "artifact_version", "status", "payload"],
+  "properties": {
+    "schema_version": { "const": "adp-digital-asset-handoff-document/v1" },
+    "artifact_id": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "artifact_version": { "const": "1.0.0" },
+    "status": { "const": "VALIDATED" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}
