@@ -133,6 +133,10 @@ BE-10 Skeleton 계약은 [BE-10 Policy Lifecycle Skeleton](be-10-policy-lifecycl
 - [x] Raw-free server-defined Transition Reason Code
 - [x] DA Artifact Bundle Loader와 Schema Validation
 - [ ] Replay/Shadow Decision 실행 및 Diff Evidence
+  - [x] Replay-stage Candidate와 단일 ACTIVE baseline의 server-owned Shadow 평가
+  - [x] 동일 Evaluation Case Version/Input Digest 검증과 raw-free typed Diff Evidence
+  - [x] Shadow 경로 Connector/External Action 비호출 및 evaluator 미구성 fail-closed
+  - [ ] Shadow Evidence Gate와 Lifecycle `SHADOW -> APPROVED` 연결
 - [ ] Active Policy Runtime Selection과 Rollback Propagation
 
 ## BE-11 Parallel Tracking

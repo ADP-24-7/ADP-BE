@@ -1,6 +1,7 @@
 package com.adp.gateway.policy.infrastructure;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.Set;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
@@ -100,6 +101,7 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         PolicyLifecycleTransitionReason reason,
         OffsetDateTime occurredAt
     ) {
+        lockScope(current);
         int updated = jdbcClient.sql("""
                 update policy.lifecycle_artifact
                 set lifecycle_stage = :target, revision = revision + 1, updated_at = :occurredAt
@@ -140,5 +142,115 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             .param("occurredAt", occurredAt)
             .update();
         return load(current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion());
+    }
+
+    @Override
+    public PolicyLifecycleRecord loadActive(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        PolicyLayer policyLayer,
+        ExecutionPackType executionPack,
+        String workloadId,
+        String purposeCode
+    ) {
+        if (allowedWorkloads == null || allowedWorkloads.isEmpty()
+            || (!allowedWorkloads.contains("*") && !allowedWorkloads.contains(workloadId))) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_BASELINE_NOT_FOUND");
+        }
+        var candidates = jdbcClient.sql("""
+                select artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                       execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                       revision, created_at, updated_at
+                from policy.lifecycle_artifact
+                where institution_id = :institutionId
+                  and execution_pack = :executionPack
+                  and policy_layer = :policyLayer
+                  and workload_id = :workloadId
+                  and purpose_code = :purposeCode
+                  and lifecycle_stage = 'ACTIVE'
+                order by updated_at desc, artifact_id, artifact_version
+                limit 2
+                """)
+            .param("institutionId", institutionId)
+            .param("executionPack", executionPack.name())
+            .param("policyLayer", policyLayer.name())
+            .param("workloadId", workloadId)
+            .param("purposeCode", purposeCode)
+            .query((rs, rowNum) -> new PolicyLifecycleRecord(
+                rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),
+                rs.getString("institution_id"), PolicyLayer.valueOf(rs.getString("policy_layer")),
+                ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
+                rs.getString("purpose_code"), PolicyLifecycleStage.valueOf(rs.getString("lifecycle_stage")),
+                rs.getString("created_by"), rs.getLong("revision"),
+                rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
+            )).list();
+        if (candidates.size() != 1) {
+            throw new PolicyLifecycleException(
+                candidates.isEmpty() ? "POLICY_SHADOW_BASELINE_NOT_FOUND" : "POLICY_SHADOW_BASELINE_AMBIGUOUS"
+            );
+        }
+        return candidates.getFirst();
+    }
+
+    @Override
+    public void revalidateShadowInputs(
+        PolicyLifecycleRecord expectedCandidate,
+        PolicyLifecycleRecord expectedBaseline,
+        Set<String> allowedWorkloads
+    ) {
+        lockScope(expectedCandidate);
+        try {
+            PolicyLifecycleRecord candidate = load(
+                expectedCandidate.institutionId(), allowedWorkloads,
+                expectedCandidate.artifactId(), expectedCandidate.artifactVersion()
+            );
+            PolicyLifecycleRecord baseline = loadActive(
+                expectedCandidate.institutionId(), allowedWorkloads,
+                expectedCandidate.policyLayer(), expectedCandidate.executionPack(),
+                expectedCandidate.workloadId(), expectedCandidate.purposeCode()
+            );
+            if (!sameCandidate(expectedCandidate, candidate) || !sameBaseline(expectedBaseline, baseline)) {
+                throw new PolicyLifecycleException("POLICY_SHADOW_STALE_EVALUATION");
+            }
+        } catch (PolicyLifecycleException exception) {
+            if ("POLICY_SHADOW_STALE_EVALUATION".equals(exception.reasonCode())) {
+                throw exception;
+            }
+            throw new PolicyLifecycleException("POLICY_SHADOW_STALE_EVALUATION");
+        }
+    }
+
+    private void lockScope(PolicyLifecycleRecord record) {
+        String scope = String.join("|",
+            record.institutionId(), record.policyLayer().name(), record.executionPack().name(),
+            record.workloadId(), record.purposeCode()
+        );
+        jdbcClient.sql("select pg_advisory_xact_lock(hashtextextended(:scope, 0))")
+            .param("scope", scope)
+            .query((rs, rowNum) -> true)
+            .single();
+    }
+
+    private boolean sameCandidate(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return sameIdentityAndScope(expected, actual)
+            && expected.revision() == actual.revision()
+            && actual.lifecycleStage() == PolicyLifecycleStage.REPLAY;
+    }
+
+    private boolean sameBaseline(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return sameIdentityAndScope(expected, actual)
+            && expected.revision() == actual.revision()
+            && actual.lifecycleStage() == PolicyLifecycleStage.ACTIVE;
+    }
+
+    private boolean sameIdentityAndScope(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return Objects.equals(expected.artifactId(), actual.artifactId())
+            && Objects.equals(expected.artifactVersion(), actual.artifactVersion())
+            && Objects.equals(expected.artifactDigest(), actual.artifactDigest())
+            && Objects.equals(expected.institutionId(), actual.institutionId())
+            && expected.policyLayer() == actual.policyLayer()
+            && expected.executionPack() == actual.executionPack()
+            && Objects.equals(expected.workloadId(), actual.workloadId())
+            && Objects.equals(expected.purposeCode(), actual.purposeCode());
     }
 }

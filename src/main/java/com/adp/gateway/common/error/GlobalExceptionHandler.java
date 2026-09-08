@@ -271,9 +271,13 @@ public class GlobalExceptionHandler {
     ) {
         ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
         HttpStatus status = switch (reasonCode) {
-            case POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND,
+                 POLICY_SHADOW_BASELINE_NOT_FOUND,
+                 POLICY_SHADOW_CASE_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case POLICY_LIFECYCLE_ARTIFACT_CONFLICT,
-                 POLICY_LIFECYCLE_CONCURRENT_MODIFICATION -> HttpStatus.CONFLICT;
+                 POLICY_LIFECYCLE_CONCURRENT_MODIFICATION,
+                 POLICY_SHADOW_EVIDENCE_CONFLICT,
+                 POLICY_SHADOW_STALE_EVALUATION -> HttpStatus.CONFLICT;
             case POLICY_LIFECYCLE_FORBIDDEN -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };

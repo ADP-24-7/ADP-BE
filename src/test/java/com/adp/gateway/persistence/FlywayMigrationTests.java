@@ -990,6 +990,28 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v33MigrationAddsAppendOnlyPolicyShadowEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'policy'
+                  and table_name = 'shadow_evaluation_evidence'
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'policy'
+                  and table_name = 'shadow_evaluation_evidence'
+                  and constraint_name in (
+                    'uq_policy_shadow_candidate_case_revision', 'chk_policy_shadow_digests',
+                    'chk_policy_shadow_diff_fields', 'chk_policy_shadow_result',
+                    'chk_policy_shadow_result_consistency'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(columnCount).isEqualTo(20);
+        assertThat(constraintCount).isEqualTo(5);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
