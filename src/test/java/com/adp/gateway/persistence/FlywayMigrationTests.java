@@ -947,6 +947,34 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v31MigrationAddsPrivacySafeDigitalAssetPostExecutionEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'digital_asset_post_execution_evidence'
+                  and column_name in (
+                    'execution_id', 'status', 'external_status', 'provider_status', 'receipt_status',
+                    'finality_status', 'amount_source', 'transaction_detail_digest',
+                    'receipt_finality_digest', 'transfer_evidence_digest', 'internal_trace_evidence_digest',
+                    'exact_amount_digest', 'expected_projection_digest', 'actual_projection_digest',
+                    'mismatch_fields', 'provider_response_digest', 'observed_at'
+                  )
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'runtime'
+                  and table_name = 'digital_asset_post_execution_evidence'
+                  and constraint_name in (
+                    'chk_da_post_execution_status', 'chk_da_post_execution_amount_source',
+                    'chk_da_post_execution_mismatch_array', 'chk_da_post_execution_verified'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(columnCount).isEqualTo(17);
+        assertThat(constraintCount).isEqualTo(4);
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

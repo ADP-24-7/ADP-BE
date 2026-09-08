@@ -57,7 +57,8 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
                 null, null, null);
         }
         stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
-        String externalStatus = "asset-settling".equals(assetSymbol) ? "SETTLING" : "SETTLED";
+        String externalStatus = "asset-settling".equals(assetSymbol) ? "SETTLING"
+            : "asset-provider-sent-unknown".equals(assetSymbol) ? "SENT_UNKNOWN" : "SETTLED";
         Map<String, Object> actual = new TreeMap<>(expected);
         if ("asset-critical-mismatch".equals(assetSymbol)) {
             actual.put("amount", "999999");
@@ -73,7 +74,8 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         response.put("transactionHash", transactionHash);
         response.put("externalStatus", externalStatus);
         response.put("providerStatus", "ACKNOWLEDGED");
-        response.put("receiptStatus", "SETTLED".equals(externalStatus) ? "SUCCESS" : "PENDING");
+        response.put("receiptStatus", "SETTLED".equals(externalStatus) ? "SUCCESS"
+            : "SENT_UNKNOWN".equals(externalStatus) ? "NOT_AVAILABLE" : "PENDING");
         response.put("finalityStatus", "SETTLED".equals(externalStatus) ? "FINALIZED" : "UNCONFIRMED");
         response.put("executedChainId", actual.get("chainId"));
         response.put("executedRecipientAddress", actual.get("recipientAddress"));

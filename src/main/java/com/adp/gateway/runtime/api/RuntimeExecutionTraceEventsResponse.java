@@ -12,13 +12,15 @@ public record RuntimeExecutionTraceEventsResponse(
     List<RuntimeExecutionStageResponse> stages,
     DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
     DigitalAssetPreExecutionGuardResponse digitalAssetPreExecutionGuard,
+    DigitalAssetPostExecutionEvidenceResponse digitalAssetPostExecutionEvidence,
     RuntimeExecutionEvidenceResponse evidence
 ) {
 
     public static RuntimeExecutionTraceEventsResponse from(
         RuntimeExecutionTrace trace,
         com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot,
-        com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult preExecutionGuard
+        com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult preExecutionGuard,
+        com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence postExecutionEvidence
     ) {
         List<RuntimeExecutionStageResponse> stages = new ArrayList<>();
         stages.add(new RuntimeExecutionStageResponse("RECEIVED", "COMPLETED", trace.createdAt()));
@@ -63,6 +65,14 @@ public record RuntimeExecutionTraceEventsResponse(
                 trace.updatedAt()
             ));
         }
+        if (postExecutionEvidence != null) {
+            stages.add(new RuntimeExecutionStageResponse(
+                "POST_EXECUTION_REBINDING",
+                "VERIFIED".equals(postExecutionEvidence.status().name())
+                    ? "COMPLETED" : postExecutionEvidence.status().name(),
+                postExecutionEvidence.observedAt()
+            ));
+        }
         if (trace.controlledDeliveryStatus() != null) {
             stages.add(new RuntimeExecutionStageResponse(
                 "CONTROLLED_DELIVERY",
@@ -80,6 +90,7 @@ public record RuntimeExecutionTraceEventsResponse(
             List.copyOf(stages),
             DigitalAssetRuntimeSnapshotResponse.from(snapshot),
             DigitalAssetPreExecutionGuardResponse.from(preExecutionGuard),
+            DigitalAssetPostExecutionEvidenceResponse.from(postExecutionEvidence),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
     }

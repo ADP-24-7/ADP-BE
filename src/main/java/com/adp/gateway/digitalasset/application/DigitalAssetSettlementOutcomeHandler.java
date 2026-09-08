@@ -1,6 +1,8 @@
 package com.adp.gateway.digitalasset.application;
 
 import java.util.Map;
+import java.time.OffsetDateTime;
+import java.time.Clock;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
@@ -11,6 +13,7 @@ import com.adp.gateway.runtime.application.ExecutionPackOutcome;
 import com.adp.gateway.runtime.application.ExecutionPackOutcomeHandler;
 import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
+import com.adp.gateway.recovery.application.ExternalInteractionRecoveryPersistence;
 import com.adp.gateway.digitalasset.domain.DigitalAssetExternalStatus;
 import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import org.springframework.stereotype.Component;
@@ -20,15 +23,27 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
     private final DigitalAssetTransactionPersistencePort persistence;
     private final DigitalAssetMismatchPersistencePort mismatchPersistence;
     private final DigitalAssetReconciliationEvaluator reconciliationEvaluator;
+    private final DigitalAssetPostExecutionEvidenceService postExecutionEvidenceService;
+    private final DigitalAssetRuntimeSnapshotPersistence snapshotPersistence;
+    private final ExternalInteractionRecoveryPersistence recoveryPersistence;
+    private final Clock clock;
 
     public DigitalAssetSettlementOutcomeHandler(
         DigitalAssetTransactionPersistencePort persistence,
         DigitalAssetMismatchPersistencePort mismatchPersistence,
-        DigitalAssetReconciliationEvaluator reconciliationEvaluator
+        DigitalAssetReconciliationEvaluator reconciliationEvaluator,
+        DigitalAssetPostExecutionEvidenceService postExecutionEvidenceService,
+        DigitalAssetRuntimeSnapshotPersistence snapshotPersistence,
+        ExternalInteractionRecoveryPersistence recoveryPersistence,
+        Clock clock
     ) {
         this.persistence = persistence;
         this.mismatchPersistence = mismatchPersistence;
         this.reconciliationEvaluator = reconciliationEvaluator;
+        this.postExecutionEvidenceService = postExecutionEvidenceService;
+        this.snapshotPersistence = snapshotPersistence;
+        this.recoveryPersistence = recoveryPersistence;
+        this.clock = clock;
     }
 
     @Override
@@ -60,14 +75,26 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
             return outcome(RuntimeExecutionStatus.BLOCKED, connector, "EXTERNAL_EXECUTION_RESULT_INVALID");
         }
         if (!request.providerCorrelationKey().equals(externalResult.externalRequestId())) {
-            mismatchPersistence.open(executionId, reconciliationEvaluator.criticalCorrelationMismatch(
+            var assessment = reconciliationEvaluator.criticalCorrelationMismatch(
                 request.providerCorrelationKey(), externalResult.externalRequestId()
+            );
+            snapshotPersistence.savePostExecutionEvidence(postExecutionEvidenceService.resolve(
+                executionId, externalResult, assessment, OffsetDateTime.now(clock)
             ));
+            mismatchPersistence.open(executionId, assessment);
             return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "EXTERNAL_REQUEST_CORRELATION_MISMATCH");
         }
 
         String settlementStatus = externalResult.externalStatus().name();
         var assessment = reconciliationEvaluator.evaluate(request.payload(), externalResult);
+        var postExecutionEvidence = postExecutionEvidenceService.resolve(
+            executionId, externalResult, assessment, OffsetDateTime.now(clock)
+        );
+        snapshotPersistence.savePostExecutionEvidence(postExecutionEvidence);
+        if (externalResult.externalStatus() == DigitalAssetExternalStatus.SENT_UNKNOWN
+            && connector.status() != ConnectorStatus.SENT_UNKNOWN) {
+            recoveryPersistence.scheduleUnknown(executionId, connector, OffsetDateTime.now(clock));
+        }
         String reconciliation = assessment.result().name();
         persistence.record(executionId, request.providerCorrelationKey(), externalResult.externalReference(),
             externalResult.transactionHash(),
@@ -76,8 +103,7 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
             mismatchPersistence.open(executionId, assessment);
         }
 
-        if (("MATCH".equals(reconciliation) || "RECOVERED".equals(reconciliation))
-            && externalResult.isFinalSuccess()) {
+        if (postExecutionEvidence.permitsCompletion()) {
             return new ExecutionPackOutcome(RuntimeExecutionStatus.COMPLETED,
                 ControlledDeliveryResult.delivered("SETTLED", connector.responseDigest()));
         }
@@ -87,6 +113,10 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
         }
         if (externalResult.externalStatus() == DigitalAssetExternalStatus.FAILED) {
             return outcome(RuntimeExecutionStatus.FAILED, connector, "SETTLEMENT_FAILED");
+        }
+        if (postExecutionEvidence.status()
+            == com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionStatus.REVIEW_REQUIRED) {
+            return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "POST_EXECUTION_EVIDENCE_INCOMPLETE");
         }
         return outcome(RuntimeExecutionStatus.EGRESSING, connector, "SETTLEMENT_PENDING");
     }

@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
@@ -132,6 +133,10 @@ public class DigitalAssetRuntimeSnapshotService {
 
     public Optional<DigitalAssetPreExecutionGuardResult> findPreExecutionGuard(String executionId) {
         return persistence.findPreExecutionGuard(executionId);
+    }
+
+    public Optional<DigitalAssetPostExecutionEvidence> findPostExecutionEvidence(String executionId) {
+        return persistence.findPostExecutionEvidence(executionId);
     }
 
     private void validate(

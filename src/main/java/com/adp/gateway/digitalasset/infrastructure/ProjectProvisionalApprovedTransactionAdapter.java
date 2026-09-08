@@ -38,6 +38,7 @@ public class ProjectProvisionalApprovedTransactionAdapter implements ApprovedTra
         "approved-tx-asset-correlation-mismatch", "asset-correlation-mismatch",
         "approved-tx-asset-unexpected-field", "asset-unexpected-field",
         "approved-tx-asset-sent-unknown", "asset-sent-unknown",
+        "approved-tx-asset-provider-sent-unknown", "asset-provider-sent-unknown",
         "approved-tx-expired", "asset-krw-token-001"
     );
 

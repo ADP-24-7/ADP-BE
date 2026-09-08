@@ -168,6 +168,22 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(preExecutionGuardCount).isEqualTo(1);
+        Integer postExecutionEvidenceCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId
+                  and status = 'VERIFIED'
+                  and external_status = 'SETTLED'
+                  and receipt_status = 'SUCCESS'
+                  and finality_status = 'FINALIZED'
+                  and amount_source = 'TOKEN_TRANSFER'
+                  and mismatch_fields = '[]'::jsonb
+                  and transaction_detail_digest ~ '^[0-9a-f]{64}$'
+                  and receipt_finality_digest ~ '^[0-9a-f]{64}$'
+                  and transfer_evidence_digest ~ '^[0-9a-f]{64}$'
+                  and exact_amount_digest ~ '^[0-9a-f]{64}$'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(postExecutionEvidenceCount).isEqualTo(1);
         assertThat(terminalTransitions("COMPLETED")).isEqualTo(completedBefore + 1);
 
         mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
@@ -182,6 +198,10 @@ class DigitalAssetThinE2ETests {
             .andExpect(jsonPath("$.digitalAssetPreExecutionGuard.status").value("PASSED"))
             .andExpect(jsonPath("$.digitalAssetPreExecutionGuard.controlResults.length()").value(6))
             .andExpect(jsonPath("$.stages[?(@.stage == 'PRE_EXECUTION_GUARD')].status").value("COMPLETED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.status").value("VERIFIED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.amountSource").value("TOKEN_TRANSFER"))
+            .andExpect(jsonPath("$.stages[?(@.stage == 'POST_EXECUTION_REBINDING')].status")
+                .value("COMPLETED"))
             .andExpect(jsonPath("$.evidence.destinationProfileId").value("dest_mock_asset_platform_v1"))
             .andExpect(jsonPath("$.stages[?(@.stage == 'CONNECTOR')].status").value("COMPLETED"));
 
@@ -409,6 +429,32 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(String.class).single();
         assertThat(recoveredSnapshotDigest).isEqualTo(pinnedSnapshotDigest);
+    }
+
+    @Test
+    void schedulesRecoveryWhenProviderPayloadReportsTypedSentUnknown() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-provider-sent-unknown")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("EGRESSING"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        Integer evidenceCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId and status = 'SENT_UNKNOWN'
+                  and external_status = 'SENT_UNKNOWN'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        Integer recoveryCount = jdbcClient.sql("""
+                select count(*) from runtime.external_interaction_recovery
+                where execution_id = :executionId and observed_status = 'SENT_UNKNOWN'
+                  and recovery_status = 'PENDING' and retry_disposition = 'RECONCILE_FIRST'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+
+        assertThat(evidenceCount).isEqualTo(1);
+        assertThat(recoveryCount).isEqualTo(1);
     }
 
     private org.springframework.test.web.servlet.ResultActions assetRequest(

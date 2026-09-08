@@ -98,7 +98,9 @@ Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적
 - [x] NCP-5 BE NCP ContentStore Adapter와 fail-closed storage boundary
 - [x] NCP-5 실제 QA Object Storage ingest E2E 증적
 - [x] DA-P0-7 PRE_EXECUTION 6 Runtime Controls와 Connector 직전 TOCTOU 재검증
-- [ ] DA-P0-8 External Adapter/Recovery 재연결
+- [x] DA-P0-8 Transaction/Receipt/Finality/Transfer Resolver와 POST_EXECUTION Evidence
+- [x] DA-P0-8 Approved/Requested/Executed digest re-binding과 Runtime Trace 노출
+- [x] DA-P0-8 typed Provider `SENT_UNKNOWN` 및 외부 성공 후 Local 실패 Recovery 연결
 
 DA-P0-2의 Active Runtime 계약과 fail-closed 증적은
 [DA-P0-2 Approved Transaction Trust Boundary](da-p0-2-approved-transaction-boundary.md)에서 관리한다.
@@ -115,7 +117,8 @@ P0-7의 Approved/Requested 재검증, exact/transform 분리, destination payloa
 NCP-5의 server-owned Object Storage 설정, content-addressed reference와 실제 ingest 절차는
 [NCP-5 BE ContentStore](ncp-5-be-content-store.md)에서 관리한다.
 `regulatoryOutboundData`는 source/allowlist/provider mapping이 별도로 고정될 때까지 empty-only를 유지한다.
-typed Provider `SENT_UNKNOWN` recovery 연결은 P0-8에서 완료한다.
+typed Provider `SENT_UNKNOWN` recovery 연결은 P0-8에서 완료했다. 실제 Provider별 Status Query/Resolver Adapter는
+Provider 연동 시 동일 Port 계약으로 추가한다.
 
 ## BE-10 Parallel Tracking
 

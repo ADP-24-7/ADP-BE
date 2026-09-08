@@ -1,5 +1,6 @@
 package com.adp.gateway.digitalasset.infrastructure;
 
+import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,13 @@ import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotPersi
 import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetExternalStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetProviderStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetReceiptStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetFinalityStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetMismatchField;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -229,5 +237,75 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Digital Asset pre-execution evidence could not be read", exception);
         }
+    }
+
+    @Override
+    public void savePostExecutionEvidence(DigitalAssetPostExecutionEvidence value) {
+        jdbcClient.sql("""
+                insert into runtime.digital_asset_post_execution_evidence (
+                    execution_id, status, external_status, provider_status, receipt_status, finality_status,
+                    amount_source, transaction_detail_digest, receipt_finality_digest, transfer_evidence_digest,
+                    internal_trace_evidence_digest, exact_amount_digest, expected_projection_digest,
+                    actual_projection_digest, mismatch_fields, provider_response_digest, observed_at
+                ) values (
+                    :executionId, :status, :externalStatus, :providerStatus, :receiptStatus, :finalityStatus,
+                    :amountSource, :transactionDigest, :receiptDigest, :transferDigest, :traceDigest,
+                    :amountDigest, :expectedDigest, :actualDigest, cast(:mismatchFields as jsonb),
+                    :responseDigest, :observedAt
+                )
+                on conflict (execution_id) do update set
+                    status = excluded.status,
+                    external_status = excluded.external_status,
+                    provider_status = excluded.provider_status,
+                    receipt_status = excluded.receipt_status,
+                    finality_status = excluded.finality_status,
+                    amount_source = excluded.amount_source,
+                    transaction_detail_digest = excluded.transaction_detail_digest,
+                    receipt_finality_digest = excluded.receipt_finality_digest,
+                    transfer_evidence_digest = excluded.transfer_evidence_digest,
+                    internal_trace_evidence_digest = excluded.internal_trace_evidence_digest,
+                    exact_amount_digest = excluded.exact_amount_digest,
+                    expected_projection_digest = excluded.expected_projection_digest,
+                    actual_projection_digest = excluded.actual_projection_digest,
+                    mismatch_fields = excluded.mismatch_fields,
+                    provider_response_digest = excluded.provider_response_digest,
+                    observed_at = excluded.observed_at
+                """)
+            .param("executionId", value.executionId()).param("status", value.status().name())
+            .param("externalStatus", value.externalStatus().name()).param("providerStatus", value.providerStatus().name())
+            .param("receiptStatus", value.receiptStatus().name()).param("finalityStatus", value.finalityStatus().name())
+            .param("amountSource", value.amountSource()).param("transactionDigest", value.transactionDetailDigest())
+            .param("receiptDigest", value.receiptFinalityDigest()).param("transferDigest", value.transferEvidenceDigest())
+            .param("traceDigest", value.internalTraceEvidenceDigest(), Types.VARCHAR)
+            .param("amountDigest", value.exactAmountDigest()).param("expectedDigest", value.expectedProjectionDigest())
+            .param("actualDigest", value.actualProjectionDigest()).param("mismatchFields", toJson(value.mismatchedFields()))
+            .param("responseDigest", value.providerResponseDigest()).param("observedAt", value.observedAt())
+            .update();
+    }
+
+    @Override
+    public Optional<DigitalAssetPostExecutionEvidence> findPostExecutionEvidence(String executionId) {
+        return jdbcClient.sql("""
+                select execution_id, status, external_status, provider_status, receipt_status, finality_status,
+                       amount_source, transaction_detail_digest, receipt_finality_digest, transfer_evidence_digest,
+                       internal_trace_evidence_digest, exact_amount_digest, expected_projection_digest,
+                       actual_projection_digest, mismatch_fields::text as mismatch_fields,
+                       provider_response_digest, observed_at
+                from runtime.digital_asset_post_execution_evidence where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query((rs, rowNum) -> new DigitalAssetPostExecutionEvidence(
+                rs.getString("execution_id"), DigitalAssetPostExecutionStatus.valueOf(rs.getString("status")),
+                DigitalAssetExternalStatus.valueOf(rs.getString("external_status")),
+                DigitalAssetProviderStatus.valueOf(rs.getString("provider_status")),
+                DigitalAssetReceiptStatus.valueOf(rs.getString("receipt_status")),
+                DigitalAssetFinalityStatus.valueOf(rs.getString("finality_status")), rs.getString("amount_source"),
+                rs.getString("transaction_detail_digest"), rs.getString("receipt_finality_digest"),
+                rs.getString("transfer_evidence_digest"), rs.getString("internal_trace_evidence_digest"),
+                rs.getString("exact_amount_digest"), rs.getString("expected_projection_digest"),
+                rs.getString("actual_projection_digest"),
+                fromJson(rs.getString("mismatch_fields"), new TypeReference<List<DigitalAssetMismatchField>>() {}),
+                rs.getString("provider_response_digest"), rs.getObject("observed_at", OffsetDateTime.class)
+            )).optional();
     }
 }

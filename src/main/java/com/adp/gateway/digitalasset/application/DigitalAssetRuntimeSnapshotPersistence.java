@@ -5,6 +5,7 @@ import java.util.Optional;
 import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence;
 
 public interface DigitalAssetRuntimeSnapshotPersistence {
     void lockActiveScope(String institutionId, String workloadId);
@@ -23,4 +24,8 @@ public interface DigitalAssetRuntimeSnapshotPersistence {
     void savePreExecutionGuard(DigitalAssetPreExecutionGuardResult result);
 
     Optional<DigitalAssetPreExecutionGuardResult> findPreExecutionGuard(String executionId);
+
+    void savePostExecutionEvidence(DigitalAssetPostExecutionEvidence evidence);
+
+    Optional<DigitalAssetPostExecutionEvidence> findPostExecutionEvidence(String executionId);
 }
