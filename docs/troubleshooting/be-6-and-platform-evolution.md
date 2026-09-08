@@ -95,6 +95,18 @@ BE-6부터 Security Baseline까지의 기능 커밋과 리뷰 후속 `fix` 커�
 - 해결: 모든 조회와 transition에 institution/workload scope를 적용하고 transition evidence FK도 tenant 복합 identity로 고정했다.
 - 교훈: 관리자 기능도 인증만으로 안전하지 않다. Governance object identity 자체에 tenant namespace가 포함되어야 한다.
 
+## Policy Lifecycle의 stale write와 부분 Evidence
+
+- 관련 커밋: `08fbdc5`, `6993758`, main `f7286aa`
+- 현상: 두 관리자가 같은 revision을 읽고 동시에 전이하면 둘 다 성공하거나 current state만 바뀌고 transition history 저장이
+  실패할 수 있었다.
+- 해결: `expectedRevision` 기반 optimistic update로 stale writer를 `CONCURRENT_MODIFICATION`으로 거부하고, current stage
+  갱신과 append-only transition event insert를 하나의 transaction으로 묶었다. APPROVED/ACTIVE는 Maker-Checker도 함께
+  강제한다.
+- 후속 경계: history의 DB user 권한 수준 immutable 보장과 scope당 single ACTIVE는 각각 운영 hardening과 실제 Runtime
+  selection 단계에서 다룬다.
+- 교훈: 상태 머신의 유효 전이 검사만으로는 충분하지 않다. 동시성 arbiter와 state/evidence 원자성이 함께 있어야 한다.
+
 ## Default-deny Security Matcher
 
 - 관련 커밋: `403636b`, `d2cea8f`

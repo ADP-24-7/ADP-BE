@@ -40,6 +40,26 @@ fresh CI에서는 통과하지만 과거 Connector status row가 있는 DB에서
 DB에 존재하는 row만 묶어 Export해 등록된 Case × Model 완전성을 증명하지 못했다. 서버 Run Catalog의 기대 Cartesian
 Product와 최신 Evidence를 비교하고 불완전 Bundle을 명시적으로 거부하도록 바꿨다.
 
+## 9. 승인 존재만으로 Digital Asset 외부 호출이 가능했던 문제
+
+Approval Scope와 Approved Transaction을 같은 승인으로 취급하면 유효한 reference의 존재만으로 asset/amount/destination
+조건을 우회할 수 있었다. Server-owned 승인 원장을 scope-aware하게 조회하고 승인 조건 전체를 요청과 비교했다.
+
+## 10. NCP Object 이름과 실제 bytes가 분리됐던 문제
+
+파일명이 SHA-256 형식이어도 실제 다운로드 bytes가 그 digest와 같다는 보장은 없었다. JSON 검증 전에 raw bytes digest와
+object key의 content address를 비교해 원격 저장소 경계에서 변조를 차단했다.
+
+## 11. 최신 3-Model 평가가 과거 실행으로 대체될 수 있던 문제
+
+Readiness가 READY여도 Bundle이 방금 요청한 execution이 아닌 과거 COMPLETE row를 선택할 수 있었다. Runtime 응답,
+Readiness, Bundle의 execution ID 집합을 끝까지 비교해 이번 실행의 provenance를 보장했다.
+
+## 12. KEEP 결과 digest를 원본 digest와 직접 비교한 문제
+
+Transform 결과 digest와 Canonical source digest는 계산 목적이 달라 정상 exact field도 불일치한다. Source digest와
+Transform lineage, output digest와 Candidate digest를 단계별로 비교하고 실제 값/strategy도 함께 검증했다.
+
 ## 발표 시 강조할 공통 원칙
 
 - Fail closed는 예외를 던지는 것뿐 아니라 부수효과 순서, DB scope, 복구 상태까지 포함한다.

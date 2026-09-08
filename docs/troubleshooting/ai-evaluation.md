@@ -63,3 +63,14 @@ AI-EVAL-0부터 AI-EVAL-3까지의 기능·리뷰 수정 커밋 `c156ff6`~현재
 - 해결: Bundle 전용 canonicalizer에서 key ordering, null 포함, ISO-8601 date-time, UTF-8 compact JSON을 고정했다.
   `failure_summary`를 포함한 manifest 제외 payload 전체를 digest한다.
 - 교훈: 재현 가능한 Artifact digest는 일반 API serialization의 부산물이 아니라 독립된 versioned 알고리즘이어야 한다.
+
+## 과거 COMPLETE Evidence가 새 3-Model 실행을 대신하던 문제
+
+- 관련 커밋: `cfd3c66`, `4ebb5a4`, main `b9bfb71`
+- 문제: Run Readiness가 `READY`여도 방금 요청한 세 모델이 아니라 DB에 남아 있던 과거 COMPLETE 실행이 Bundle의 최신
+  Case x Model 결과로 선택될 수 있었다.
+- 해결: Harness가 Runtime 응답에서 받은 `profile_id -> execution_id` 집합을 Readiness와 Bundle의 Case Result,
+  Runtime Metric, Trace Index execution ID 집합과 모두 비교한다. 하나라도 다르면 export 성공으로 인정하지 않는다.
+- 추가 조치: producer commit, 현재 source HEAD와 worktree 상태를 구분하고 실제 Provider 호출에는 명시적인 확인 변수를
+  요구한다.
+- 교훈: E2E 완료는 endpoint가 200을 반환했다는 의미가 아니라 이번 실행의 identity가 최종 Artifact까지 보존됐다는 뜻이다.
