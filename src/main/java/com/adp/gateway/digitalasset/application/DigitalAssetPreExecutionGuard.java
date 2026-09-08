@@ -4,9 +4,9 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -33,6 +33,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetPreExecutionGuard {
+    private static final Set<String> PROVIDER_PAYLOAD_FIELDS = Set.of(
+        "externalRequestId", "schemaVersion", "transaction"
+    );
     private static final Map<String, String> PROVIDER_FIELDS = Map.ofEntries(
         Map.entry("$.input.customerId", "customerToken"),
         Map.entry("$.input.accountId", "accountToken"),
@@ -117,9 +120,11 @@ public class DigitalAssetPreExecutionGuard {
         record(controls, reasons, DigitalAssetArtifactControl.TRANSFORM_FIELD_SEPARATION,
             separationReasons, "BLOCKED");
 
-        List<ReasonCode> mappingReasons = destinationPayloadReasons(pinnedDestination, outbound, providerRequest);
+        DestinationPayloadAssessment destinationAssessment = destinationPayloadAssessment(
+            pinnedDestination, outbound, providerRequest
+        );
         record(controls, reasons, DigitalAssetArtifactControl.DESTINATION_SPECIFIC_PAYLOAD,
-            mappingReasons, "REVIEW_REQUIRED");
+            destinationAssessment.reasons(), destinationAssessment.failureStatus());
 
         List<ReasonCode> traceReasons = traceBindingReasons(
             executionId, requestScope, pinnedDestination, currentDestination, pinnedPolicy, currentPolicy,
@@ -204,28 +209,34 @@ public class DigitalAssetPreExecutionGuard {
         return invalid ? List.of(ReasonCode.DIGITAL_ASSET_TRANSFORM_NOT_ALLOWED) : List.of();
     }
 
-    private List<ReasonCode> destinationPayloadReasons(
+    private DestinationPayloadAssessment destinationPayloadAssessment(
         DestinationProfile destination,
         OutboundCandidatePayload outbound,
         ProviderRequestPayload providerRequest
     ) {
-        Set<String> expected = new HashSet<>();
+        Map<String, Object> expected = new HashMap<>();
         for (OutboundCandidateField field : outbound.fields()) {
             String providerField = PROVIDER_FIELDS.get(field.path());
-            if (providerField == null) {
-                return List.of(ReasonCode.DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED);
+            if (providerField == null || expected.containsKey(providerField)) {
+                return DestinationPayloadAssessment.mappingUnresolved();
             }
-            expected.add(providerField);
+            expected.put(providerField, field.value());
         }
         Object transactionValue = providerRequest.payload().get("transaction");
         if (!(transactionValue instanceof Map<?, ?> transaction)
-            || !transaction.keySet().equals(expected)
+            || !providerRequest.payload().keySet().equals(PROVIDER_PAYLOAD_FIELDS)
+            || !transaction.keySet().equals(expected.keySet())
             || !destination.providerProfileId().equals(providerRequest.providerProfileId())
             || !destination.schemaVersion().equals(providerRequest.schemaVersion())
             || providerRequest.fieldCount() != expected.size()) {
-            return List.of(ReasonCode.DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED);
+            return DestinationPayloadAssessment.mappingUnresolved();
         }
-        return List.of();
+        boolean valueMismatch = expected.entrySet().stream()
+            .anyMatch(entry -> !Objects.equals(entry.getValue(), transaction.get(entry.getKey())));
+        if (valueMismatch) {
+            return DestinationPayloadAssessment.payloadMismatch();
+        }
+        return DestinationPayloadAssessment.passed();
     }
 
     private List<ReasonCode> traceBindingReasons(
@@ -280,5 +291,23 @@ public class DigitalAssetPreExecutionGuard {
     ) {
         controls.put(control, controlReasons.isEmpty() ? "PASSED" : failureStatus);
         allReasons.addAll(controlReasons);
+    }
+
+    private record DestinationPayloadAssessment(List<ReasonCode> reasons, String failureStatus) {
+        private static DestinationPayloadAssessment passed() {
+            return new DestinationPayloadAssessment(List.of(), "PASSED");
+        }
+
+        private static DestinationPayloadAssessment mappingUnresolved() {
+            return new DestinationPayloadAssessment(
+                List.of(ReasonCode.DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED), "REVIEW_REQUIRED"
+            );
+        }
+
+        private static DestinationPayloadAssessment payloadMismatch() {
+            return new DestinationPayloadAssessment(
+                List.of(ReasonCode.DIGITAL_ASSET_CONTRACT_GAP), "BLOCKED"
+            );
+        }
     }
 }

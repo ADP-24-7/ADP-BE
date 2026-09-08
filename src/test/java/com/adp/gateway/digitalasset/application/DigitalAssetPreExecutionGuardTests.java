@@ -1,6 +1,7 @@
 package com.adp.gateway.digitalasset.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactControl;
 import com.adp.gateway.digitalasset.domain.DigitalAssetDescriptor;
 import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
 import com.adp.gateway.digitalasset.domain.DigitalAssetOperation;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.DestinationFieldContract;
@@ -78,7 +80,7 @@ class DigitalAssetPreExecutionGuardTests {
         invalid.removeIf(field -> field.path().endsWith("requestedAmount"));
         invalid.add(exact("$.input.outboundRequest.requestedAmount", "9999", "digest-modified"));
         DestinationProfile withMissingRequired = withContract(destination(), new DestinationFieldContract(
-            "input.outboundRequest.requestedDestination", DataClass.TRANSACTION_IDENTIFIER,
+            "input.outboundRequest.requestedAsset.chainId", DataClass.TRANSACTION_IDENTIFIER,
             FieldObligation.REQUIRED_EXACT, true, true
         ));
 
@@ -123,6 +125,61 @@ class DigitalAssetPreExecutionGuardTests {
     }
 
     @Test
+    void blocksProviderAmountThatDiffersFromOutboundCandidate() {
+        var result = evaluate(
+            destination(), destination(), outbound(fields()), provider(fields(), Map.of("amount", "9999"))
+        ).orElseThrow();
+
+        assertDestinationPayloadMismatch(result);
+    }
+
+    @Test
+    void blocksProviderRecipientThatDiffersFromOutboundCandidate() {
+        var result = evaluate(
+            destination(), destination(), outbound(fields()),
+            provider(fields(), Map.of("recipientAddress", "wallet-modified"))
+        ).orElseThrow();
+
+        assertDestinationPayloadMismatch(result);
+    }
+
+    @Test
+    void blocksProviderTokenThatDiffersFromTransformedOutboundCandidate() {
+        var result = evaluate(
+            destination(), destination(), outbound(fields()),
+            provider(fields(), Map.of("customerToken", "customer-token-modified"))
+        ).orElseThrow();
+
+        assertDestinationPayloadMismatch(result);
+    }
+
+    @Test
+    void routesUnexpectedProviderPayloadFieldToReview() {
+        ProviderRequestPayload valid = provider(fields());
+        Map<String, Object> payload = new HashMap<>(valid.payload());
+        payload.put("unregisteredMetadata", "value");
+        ProviderRequestPayload invalid = new ProviderRequestPayload(
+            valid.providerRequestId(), valid.outboundPayloadId(), valid.providerProfileId(), valid.schemaVersion(),
+            valid.canonicalPayloadDigest(), valid.fieldCount(), payload
+        );
+
+        var result = evaluate(destination(), destination(), outbound(fields()), invalid).orElseThrow();
+
+        assertThat(result.status()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(result.reasonCodes()).contains(ReasonCode.DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED);
+    }
+
+    @Test
+    void rejectsGuardEvidenceWhenAnyRequiredControlIsMissing() {
+        assertThatThrownBy(() -> new DigitalAssetPreExecutionGuardResult(
+            "exec-1", "snapshot-1", "PASSED",
+            Map.of(DigitalAssetArtifactControl.TRACE_BINDING, "PASSED"), List.of(),
+            "outbound-digest", "provider-digest", NOW
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("DIGITAL_ASSET_PRE_EXECUTION_CONTROLS_INCOMPLETE");
+    }
+
+    @Test
     void blocksChangedApprovalAndToctouSnapshotBeforeConnector() {
         when(approvedResolver.resolve(any())).thenReturn(approved("9000"));
         when(snapshotService.isPinnedCurrent(any(), any(), any())).thenReturn(false);
@@ -137,7 +194,7 @@ class DigitalAssetPreExecutionGuardTests {
         );
     }
 
-    private Optional<com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult> evaluate(
+    private Optional<DigitalAssetPreExecutionGuardResult> evaluate(
         DestinationProfile pinnedDestination,
         DestinationProfile currentDestination,
         OutboundCandidatePayload outbound,
@@ -156,7 +213,7 @@ class DigitalAssetPreExecutionGuardTests {
         List<TransformFieldResult> fields = outbound.fields().stream().map(field -> new TransformFieldResult(
             field.path(), "request", field.path(), field.dataClass(), field.strategy(), "strategy-v1", "key-v1",
             "mapping-v1", "instruction-digest",
-            field.path().endsWith("requestedAmount") ? "digest-amount" : "digest-customer",
+            sourceDigest(field.path()),
             field.valueDigest(), field.strategy() == TransformStrategy.VAULT_TOKEN ? String.valueOf(field.value()) : null,
             field.value()
         )).toList();
@@ -166,13 +223,19 @@ class DigitalAssetPreExecutionGuardTests {
     private List<OutboundCandidateField> fields() {
         return List.of(
             transformed("$.input.customerId", DataClass.CUSTOMER_IDENTIFIER, "customer-token"),
-            exact("$.input.outboundRequest.requestedAmount", "10000", "digest-amount")
+            exact("$.input.outboundRequest.requestedAmount", DataClass.FINANCIAL_AMOUNT, "10000", "digest-amount"),
+            exact("$.input.outboundRequest.requestedDestination", DataClass.TRANSACTION_IDENTIFIER,
+                "wallet", "digest-recipient")
         );
     }
 
     private OutboundCandidateField exact(String path, Object value, String digest) {
+        return exact(path, DataClass.FINANCIAL_AMOUNT, value, digest);
+    }
+
+    private OutboundCandidateField exact(String path, DataClass dataClass, Object value, String digest) {
         return new OutboundCandidateField(
-            path, DataClass.FINANCIAL_AMOUNT, TransformStrategy.KEEP, FieldObligation.REQUIRED_EXACT,
+            path, dataClass, TransformStrategy.KEEP, FieldObligation.REQUIRED_EXACT,
             FieldTreatment.KEEP_EXACT_PROTECTED, digest, List.of(), value
         );
     }
@@ -193,12 +256,24 @@ class DigitalAssetPreExecutionGuardTests {
 
     private ProviderRequestPayload provider(List<OutboundCandidateField> fields) {
         Map<String, Object> transaction = new HashMap<>();
-        fields.forEach(field -> transaction.put(
-            field.path().endsWith("customerId") ? "customerToken" : "amount", field.value()
-        ));
+        fields.forEach(field -> transaction.put(providerField(field.path()), field.value()));
         return new ProviderRequestPayload(
             "provider-1", "out-1", "provider", "schema", "provider-digest", transaction.size(),
             Map.of("externalRequestId", "provider-1", "schemaVersion", "schema", "transaction", transaction)
+        );
+    }
+
+    private ProviderRequestPayload provider(List<OutboundCandidateField> fields, Map<String, Object> overrides) {
+        ProviderRequestPayload valid = provider(fields);
+        Map<String, Object> transaction = new HashMap<>();
+        ((Map<?, ?>) valid.payload().get("transaction"))
+            .forEach((key, value) -> transaction.put(String.valueOf(key), value));
+        transaction.putAll(overrides);
+        return new ProviderRequestPayload(
+            valid.providerRequestId(), valid.outboundPayloadId(), valid.providerProfileId(), valid.schemaVersion(),
+            "provider-digest-modified", transaction.size(),
+            Map.of("externalRequestId", valid.providerRequestId(), "schemaVersion", valid.schemaVersion(),
+                "transaction", transaction)
         );
     }
 
@@ -211,7 +286,9 @@ class DigitalAssetPreExecutionGuardTests {
                 new DestinationFieldContract("input.customerId", DataClass.CUSTOMER_IDENTIFIER,
                     FieldObligation.PSEUDONYMIZABLE, true, false),
                 new DestinationFieldContract("input.outboundRequest.requestedAmount", DataClass.FINANCIAL_AMOUNT,
-                    FieldObligation.REQUIRED_EXACT, true, true)
+                    FieldObligation.REQUIRED_EXACT, true, true),
+                new DestinationFieldContract("input.outboundRequest.requestedDestination",
+                    DataClass.TRANSACTION_IDENTIFIER, FieldObligation.REQUIRED_EXACT, true, true)
             )
         );
     }
@@ -234,7 +311,9 @@ class DigitalAssetPreExecutionGuardTests {
                 new CanonicalContextField("$.input.customerId", "request", "customerId",
                     DataClass.CUSTOMER_IDENTIFIER, "customer", "digest-customer"),
                 new CanonicalContextField("$.input.outboundRequest.requestedAmount", "request", "requestedAmount",
-                    DataClass.FINANCIAL_AMOUNT, "10000", "digest-amount")
+                    DataClass.FINANCIAL_AMOUNT, "10000", "digest-amount"),
+                new CanonicalContextField("$.input.outboundRequest.requestedDestination", "request",
+                    "requestedDestination", DataClass.TRANSACTION_IDENTIFIER, "wallet", "digest-recipient")
             ), Map.of("approvedTransactionDigest", "a".repeat(64)), "context-digest"
         );
     }
@@ -282,5 +361,35 @@ class DigitalAssetPreExecutionGuardTests {
             "eip155:1", DigitalAssetKind.FUNGIBLE_TOKEN, "ASSET",
             "0x0000000000000000000000000000000000000001", DigitalAssetOperation.TRANSFER, null
         );
+    }
+
+    private String sourceDigest(String path) {
+        if (path.endsWith("requestedAmount")) {
+            return "digest-amount";
+        }
+        if (path.endsWith("requestedDestination")) {
+            return "digest-recipient";
+        }
+        return "digest-customer";
+    }
+
+    private String providerField(String path) {
+        if (path.endsWith("customerId")) {
+            return "customerToken";
+        }
+        if (path.endsWith("requestedAmount")) {
+            return "amount";
+        }
+        if (path.endsWith("requestedDestination")) {
+            return "recipientAddress";
+        }
+        throw new IllegalArgumentException("Unexpected test field: " + path);
+    }
+
+    private void assertDestinationPayloadMismatch(DigitalAssetPreExecutionGuardResult result) {
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.controlResults().get(DigitalAssetArtifactControl.DESTINATION_SPECIFIC_PAYLOAD))
+            .isEqualTo("BLOCKED");
+        assertThat(result.reasonCodes()).contains(ReasonCode.DIGITAL_ASSET_CONTRACT_GAP);
     }
 }

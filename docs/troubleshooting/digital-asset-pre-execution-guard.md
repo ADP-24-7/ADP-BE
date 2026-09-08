@@ -35,6 +35,16 @@ Destination-specific payload 검증에는 실제 mapper가 만든 field key와 s
 Request를 생성하고 Evidence로 저장한 뒤 Guard를 평가하되, Guard PASS 전에는 Connector를 호출하지 않는다. 생성은 전송이
 아니며, BLOCK/REVIEW 결과에서도 어떤 payload digest가 거부됐는지 남길 수 있다.
 
+## Provider key만 비교하면 값 변조를 탐지할 수 없다
+
+초기 Destination Control은 transaction의 key set과 field count, schema/profile만 비교했다. 이 구조에서는 Mapper가
+`amount=10000`을 `9999`로 바꾸거나 변환 토큰과 목적지를 다른 값으로 바꿔도 동일한 key를 유지하면 PASS할 수 있었다.
+
+수정 후에는 등록된 Outbound path를 Provider field로 변환한 기대 Map을 만들고, 각 Provider 값이
+`OutboundCandidateField.value`와 같은지 Connector 직전에 비교한다. 알 수 없는 path, 누락/추가 key, schema/profile
+불일치는 계약을 해석할 수 없으므로 `REVIEW_REQUIRED`로 보내고, 해석 가능한 필드의 값 불일치는 전송 무결성 위반인
+`DIGITAL_ASSET_CONTRACT_GAP`으로 기록해 `BLOCKED` 처리한다. Provider payload 최상위 key도 등록된 세 필드만 허용한다.
+
 ## Evidence에 원문을 저장하지 않는 이유
 
 운영 분석에는 Control 상태, reason code, snapshot ID, 두 payload digest만 필요하다. 승인 거래나 지갑 주소 등 원문을

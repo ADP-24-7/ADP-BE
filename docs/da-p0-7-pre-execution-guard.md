@@ -27,7 +27,7 @@ Approved Transaction + Outbound Request
 | `REQUIRED_OUTBOUND_FIELD_PRESENCE` | Destination Profile의 required field 존재 | `BLOCKED` |
 | `REQUIRED_EXACT_PRESERVATION` | Context source digest, Transform lineage, Candidate value의 exact 보존 | `BLOCKED` |
 | `TRANSFORM_FIELD_SEPARATION` | exact field는 `KEEP`, pseudonymizable field는 Transform set으로 분리 | `BLOCKED` |
-| `DESTINATION_SPECIFIC_PAYLOAD` | 등록된 provider field/schema/profile만 사용 | `REVIEW_REQUIRED` |
+| `DESTINATION_SPECIFIC_PAYLOAD` | 등록된 provider field/schema/profile 및 Candidate 대비 값 보존 | 매핑 불명확 `REVIEW_REQUIRED`, 값 불일치 `BLOCKED` |
 | `TRACE_BINDING` | execution, snapshot, policy, destination, outbound, provider request identity 연결 | `BLOCKED` |
 
 `regulatoryOutboundData`는 source/allowlist/provider mapping이 고정되기 전까지 empty-only다.
@@ -60,6 +60,7 @@ ACTIVE Artifact 교체 또는 Policy/Destination 변경이 탐지되면 Connecto
 
 - 6개 Control PASS와 Evidence 저장 단위 테스트
 - 승인 조건 변경, required 누락, exact 변형, transform set 혼입, destination mapping 누락 테스트
+- 금액, 목적지, 변환 토큰의 Candidate -> Provider 값 변조 및 Provider 최상위 미등록 필드 테스트
 - ACTIVE Artifact 교체 TOCTOU 테스트
 - 정상 Digital Asset E2E에서 6개 PASS 및 Connector 실행 검증
 - V30 table/column migration 검증
