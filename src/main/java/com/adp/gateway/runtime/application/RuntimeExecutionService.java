@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
@@ -27,6 +28,9 @@ import com.adp.gateway.context.application.ExecutionPackRequestScope;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
+import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotException;
+import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotService;
+import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.application.ExecutionPackPolicyGateResolver;
 import com.adp.gateway.decision.domain.FinalAction;
@@ -102,6 +106,7 @@ public class RuntimeExecutionService {
     private final GatewayObservability observability;
     private final AiEvaluationRunCatalog evaluationRuns;
     private final AiEvaluationEvidenceRecorder evaluationEvidenceRecorder;
+    private final DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -132,7 +137,8 @@ public class RuntimeExecutionService {
         Clock clock,
         GatewayObservability observability,
         AiEvaluationRunCatalog evaluationRuns,
-        AiEvaluationEvidenceRecorder evaluationEvidenceRecorder
+        AiEvaluationEvidenceRecorder evaluationEvidenceRecorder,
+        DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -163,6 +169,7 @@ public class RuntimeExecutionService {
         this.observability = observability;
         this.evaluationRuns = evaluationRuns;
         this.evaluationEvidenceRecorder = evaluationEvidenceRecorder;
+        this.digitalAssetRuntimeSnapshotService = digitalAssetRuntimeSnapshotService;
     }
 
     public RuntimeExecutionResult execute(
@@ -294,6 +301,16 @@ public class RuntimeExecutionService {
                 runtimePolicyContext.processingContexts(),
                 runtimePolicyContext.runtimeDataClasses()
             ));
+            Optional<DigitalAssetRuntimeSnapshot> digitalAssetSnapshot =
+                digitalAssetRuntimeSnapshotService.pinIfRequired(
+                    executionId,
+                    institutionId,
+                    requestContext.workloadId(),
+                    requestContext.purpose(),
+                    destinationProfile,
+                    snapshot,
+                    now
+                );
             persistence.recordPolicyEvaluation(executionId, snapshot);
 
             ApplicabilityResult applicability = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
@@ -452,6 +469,9 @@ public class RuntimeExecutionService {
                 );
             }
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
+            digitalAssetRuntimeSnapshotService.verifyPinned(
+                digitalAssetSnapshot, destinationProfile, snapshot
+            );
             var providerRequest = externalSchemaMapper.map(
                 executionId,
                 resolvedEvaluation == null ? null : new AiEvaluationReference(
@@ -489,7 +509,8 @@ public class RuntimeExecutionService {
         } catch (AccessDeniedException exception) {
             throw exception;
         } catch (DestinationProfileNotFoundException | ApprovalScopeNotFoundException
-            | ExecutionPackInputRejectedException | OutboundGuardException exception) {
+            | ExecutionPackInputRejectedException | OutboundGuardException
+            | DigitalAssetRuntimeSnapshotException exception) {
             updateStatus(executionId, RuntimeExecutionStatus.BLOCKED);
             throw exception;
         } catch (RuntimeException exception) {
@@ -575,6 +596,10 @@ public class RuntimeExecutionService {
 
     public RuntimeExecutionTrace load(String executionId) {
         return persistence.load(executionId);
+    }
+
+    public Optional<DigitalAssetRuntimeSnapshot> loadDigitalAssetSnapshot(String executionId) {
+        return digitalAssetRuntimeSnapshotService.find(executionId);
     }
 
     private RuntimeExecutionStatus finalStatus(FinalAction finalAction, TransformResult transformResult) {

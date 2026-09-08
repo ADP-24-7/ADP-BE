@@ -6,15 +6,18 @@
 
 ```text
 DRAFT -> VALIDATED -> CANDIDATE -> REPLAY -> SHADOW
-      -> APPROVED -> ACTIVE -> REVIEW -> ROLLED_BACK
+      -> APPROVED -> ACTIVE -> SUPERSEDED
+                           -> REVIEW -> ROLLED_BACK
 ```
 
-`ACTIVE`에서는 긴급 `ROLLED_BACK` 전이도 허용한다. 정의되지 않은 역방향, 단계 건너뛰기, 동일 상태 전이는 차단한다. Transition reason은 자유 문자열이 아니라 target stage에 대응하는 서버 정의 enum만 허용한다.
+`ACTIVE`에서는 정상적인 새 버전 교체를 위한 `SUPERSEDED`, 검토를 위한 `REVIEW`, 긴급 `ROLLED_BACK` 전이를 허용한다.
+정의되지 않은 역방향, 단계 건너뛰기, 동일 상태 전이는 차단한다. Transition reason은 자유 문자열이 아니라 target
+stage에 대응하는 서버 정의 enum만 허용한다.
 
 ## Authorization
 
 - `OPERATOR`: Artifact 생성, VALIDATED/CANDIDATE/REPLAY/SHADOW/REVIEW 전이
-- `PRIVILEGED_OPERATOR`: APPROVED/ACTIVE/ROLLED_BACK 전이
+- `PRIVILEGED_OPERATOR`: APPROVED/ACTIVE/SUPERSEDED/ROLLED_BACK 전이
 - `AUDITOR`: Institution과 Workload scope 안에서 조회만 가능
 - Artifact 생성자는 자신의 Artifact를 APPROVED 또는 ACTIVE로 전이할 수 없다.
 

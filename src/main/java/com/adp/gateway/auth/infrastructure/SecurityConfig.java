@@ -65,6 +65,8 @@ public class SecurityConfig {
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers(HttpMethod.POST, "/api/admin/digital-assets/artifacts/ingestions")
                     .hasRole("OPERATOR")
+                    .requestMatchers(HttpMethod.POST, "/api/admin/digital-assets/artifacts/*/versions/*/activate")
+                    .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers(HttpMethod.GET, "/api/admin/digital-assets/artifacts/**")
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")

@@ -26,7 +26,8 @@ public class LocalAuthFixtureLoader implements ApplicationListener<ApplicationRe
             new ClassPathResource("db/local/V2__local_data_access_fixture.sql"),
             new ClassPathResource("db/local/V4__local_digital_asset_fixture.sql"),
             new ClassPathResource("db/local/V5__local_digital_asset_approval_boundary.sql"),
-            new ClassPathResource("db/local/V6__freeze_digital_asset_p0_3_request_fields.sql")
+            new ClassPathResource("db/local/V6__freeze_digital_asset_p0_3_request_fields.sql"),
+            new ClassPathResource("db/local/V7__local_digital_asset_runtime_snapshot.sql")
         );
         populator.execute(dataSource);
     }

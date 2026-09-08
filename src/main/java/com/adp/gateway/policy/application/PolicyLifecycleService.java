@@ -20,7 +20,8 @@ public class PolicyLifecycleService {
         ExecutionPackType.COMMON, ExecutionPackType.AI, ExecutionPackType.DIGITAL_ASSET
     );
     private static final Set<PolicyLifecycleStage> PRIVILEGED_TARGETS = Set.of(
-        PolicyLifecycleStage.APPROVED, PolicyLifecycleStage.ACTIVE, PolicyLifecycleStage.ROLLED_BACK
+        PolicyLifecycleStage.APPROVED, PolicyLifecycleStage.ACTIVE,
+        PolicyLifecycleStage.SUPERSEDED, PolicyLifecycleStage.ROLLED_BACK
     );
     private final PolicyLifecyclePersistence persistence;
     private final PolicyLifecycleTransitionValidator transitionValidator;
@@ -68,7 +69,34 @@ public class PolicyLifecycleService {
         PolicyLifecycleStage target,
         PolicyLifecycleTransitionReason reason
     ) {
+        return transition(principal, artifactId, artifactVersion, target, reason, false);
+    }
+
+    @Transactional
+    public PolicyLifecycleRecord transitionForRuntimeSelection(
+        AuthPrincipal principal,
+        String artifactId,
+        String artifactVersion,
+        PolicyLifecycleStage target,
+        PolicyLifecycleTransitionReason reason
+    ) {
+        return transition(principal, artifactId, artifactVersion, target, reason, true);
+    }
+
+    private PolicyLifecycleRecord transition(
+        AuthPrincipal principal,
+        String artifactId,
+        String artifactVersion,
+        PolicyLifecycleStage target,
+        PolicyLifecycleTransitionReason reason,
+        boolean runtimeSelection
+    ) {
         PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
+        boolean digitalAssetSelectionTransition = current.executionPack() == ExecutionPackType.DIGITAL_ASSET
+            && (target == PolicyLifecycleStage.ACTIVE || target == PolicyLifecycleStage.SUPERSEDED);
+        if (digitalAssetSelectionTransition != runtimeSelection) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
+        }
         requireRole(principal, PRIVILEGED_TARGETS.contains(target) ? AdpRole.PRIVILEGED_OPERATOR : AdpRole.OPERATOR);
         if ((target == PolicyLifecycleStage.APPROVED || target == PolicyLifecycleStage.ACTIVE)
             && current.createdBy().equals(principal.principalId())) {

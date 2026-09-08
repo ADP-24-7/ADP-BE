@@ -24,6 +24,7 @@ public record ValidatedDigitalAssetArtifactBundle(
 
     public record ArtifactFile(
         DigitalAssetArtifactFileRole role,
+        String artifactVersion,
         String reference,
         String digest,
         String schemaReference,

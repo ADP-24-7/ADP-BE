@@ -9,6 +9,7 @@ public enum PolicyLifecycleStage {
     SHADOW,
     APPROVED,
     ACTIVE,
+    SUPERSEDED,
     REVIEW,
     ROLLED_BACK
 }

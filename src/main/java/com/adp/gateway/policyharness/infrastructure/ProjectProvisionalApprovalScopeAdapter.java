@@ -108,7 +108,7 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
             "institution_local", "institution-policy/local/1.0.0", "local-institution-policy-digest-v1",
             "tokenized_asset_purchase", "DIGITAL_ASSET_PURCHASE", "EXACT_DIGEST",
             subjectRefHasher.hash(SubjectRef.from("customer:customer-100")),
-            "be-runtime-policy/0.0.0",
+            "be-runtime-policy/digital-asset/1.0.0",
             "be-snapshot-local-fixture:digital-asset-purchase:mock-asset-platform",
             Set.of(AdpRole.RUNTIME_EXECUTOR), Set.of("DIGITAL_ASSET"),
             Set.of(

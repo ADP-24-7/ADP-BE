@@ -82,6 +82,18 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                    re.workload_id, re.purpose_code, re.status as runtime_status,
                    re.authorization_status, re.approval_reference, re.approval_version,
                    re.approval_scope_digest, re.policy_version, re.snapshot_digest,
+                   das.snapshot_id as digital_asset_snapshot_id,
+                   das.snapshot_digest as digital_asset_snapshot_digest,
+                   das.artifact_id as digital_asset_artifact_id,
+                   das.artifact_version as digital_asset_artifact_version,
+                   das.artifact_digest as digital_asset_artifact_digest,
+                   das.approved_policy_snapshot_id, das.approved_policy_version,
+                   das.approved_policy_digest,
+                   das.destination_profile_id as snapshot_destination_profile_id,
+                   das.destination_profile_version as snapshot_destination_profile_version,
+                   das.destination_profile_digest as snapshot_destination_profile_digest,
+                   das.runtime_control_version, das.runtime_control_digest,
+                   das.crosswalk_version, das.crosswalk_digest, das.selected_at,
                    re.decision_id, re.final_action, re.subject_ref_digest, re.input_digest,
                    re.canonical_context_digest, re.runtime_context_digest,
                    re.requested_field_count, re.requested_fields_digest,
@@ -100,6 +112,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                    ae.audit_id, ae.reason_code, ae.evidence_refs,
                    re.created_at, re.updated_at
             from runtime.runtime_execution re
+            left join runtime.digital_asset_runtime_snapshot das on das.execution_id = re.execution_id
             left join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
             left join lateral (
                 select audit_id, reason_code, evidence_refs
@@ -174,6 +187,12 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         String workloadId, String purposeCode, String runtimeStatus, String authorizationStatus,
         String approvalReference, String approvalVersion, String approvalScopeDigest,
         String policyVersion, String snapshotDigest, String decisionId, String finalAction,
+        String digitalAssetSnapshotId, String digitalAssetSnapshotDigest,
+        String digitalAssetArtifactId, String digitalAssetArtifactVersion, String digitalAssetArtifactDigest,
+        String approvedPolicySnapshotId, String approvedPolicyVersion, String approvedPolicyDigest,
+        String snapshotDestinationProfileId, String snapshotDestinationProfileVersion,
+        String snapshotDestinationProfileDigest, String runtimeControlVersion, String runtimeControlDigest,
+        String crosswalkVersion, String crosswalkDigest, OffsetDateTime selectedAt,
         String subjectRefDigest, String inputDigest, String canonicalContextDigest, String runtimeContextDigest,
         Integer requestedFieldCount, String requestedFieldsDigest,
         Integer retrievedFieldCount, String retrievedFieldsDigest,
@@ -196,6 +215,13 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                 new ExecutionEvidencePack.PolicyEvidence(
                     approvalReference, approvalVersion, approvalScopeDigest, policyVersion,
                     snapshotDigest, decisionId, finalAction
+                ),
+                digitalAssetSnapshotId == null ? null : new ExecutionEvidencePack.DigitalAssetSnapshotEvidence(
+                    digitalAssetSnapshotId, digitalAssetSnapshotDigest, digitalAssetArtifactId,
+                    digitalAssetArtifactVersion, digitalAssetArtifactDigest, approvedPolicySnapshotId,
+                    approvedPolicyVersion, approvedPolicyDigest, snapshotDestinationProfileId,
+                    snapshotDestinationProfileVersion, snapshotDestinationProfileDigest,
+                    runtimeControlVersion, runtimeControlDigest, crosswalkVersion, crosswalkDigest, selectedAt
                 ),
                 new ExecutionEvidencePack.DataEvidence(
                     subjectRefDigest, inputDigest, canonicalContextDigest, runtimeContextDigest,

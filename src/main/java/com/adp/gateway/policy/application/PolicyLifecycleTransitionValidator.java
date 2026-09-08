@@ -16,7 +16,11 @@ public class PolicyLifecycleTransitionValidator {
         PolicyLifecycleStage.REPLAY, Set.of(PolicyLifecycleStage.SHADOW),
         PolicyLifecycleStage.SHADOW, Set.of(PolicyLifecycleStage.APPROVED),
         PolicyLifecycleStage.APPROVED, Set.of(PolicyLifecycleStage.ACTIVE),
-        PolicyLifecycleStage.ACTIVE, Set.of(PolicyLifecycleStage.REVIEW, PolicyLifecycleStage.ROLLED_BACK),
+        PolicyLifecycleStage.ACTIVE, Set.of(
+            PolicyLifecycleStage.SUPERSEDED,
+            PolicyLifecycleStage.REVIEW,
+            PolicyLifecycleStage.ROLLED_BACK
+        ),
         PolicyLifecycleStage.REVIEW, Set.of(PolicyLifecycleStage.ROLLED_BACK)
     );
 

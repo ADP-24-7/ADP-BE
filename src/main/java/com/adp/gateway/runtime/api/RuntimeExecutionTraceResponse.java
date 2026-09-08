@@ -35,10 +35,14 @@ public record RuntimeExecutionTraceResponse(
     String status,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
+    DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
     RuntimeExecutionEvidenceResponse evidence
 ) {
 
-    public static RuntimeExecutionTraceResponse from(RuntimeExecutionTrace trace) {
+    public static RuntimeExecutionTraceResponse from(
+        RuntimeExecutionTrace trace,
+        com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot snapshot
+    ) {
         return new RuntimeExecutionTraceResponse(
             trace.executionId(),
             trace.requestId(),
@@ -70,6 +74,7 @@ public record RuntimeExecutionTraceResponse(
             trace.status(),
             trace.createdAt(),
             trace.updatedAt(),
+            DigitalAssetRuntimeSnapshotResponse.from(snapshot),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
     }

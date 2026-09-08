@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.adp.gateway.recovery.application.ExternalInteractionRecoveryService;
+import com.adp.gateway.audit.application.AuditReadPort;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -35,6 +36,9 @@ class DigitalAssetThinE2ETests {
 
     @Autowired
     private ExternalInteractionRecoveryService recoveryService;
+
+    @Autowired
+    private AuditReadPort auditReadPort;
 
     @Test
     void executesTokenizedAssetPurchaseWithSettlementAndReconciliationEvidence() throws Exception {
@@ -139,14 +143,39 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(settlementEvidence).isEqualTo(1);
+        Integer snapshotCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_runtime_snapshot
+                where execution_id = :executionId
+                  and artifact_id = 'DA-DIGITAL-ASSET-RUNTIME-LOCAL-ACTIVE-001'
+                  and artifact_version = '1.0.0'
+                  and snapshot_digest ~ '^sha256:[0-9a-f]{64}$'
+                  and runtime_control_digest = 'sha256:94447f7910fa799caa4613dc80bc588104d5829e2042963affd98825bdd2c43c'
+                  and crosswalk_digest = 'sha256:eb40822cdd5c192e68eb0fe3a961428dbabbdabda00204c760d32cac6b669cf5'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(snapshotCount).isEqualTo(1);
         assertThat(terminalTransitions("COMPLETED")).isEqualTo(completedBefore + 1);
 
         mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
                 .header("X-ADP-API-Key", "local-dev-api-key"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.digitalAssetRuntimeSnapshot.snapshotId").exists())
+            .andExpect(jsonPath("$.digitalAssetRuntimeSnapshot.artifactId")
+                .value("DA-DIGITAL-ASSET-RUNTIME-LOCAL-ACTIVE-001"))
+            .andExpect(jsonPath("$.digitalAssetRuntimeSnapshot.destinationProfileId")
+                .value("dest_mock_asset_platform_v1"))
             .andExpect(jsonPath("$.evidence.destinationProfileId").value("dest_mock_asset_platform_v1"))
             .andExpect(jsonPath("$.stages[?(@.stage == 'CONNECTOR')].status").value("COMPLETED"));
+
+        var auditEvidence = auditReadPort.loadEvidence(
+            executionId, "institution_local", java.util.Set.of("tokenized_asset_purchase")
+        );
+        assertThat(auditEvidence.digitalAssetRuntimeSnapshot()).isNotNull();
+        assertThat(auditEvidence.digitalAssetRuntimeSnapshot().snapshotDigest())
+            .matches("sha256:[0-9a-f]{64}");
+        assertThat(auditEvidence.digitalAssetRuntimeSnapshot().destinationProfileDigest())
+            .isEqualTo("local-digital-asset-destination-v1");
 
         assertThat(response)
             .doesNotContain("customer-100")
@@ -311,6 +340,11 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(evidenceCount).isEqualTo(1);
         assertThat(recoveryCount).isEqualTo(1);
+        String pinnedSnapshotDigest = jdbcClient.sql("""
+                select snapshot_digest from runtime.digital_asset_runtime_snapshot
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId).query(String.class).single();
         Integer activeRecoveryCount = jdbcClient.sql("""
                 select count(*) from runtime.external_interaction_recovery
                 where execution_id = :executionId
@@ -352,6 +386,12 @@ class DigitalAssetThinE2ETests {
             .single();
         assertThat(settlement.settlementStatus()).isEqualTo("SENT_UNKNOWN");
         assertThat(settlement.reconciliationResult()).isEqualTo("WAIT");
+        String recoveredSnapshotDigest = jdbcClient.sql("""
+                select snapshot_digest from runtime.digital_asset_runtime_snapshot
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId).query(String.class).single();
+        assertThat(recoveredSnapshotDigest).isEqualTo(pinnedSnapshotDigest);
     }
 
     private org.springframework.test.web.servlet.ResultActions assetRequest(
