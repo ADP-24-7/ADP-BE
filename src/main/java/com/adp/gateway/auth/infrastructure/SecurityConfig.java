@@ -56,6 +56,8 @@ public class SecurityConfig {
                     .requestMatchers("/api/internal/auth/**").authenticated()
                     .requestMatchers("/api/admin/ai/evaluation-runs/*/bundle")
                     .hasRole("PRIVILEGED_OPERATOR")
+                    .requestMatchers("/api/admin/ai/evaluation-runs/*/readiness")
+                    .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/audit/executions/*/evidence")
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/policy-lifecycle/**")

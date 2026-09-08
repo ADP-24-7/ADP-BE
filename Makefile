@@ -34,7 +34,7 @@ DOCKER_RUN_GRADLE_DEV := docker run --rm --network adp-local \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/dev-run-project-cache
 
-.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps
+.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e
 
 help:
 	@printf "%s\n" \
@@ -52,6 +52,7 @@ help:
 		"  make docker-rebuild Rebuild and start the full dev stack" \
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
+		"  make ai-eval-e2e Run the real three-model Evaluation and export the DA Bundle" \
 		"  make docker-down Stop full dev stack"
 
 setup: env docker-network
@@ -97,3 +98,6 @@ docker-logs:
 
 docker-ps:
 	$(COMPOSE) ps
+
+ai-eval-e2e:
+	./scripts/run-ai-evaluation-e2e.sh

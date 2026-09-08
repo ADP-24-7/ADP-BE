@@ -70,6 +70,7 @@ make setup
 make docker-up
 make docker-logs
 make docker-ps
+make ai-eval-e2e
 make docker-down
 make check
 ```
@@ -93,6 +94,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [AI-EVAL-1 Evaluation Run Contract](docs/ai-eval-1-evaluation-run-contract.md)
 - [AI-EVAL-2 Runtime Evidence Capture](docs/ai-eval-2-runtime-evidence.md)
 - [AI-EVAL-3 DA Evaluation Bundle Export](docs/ai-eval-3-da-evaluation-bundle.md)
+- [AI Evaluation Real E2E Handoff](docs/ai-eval-real-e2e-handoff.md)
 - [BE-4 Policy & Decision Core](docs/be-4-policy-decision-core.md)
 - [BE-5 Transform Engine & Vault](docs/be-5-transform-vault.md)
 - [BE-6 Common Egress Boundary](docs/be-6-common-egress-boundary.md)

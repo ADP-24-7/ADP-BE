@@ -43,6 +43,9 @@ jobs:
           touch ../ADP-DA/Dockerfile
           docker compose --profile test config
 
+      - name: Validate AI Evaluation E2E harness
+        run: sh -n scripts/run-ai-evaluation-e2e.sh
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

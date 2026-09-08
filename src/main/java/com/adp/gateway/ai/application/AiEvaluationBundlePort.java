@@ -12,4 +12,10 @@ public interface AiEvaluationBundlePort {
         Set<String> allowedWorkloads,
         int limit
     );
+
+    long countStored(
+        String evaluationRunId,
+        String institutionId,
+        Set<String> allowedWorkloads
+    );
 }

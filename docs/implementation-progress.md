@@ -40,6 +40,11 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
   - Privileged, institution/workload-scoped Bundle API와 재현 가능한 content fingerprint
   - Run Catalog Case × Model 완전성 및 Run/Profile Source of Truth 재검증
   - Failure Summary, 전용 integrity reason/metric, DA parser fixture
+- [x] AI Evaluation Real E2E Handoff
+  - Privileged Evaluation Run Readiness API
+  - DB 전체 저장 실행과 Bundle 최신 선택 실행 수 분리
+  - 기존 Runtime API 기반 세 NVIDIA Profile 실행 및 Bundle Export harness
+  - 이전 버전 DB의 local principal institution binding 복구
 
 ## Security Cross-cutting Tracking
 

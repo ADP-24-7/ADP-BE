@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.adp.gateway.ai.domain.AiEvaluationBundle;
 import com.adp.gateway.ai.domain.AiEvaluationBundleSource;
 import com.adp.gateway.ai.domain.AiEvaluationRunDefinition;
+import com.adp.gateway.ai.domain.AiEvaluationRunReadiness;
 import com.adp.gateway.ai.domain.AiModelProfile;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
@@ -21,6 +22,8 @@ import com.adp.gateway.observability.GatewayObservability;
 import com.adp.gateway.observability.GatewayObservability.AiEvaluationBundleExportOutcome;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AiEvaluationBundleService {
@@ -116,6 +119,78 @@ public class AiEvaluationBundleService {
         return bundle;
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public AiEvaluationRunReadiness readiness(AuthPrincipal principal, String evaluationRunId) {
+        requireInstitution(principal);
+        AiEvaluationRunDefinition run = runCatalog.find(evaluationRunId)
+            .orElseThrow(() -> new AiEvaluationBundleNotFoundException(evaluationRunId));
+        validateExpectedSize(run);
+        List<AiEvaluationBundleSource> rows = bundlePort.load(
+            evaluationRunId, principal.institutionId(), principal.workloadIds(), MAX_EXECUTION_COUNT + 1
+        );
+        long storedExecutionCount = bundlePort.countStored(
+            evaluationRunId, principal.institutionId(), principal.workloadIds()
+        );
+        Set<CaseModelPair> expected = expectedPairs(run);
+        Map<CaseModelPair, AiEvaluationBundleSource> observed = rows.stream()
+            .filter(row -> expected.contains(new CaseModelPair(row.evalCaseId(), row.profileId())))
+            .collect(Collectors.toMap(
+                row -> new CaseModelPair(row.evalCaseId(), row.profileId()),
+                row -> row,
+                (first, ignored) -> first
+            ));
+        List<AiEvaluationRunReadiness.CaseModelEvidence> matrix = expected.stream()
+            .sorted(Comparator.comparing(CaseModelPair::caseId).thenComparing(CaseModelPair::profileId))
+            .map(pair -> readinessEntry(pair, observed.get(pair)))
+            .toList();
+        int completeEvidenceCount = (int) rows.stream()
+            .filter(row -> "COMPLETE".equals(row.evidenceStatus()))
+            .count();
+        int unexpectedExecutionCount = (int) rows.stream()
+            .filter(row -> !expected.contains(new CaseModelPair(row.evalCaseId(), row.profileId())))
+            .count();
+        AiEvaluationRunReadiness.Status status = readinessStatus(run, rows);
+        return new AiEvaluationRunReadiness(
+            run.evaluationRunId(), run.runVersion(), status,
+            status == AiEvaluationRunReadiness.Status.READY,
+            expected.size(), storedExecutionCount, rows.size(), completeEvidenceCount,
+            expected.size() - observed.size(), unexpectedExecutionCount, matrix
+        );
+    }
+
+    private AiEvaluationRunReadiness.CaseModelEvidence readinessEntry(
+        CaseModelPair pair,
+        AiEvaluationBundleSource row
+    ) {
+        return row == null
+            ? new AiEvaluationRunReadiness.CaseModelEvidence(
+                pair.caseId(), pair.profileId(), null, null, null, null
+            )
+            : new AiEvaluationRunReadiness.CaseModelEvidence(
+                pair.caseId(), pair.profileId(), row.executionId(), row.runtimeStatus(),
+                row.providerStatus(), row.evidenceStatus()
+            );
+    }
+
+    private AiEvaluationRunReadiness.Status readinessStatus(
+        AiEvaluationRunDefinition run,
+        List<AiEvaluationBundleSource> rows
+    ) {
+        if (rows.isEmpty()) {
+            return AiEvaluationRunReadiness.Status.NOT_STARTED;
+        }
+        if (!hasCompleteMatrix(run, rows)) {
+            return AiEvaluationRunReadiness.Status.INCOMPLETE;
+        }
+        if (!hasValidRunIdentity(run, rows)) {
+            return AiEvaluationRunReadiness.Status.PROVENANCE_MISMATCH;
+        }
+        if (!hasValidModelIdentity(run, rows)) {
+            return AiEvaluationRunReadiness.Status.MODEL_MISMATCH;
+        }
+        return AiEvaluationRunReadiness.Status.READY;
+    }
+
     private List<AiEvaluationBundle.ModelConfig> modelConfigs(List<AiEvaluationBundleSource> rows) {
         var models = new LinkedHashMap<String, AiEvaluationBundle.ModelConfig>();
         for (AiEvaluationBundleSource row : rows) {
@@ -136,16 +211,24 @@ public class AiEvaluationBundleService {
         if (rows.size() > MAX_EXECUTION_COUNT) {
             fail("AI_EVALUATION_BUNDLE_SIZE_LIMIT_EXCEEDED", AiEvaluationBundleExportOutcome.SIZE_LIMIT_EXCEEDED);
         }
-        Set<CaseModelPair> expected = run.cases().keySet().stream()
-            .flatMap(caseId -> run.modelProfileIds().stream().map(profileId -> new CaseModelPair(caseId, profileId)))
-            .collect(Collectors.toUnmodifiableSet());
+        if (!hasCompleteMatrix(run, rows)) {
+            fail("AI_EVALUATION_BUNDLE_INCOMPLETE", AiEvaluationBundleExportOutcome.INCOMPLETE);
+        }
+    }
+
+    private boolean hasCompleteMatrix(AiEvaluationRunDefinition run, List<AiEvaluationBundleSource> rows) {
+        Set<CaseModelPair> expected = expectedPairs(run);
         Set<CaseModelPair> observed = rows.stream()
             .map(row -> new CaseModelPair(row.evalCaseId(), row.profileId()))
             .collect(Collectors.toUnmodifiableSet());
         boolean completeEvidence = rows.stream().allMatch(row -> "COMPLETE".equals(row.evidenceStatus()));
-        if (!expected.equals(observed) || observed.size() != rows.size() || !completeEvidence) {
-            fail("AI_EVALUATION_BUNDLE_INCOMPLETE", AiEvaluationBundleExportOutcome.INCOMPLETE);
-        }
+        return expected.equals(observed) && observed.size() == rows.size() && completeEvidence;
+    }
+
+    private Set<CaseModelPair> expectedPairs(AiEvaluationRunDefinition run) {
+        return run.cases().keySet().stream()
+            .flatMap(caseId -> run.modelProfileIds().stream().map(profileId -> new CaseModelPair(caseId, profileId)))
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     private void validateExpectedSize(AiEvaluationRunDefinition run) {
@@ -156,41 +239,50 @@ public class AiEvaluationBundleService {
     }
 
     private void validateRunIdentity(AiEvaluationRunDefinition run, List<AiEvaluationBundleSource> rows) {
-        for (AiEvaluationBundleSource row : rows) {
-            var expectedCase = run.cases().get(row.evalCaseId());
-            if (!same(run.evaluationRunId(), row.evaluationRunId())
-                || !same(run.runVersion(), row.evaluationRunVersion())
-                || !same(run.contractDigest(), row.evaluationContractDigest())
-                || !same(run.datasetId(), row.datasetId())
-                || !same(run.datasetVersion(), row.datasetVersion())
-                || !same(run.datasetDigest(), row.datasetDigest())
-                || !same(run.policySnapshotDigest(), row.policySnapshotDigest())
-                || expectedCase == null
-                || !same(expectedCase.expectedInputDigest(), row.expectedInputDigest())
-                || !same(expectedCase.expectedInputDigest(), row.actualInputDigest())) {
-                fail("AI_EVALUATION_BUNDLE_PROVENANCE_MISMATCH",
-                    AiEvaluationBundleExportOutcome.PROVENANCE_MISMATCH);
-            }
+        if (!hasValidRunIdentity(run, rows)) {
+            fail("AI_EVALUATION_BUNDLE_PROVENANCE_MISMATCH",
+                AiEvaluationBundleExportOutcome.PROVENANCE_MISMATCH);
         }
     }
 
+    private boolean hasValidRunIdentity(AiEvaluationRunDefinition run, List<AiEvaluationBundleSource> rows) {
+        return rows.stream().allMatch(row -> {
+            var expectedCase = run.cases().get(row.evalCaseId());
+            return same(run.evaluationRunId(), row.evaluationRunId())
+                && same(run.runVersion(), row.evaluationRunVersion())
+                && same(run.contractDigest(), row.evaluationContractDigest())
+                && same(run.datasetId(), row.datasetId())
+                && same(run.datasetVersion(), row.datasetVersion())
+                && same(run.datasetDigest(), row.datasetDigest())
+                && same(run.policySnapshotDigest(), row.policySnapshotDigest())
+                && expectedCase != null
+                && same(expectedCase.expectedInputDigest(), row.expectedInputDigest())
+                && same(expectedCase.expectedInputDigest(), row.actualInputDigest());
+        });
+    }
+
     private void validateModelIdentity(AiEvaluationRunDefinition run, List<AiEvaluationBundleSource> rows) {
-        for (AiEvaluationBundleSource row : rows) {
-            AiModelProfile profile = modelProfileCatalog.findByProfileId(row.profileId()).orElse(null);
-            if (profile == null || !run.modelProfileIds().contains(row.profileId())
-                || !same(profile.profileVersion(), row.profileVersion())
-                || !same(profile.modelProfileDigest(), row.profileDigest())
-                || !same(profile.modelId(), row.providerModelId())
-                || !same(profile.modelVersion(), row.providerModelVersion())
-                || !same(profile.providerConnectionProfileId(), row.connectionProfileId())
-                || !same(profile.maxTokens(), row.maxTokens())
-                || row.temperature() == null
-                || Double.compare(profile.temperature(), row.temperature()) != 0
-                || !same(profile.profileVersion(), row.samplingProfileVersion())
-                || !same(profile.destinationProfileDigest(), row.destinationProfileDigest())) {
-                fail("AI_EVALUATION_BUNDLE_MODEL_MISMATCH", AiEvaluationBundleExportOutcome.MODEL_MISMATCH);
-            }
+        if (!hasValidModelIdentity(run, rows)) {
+            fail("AI_EVALUATION_BUNDLE_MODEL_MISMATCH", AiEvaluationBundleExportOutcome.MODEL_MISMATCH);
         }
+    }
+
+    private boolean hasValidModelIdentity(AiEvaluationRunDefinition run, List<AiEvaluationBundleSource> rows) {
+        return rows.stream().allMatch(row -> {
+            AiModelProfile profile = modelProfileCatalog.findByProfileId(row.profileId()).orElse(null);
+            return profile != null
+                && run.modelProfileIds().contains(row.profileId())
+                && same(profile.profileVersion(), row.profileVersion())
+                && same(profile.modelProfileDigest(), row.profileDigest())
+                && same(profile.modelId(), row.providerModelId())
+                && same(profile.modelVersion(), row.providerModelVersion())
+                && same(profile.providerConnectionProfileId(), row.connectionProfileId())
+                && same(profile.maxTokens(), row.maxTokens())
+                && row.temperature() != null
+                && Double.compare(profile.temperature(), row.temperature()) == 0
+                && same(profile.profileVersion(), row.samplingProfileVersion())
+                && same(profile.destinationProfileDigest(), row.destinationProfileDigest());
+        });
     }
 
     private boolean same(Object left, Object right) {

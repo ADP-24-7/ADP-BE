@@ -14,6 +14,12 @@ BE Runtime DB에 직접 접근하지 않고도 DA가 Evaluation Run별 모델·�
 - 결과 없음 또는 접근 불가: `404 AI_EVALUATION_BUNDLE_NOT_FOUND`
 - Schema: `adp-ai-evaluation-bundle/v1`
 
+실제 실행 전후의 Case x Model 저장·완전성은
+`GET /api/admin/ai/evaluation-runs/{evaluationRunId}/readiness`에서 확인한다. 이 API는 재실행을 포함한 DB 전체 저장
+건수와 Bundle이 선택하는 Pair별 최신 실행 건수를 구분하며 동일한 `PRIVILEGED_OPERATOR`, Institution, Workload
+scope를 적용한다. 로컬 세 모델 실행과 Export 절차는
+[`AI Evaluation Real E2E Handoff`](ai-eval-real-e2e-handoff.md)를 따른다.
+
 ## Bundle 구성
 
 - `manifest`: Bundle ID/version, Schema/Run version, content digest, 생성 시각, 실행·케이스·모델 수, Evidence 기간
