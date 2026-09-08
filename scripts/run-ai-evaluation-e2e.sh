@@ -4,12 +4,13 @@ set -eu
 BASE_URL="${ADP_BE_BASE_URL:-http://127.0.0.1:8080}"
 RUNTIME_API_KEY="${ADP_RUNTIME_API_KEY:-local-dev-api-key}"
 ADMIN_USER_ID="${ADP_ADMIN_USER_ID:-da-evaluation-reader}"
+REAL_PROVIDER_CONFIRMED="${ADP_AI_E2E_CONFIRM_REAL_PROVIDER:-}"
 RUN_ID="ai-eval-baseline-2026-09-07"
 CASE_ID="customer-summary-ko-001"
 RUN_SUFFIX="${AI_EVAL_RUN_SUFFIX:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 OUTPUT_ROOT="${AI_EVAL_OUTPUT_DIR:-build/ai-evaluation-e2e}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_SUFFIX"
-TMP_DIR="$(mktemp -d)"
+TMP_DIR=""
 
 case "$BASE_URL" in
     http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
@@ -18,6 +19,13 @@ case "$BASE_URL" in
         exit 2
         ;;
 esac
+
+if [ "$REAL_PROVIDER_CONFIRMED" != "YES" ]; then
+    printf '%s\n' "Real provider execution requires ADP_AI_E2E_CONFIRM_REAL_PROVIDER=YES." >&2
+    exit 2
+fi
+
+TMP_DIR="$(mktemp -d)"
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -106,21 +114,11 @@ curl -fsS \
     "$BASE_URL/api/admin/ai/evaluation-runs/$RUN_ID/readiness" \
     >"$OUTPUT_DIR/readiness.json"
 
-python3 -c '
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as source:
-    readiness = json.load(source)
-if readiness.get("status") != "READY" or not readiness.get("bundle_available"):
-    raise SystemExit("Evaluation Run is not ready for Bundle export: " + json.dumps(readiness))
-if readiness.get("expected_execution_count") != 3 or readiness.get("complete_evidence_count") != 3:
-    raise SystemExit("Evaluation Run does not contain the expected three complete executions")
-stored = readiness.get("stored_execution_count", 0)
-observed = readiness.get("observed_execution_count", 0)
-complete = readiness.get("complete_evidence_count", 0)
-print(f"Evaluation readiness: stored={stored} latest_selected={observed} complete={complete}")
-' "$OUTPUT_DIR/readiness.json"
+python3 scripts/validate_ai_evaluation_e2e.py readiness \
+    --submission "nvidia-nemotron-3.5-lightning-30b-a3b=$TMP_DIR/nvidia-nemotron-3.5-lightning-30b-a3b.json" \
+    --submission "meta-muse-glimmer-30b=$TMP_DIR/meta-muse-glimmer-30b.json" \
+    --submission "google-gemma-4-31b-it=$TMP_DIR/google-gemma-4-31b-it.json" \
+    --readiness "$OUTPUT_DIR/readiness.json"
 
 curl -fsS \
     -H "X-ADP-User-Id: $ADMIN_USER_ID" \
@@ -128,20 +126,11 @@ curl -fsS \
     "$BASE_URL/api/admin/ai/evaluation-runs/$RUN_ID/bundle" \
     >"$OUTPUT_DIR/bundle.json"
 
-python3 -c '
-import json
-import sys
+python3 scripts/validate_ai_evaluation_e2e.py bundle \
+    --submission "nvidia-nemotron-3.5-lightning-30b-a3b=$TMP_DIR/nvidia-nemotron-3.5-lightning-30b-a3b.json" \
+    --submission "meta-muse-glimmer-30b=$TMP_DIR/meta-muse-glimmer-30b.json" \
+    --submission "google-gemma-4-31b-it=$TMP_DIR/google-gemma-4-31b-it.json" \
+    --bundle "$OUTPUT_DIR/bundle.json" \
+    --evaluation-run-id "$RUN_ID"
 
-with open(sys.argv[1], encoding="utf-8") as source:
-    bundle = json.load(source)
-manifest = bundle.get("manifest", {})
-if manifest.get("evaluation_run_id") != sys.argv[2]:
-    raise SystemExit("Exported Bundle Run ID mismatch")
-if manifest.get("execution_count") != 3 or manifest.get("model_count") != 3:
-    raise SystemExit("Exported Bundle is not the expected Case x Model matrix")
-digest = manifest.get("content_digest", "")
-if not digest.startswith("sha256:"):
-    raise SystemExit("Exported Bundle has no canonical content digest")
-print(f"Bundle exported: {sys.argv[1]}")
-print(f"Bundle snapshot: {digest}")
-' "$OUTPUT_DIR/bundle.json" "$RUN_ID"
+printf '%s\n' "Bundle exported: $OUTPUT_DIR/bundle.json"

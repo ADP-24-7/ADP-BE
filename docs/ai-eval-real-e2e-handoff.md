@@ -27,8 +27,12 @@ ADP-BE `.env`에 유효한 `NVIDIA_API_KEY`를 주입하고 로컬 평가용
 
 ```bash
 make docker-up
+export ADP_AI_E2E_CONFIRM_REAL_PROVIDER=YES
 make ai-eval-e2e
 ```
+
+`ADP_AI_E2E_CONFIRM_REAL_PROVIDER=YES`가 없으면 Harness는 네트워크 요청 전에 종료한다. 이 값은 실제 Provider 비용과
+외부 전송을 이번 실행에서 명시적으로 승인한다는 의미이며 `.env.example`에서는 비어 있다.
 
 `make ai-eval-e2e`는 다음 순서를 수행한다.
 
@@ -36,8 +40,9 @@ make ai-eval-e2e
 2. `POST /v1/runtime/executions`로 등록된 세 Model Profile 실행
 3. 각 실행의 server-owned Execution ID 확인
 4. Evaluation Run Readiness 조회
-5. Case 1 x Model 3의 COMPLETE Evidence 확인
+5. 방금 제출한 Profile별 Execution ID와 Readiness의 최신 Evidence ID가 정확히 같은지 확인
 6. DA Evaluation Bundle JSON Export
+7. Bundle의 Case Result, Runtime Metric, Trace Index가 모두 같은 세 Execution ID인지 확인
 
 실행별 Runtime 응답은 임시 디렉터리에서만 사용하고 제거한다. DA 전달물은 원문 Prompt/Response를 포함하지 않는
 `readiness.json`과 `bundle.json`이며 기본 경로는 `build/ai-evaluation-e2e/{run-suffix}/`다.
@@ -61,6 +66,14 @@ PARTIAL이면 Readiness는 READY가 되지 않는다.
 실제 Bundle API는 동일한 provenance와 model identity를 다시 검증하는 authoritative export boundary다.
 `stored_execution_count`는 재실행을 포함한 전체 Evidence 수이고 `observed_execution_count`는 Bundle이 Case x Model별
 최신 실행을 선택한 뒤의 수다.
+
+Harness는 READY 여부만 신뢰하지 않는다. 각 Runtime 응답에서 받은 `profile_id -> execution_id`와 Readiness 및 Bundle의
+선택 결과가 정확히 일치해야 성공한다. 따라서 과거 COMPLETE Evidence가 이번 실행의 실패 또는 미완료 Evidence를 대신해
+Bundle에 섞이는 경우에는 fail-closed한다.
+
+현재 Catalog의 baseline Run은 모든 로컬 기관이 동일 ID를 아는 글로벌 개발 fixture다. Readiness의 `NOT_STARTED` 응답은
+이 전역 fixture 계약에 한정한다. tenant별 Run을 추가할 때는 Catalog 조회 전에 institution/workload ownership을 검증해야
+하며, 현재 전역 fixture 동작을 tenant 전용 Run으로 일반화하지 않는다.
 
 ## DA 전달
 

@@ -52,7 +52,7 @@ help:
 		"  make docker-rebuild Rebuild and start the full dev stack" \
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
-		"  make ai-eval-e2e Run the real three-model Evaluation and export the DA Bundle" \
+		"  make ai-eval-e2e Run the explicitly confirmed real three-model Evaluation and export the DA Bundle" \
 		"  make docker-down Stop full dev stack"
 
 setup: env docker-network
