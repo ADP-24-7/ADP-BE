@@ -15,6 +15,7 @@ Operator request (Candidate ID/Version + Evaluation Case ID)
 -> server-owned PolicyShadowEvaluator로 동일 Case 각각 평가
 -> Case Version/Input Digest 동일성 검증
 -> Outcome canonical digest와 typed diff 계산
+-> Scope advisory lock 획득 후 Candidate revision/stage와 ACTIVE baseline identity 재검증
 -> append-only Shadow Evidence 저장
 ```
 
@@ -45,9 +46,12 @@ baseline/candidate outcome digest, diff enum, actor와 시각만 저장한다. R
 
 ## DB
 
-V33 `policy.shadow_evaluation_evidence`는 Candidate revision과 Case version 조합을 유일하게 고정한다. ACTIVE와 Candidate는
+V33 `policy.shadow_evaluation_evidence`는 Candidate revision, Baseline identity와 Case version 조합을 유일하게 고정한다. ACTIVE와 Candidate는
 모두 Artifact digest·workload·purpose를 포함한 Lifecycle 복합 FK로 결속한다. `MATCH`는 빈 diff, `DIFF`는 하나 이상의
 typed diff를 DB constraint로 강제한다.
+
+평가가 끝난 뒤 Evidence 저장 직전에 Lifecycle Scope lock을 획득하고 authoritative 상태를 다시 읽는다. Candidate revision이나
+`REPLAY` stage, 또는 ACTIVE baseline identity가 달라졌으면 `POLICY_SHADOW_STALE_EVALUATION`으로 저장을 중단한다.
 
 ## 현재 범위
 

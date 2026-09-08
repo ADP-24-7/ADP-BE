@@ -35,4 +35,10 @@ public interface PolicyLifecyclePersistence {
         String workloadId,
         String purposeCode
     );
+
+    void revalidateShadowInputs(
+        PolicyLifecycleRecord expectedCandidate,
+        PolicyLifecycleRecord expectedBaseline,
+        Set<String> allowedWorkloads
+    );
 }

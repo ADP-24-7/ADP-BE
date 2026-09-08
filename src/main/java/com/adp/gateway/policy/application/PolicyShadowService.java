@@ -69,8 +69,11 @@ public class PolicyShadowService {
         PolicyShadowOutcome candidateOutcome = evaluator.evaluate(candidate, evaluationCaseId);
         validateComparable(baselineOutcome, candidateOutcome, evaluationCaseId);
         List<PolicyShadowDiffField> diffFields = diff(baselineOutcome, candidateOutcome);
+        lifecyclePersistence.revalidateShadowInputs(candidate, baseline, principal.workloadIds());
         String identity = String.join("|",
-            principal.institutionId(), candidate.artifactId(), candidate.artifactVersion(),
+            principal.institutionId(), baseline.artifactId(), baseline.artifactVersion(), baseline.artifactDigest(),
+            String.valueOf(baseline.revision()),
+            candidate.artifactId(), candidate.artifactVersion(),
             String.valueOf(candidate.revision()), evaluationCaseId, baselineOutcome.inputDigest()
         );
         OffsetDateTime now = OffsetDateTime.now(clock);

@@ -38,7 +38,8 @@ create table policy.shadow_evaluation_evidence (
     ),
     constraint uq_policy_shadow_candidate_case_revision unique (
         institution_id, candidate_artifact_id, candidate_artifact_version,
-        candidate_revision, evaluation_case_id, evaluation_case_version
+        candidate_revision, baseline_artifact_id, baseline_artifact_version,
+        baseline_artifact_digest, evaluation_case_id, evaluation_case_version
     ),
     constraint chk_policy_shadow_digests check (
         baseline_artifact_digest ~ '^[0-9a-f]{64}$'

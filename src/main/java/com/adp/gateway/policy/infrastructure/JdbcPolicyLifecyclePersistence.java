@@ -1,6 +1,7 @@
 package com.adp.gateway.policy.infrastructure;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.Set;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
@@ -100,6 +101,7 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         PolicyLifecycleTransitionReason reason,
         OffsetDateTime occurredAt
     ) {
+        lockScope(current);
         int updated = jdbcClient.sql("""
                 update policy.lifecycle_artifact
                 set lifecycle_stage = :target, revision = revision + 1, updated_at = :occurredAt
@@ -188,5 +190,67 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             );
         }
         return candidates.getFirst();
+    }
+
+    @Override
+    public void revalidateShadowInputs(
+        PolicyLifecycleRecord expectedCandidate,
+        PolicyLifecycleRecord expectedBaseline,
+        Set<String> allowedWorkloads
+    ) {
+        lockScope(expectedCandidate);
+        try {
+            PolicyLifecycleRecord candidate = load(
+                expectedCandidate.institutionId(), allowedWorkloads,
+                expectedCandidate.artifactId(), expectedCandidate.artifactVersion()
+            );
+            PolicyLifecycleRecord baseline = loadActive(
+                expectedCandidate.institutionId(), allowedWorkloads,
+                expectedCandidate.policyLayer(), expectedCandidate.executionPack(),
+                expectedCandidate.workloadId(), expectedCandidate.purposeCode()
+            );
+            if (!sameCandidate(expectedCandidate, candidate) || !sameBaseline(expectedBaseline, baseline)) {
+                throw new PolicyLifecycleException("POLICY_SHADOW_STALE_EVALUATION");
+            }
+        } catch (PolicyLifecycleException exception) {
+            if ("POLICY_SHADOW_STALE_EVALUATION".equals(exception.reasonCode())) {
+                throw exception;
+            }
+            throw new PolicyLifecycleException("POLICY_SHADOW_STALE_EVALUATION");
+        }
+    }
+
+    private void lockScope(PolicyLifecycleRecord record) {
+        String scope = String.join("|",
+            record.institutionId(), record.policyLayer().name(), record.executionPack().name(),
+            record.workloadId(), record.purposeCode()
+        );
+        jdbcClient.sql("select pg_advisory_xact_lock(hashtextextended(:scope, 0))")
+            .param("scope", scope)
+            .query((rs, rowNum) -> true)
+            .single();
+    }
+
+    private boolean sameCandidate(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return sameIdentityAndScope(expected, actual)
+            && expected.revision() == actual.revision()
+            && actual.lifecycleStage() == PolicyLifecycleStage.REPLAY;
+    }
+
+    private boolean sameBaseline(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return sameIdentityAndScope(expected, actual)
+            && expected.revision() == actual.revision()
+            && actual.lifecycleStage() == PolicyLifecycleStage.ACTIVE;
+    }
+
+    private boolean sameIdentityAndScope(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return Objects.equals(expected.artifactId(), actual.artifactId())
+            && Objects.equals(expected.artifactVersion(), actual.artifactVersion())
+            && Objects.equals(expected.artifactDigest(), actual.artifactDigest())
+            && Objects.equals(expected.institutionId(), actual.institutionId())
+            && expected.policyLayer() == actual.policyLayer()
+            && expected.executionPack() == actual.executionPack()
+            && Objects.equals(expected.workloadId(), actual.workloadId())
+            && Objects.equals(expected.purposeCode(), actual.purposeCode());
     }
 }

@@ -30,3 +30,14 @@ parameter parsing을 명확히 분리했다.
 
 Shadow Service는 Runtime Connector나 Egress Port를 의존하지 않고 Lifecycle Persistence, server-owned Evaluator, Evidence
 Persistence만 의존한다. E2E 테스트는 실행 전후 `runtime.connector_execution` row count가 동일한지 검증한다.
+
+## 평가 도중 Lifecycle이 변경되면 stale Evidence가 될 수 있다
+
+PostgreSQL 기본 `READ COMMITTED`에서 `@Transactional`만 사용하면 평가 시작 때 읽은 Candidate와 ACTIVE baseline이 평가 도중
+변경되어도 과거 상태의 Evidence를 저장할 수 있다. Evaluator 실행 전체에 row lock을 유지하면 실제 운영 평가가 느려질수록
+Lifecycle 전환을 장시간 막게 된다.
+
+평가는 lock 없이 수행하되 저장 직전에 Institution + Policy Layer + Execution Pack + Workload + Purpose Scope의 PostgreSQL
+transaction advisory lock을 획득한다. Lifecycle transition도 같은 lock을 사용한다. lock 획득 후 Candidate identity/revision와
+`REPLAY` stage, ACTIVE baseline identity/stage를 다시 확인하고 하나라도 달라지면 `POLICY_SHADOW_STALE_EVALUATION`으로
+fail-closed한다. Evidence ID와 unique key에도 baseline identity를 포함해 baseline 교체 후의 정상 재평가를 구분한다.
