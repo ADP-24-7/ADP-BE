@@ -13,7 +13,6 @@ import com.adp.gateway.decision.application.ExecutionPackPolicyGate;
 import com.adp.gateway.decision.domain.ExecutionPackPolicyEvaluation;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
-import com.adp.gateway.digitalasset.domain.DigitalAssetPolicyProfile;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.ArtifactReference;
@@ -23,12 +22,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
 public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
-
-    private final DigitalAssetPolicyProfilePort profilePort;
-
-    public DigitalAssetPolicyGate(DigitalAssetPolicyProfilePort profilePort) {
-        this.profilePort = profilePort;
-    }
 
     @Override
     public ExecutionPackType supportedPack() {
@@ -42,22 +35,21 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         RuntimeDecision baselineDecision,
         OffsetDateTime requestStartedAt
     ) {
-        DigitalAssetPolicyProfile profile = profilePort.load(
-            destinationProfile.destinationProfileId(), requestStartedAt
-        );
-        List<ReasonCode> reasons = reasons(context, destinationProfile, profile, requestStartedAt);
-        FinalAction profileAction = reasons.contains(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID)
-            ? FinalAction.BLOCK
-            : reasons.isEmpty() ? FinalAction.ALLOW : FinalAction.REVIEW;
+        List<ReasonCode> reasons = reasons(context, destinationProfile, requestStartedAt);
+        FinalAction profileAction = reasons.isEmpty() ? FinalAction.ALLOW : FinalAction.BLOCK;
         FinalAction finalAction = profileAction.isAtLeastAsRestrictiveAs(baselineDecision.finalAction())
             ? profileAction : baselineDecision.finalAction();
 
         List<ReasonCode> combinedReasons = new ArrayList<>(baselineDecision.runtimeReasonCodes());
         reasons.stream().filter(reason -> !combinedReasons.contains(reason)).forEach(combinedReasons::add);
         List<ArtifactReference> policyRefs = new ArrayList<>(baselineDecision.matchedPolicyRefs());
-        policyRefs.add(new ArtifactReference(profile.profileId(), "digital_asset_policy_profile", profile.version()));
+        policyRefs.add(new ArtifactReference(
+            metadata(context, "approvedTransactionId"),
+            "approved_transaction_snapshot",
+            metadata(context, "approvedTransactionVersion")
+        ));
         String identity = String.join("|",
-            baselineDecision.decisionId(), profile.digest(), finalAction.name(),
+            baselineDecision.decisionId(), metadata(context, "approvedTransactionDigest"), finalAction.name(),
             reasons.stream().map(Enum::name).sorted().reduce((left, right) -> left + "," + right).orElse("NONE")
         );
         RuntimeDecision decision = new RuntimeDecision(
@@ -70,38 +62,42 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
             baselineDecision.runtimeContextDigest(), baselineDecision.sourcePolicyEvaluationArtifactRef()
         );
         return new ExecutionPackPolicyEvaluation(
-            supportedPack(), profile.profileId(), profile.version(), profile.digest(),
+            supportedPack(), metadata(context, "approvedTransactionId"),
+            metadata(context, "approvedTransactionVersion"), metadata(context, "approvedTransactionDigest"),
             baselineDecision.finalAction(), profileAction, finalAction, reasons,
-            metadata(context, "complianceAssertionSource"), metadata(context, "complianceAssertionVersion"),
-            metadata(context, "complianceAssertionDigest"), decision
+            null, null, null, decision
         );
     }
 
     private List<ReasonCode> reasons(
         CanonicalContext context,
         DestinationProfile destinationProfile,
-        DigitalAssetPolicyProfile profile,
         OffsetDateTime requestStartedAt
     ) {
         List<ReasonCode> reasons = new ArrayList<>();
-        if (!profile.destinationProfileId().equals(destinationProfile.destinationProfileId())
-            || !profile.isEffectiveAt(requestStartedAt)
-            || !profile.complianceSourceSystem().equals(metadata(context, "complianceAssertionSource"))
-            || !profile.complianceAssertionVersion().equals(metadata(context, "complianceAssertionVersion"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_POLICY_PROFILE_INVALID);
-            return reasons;
+        if (!destinationProfile.destinationProfileId().equals(
+            metadata(context, "approvedDestinationProfileId")
+        )) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH);
         }
-        if (!profile.allowedKycStatuses().contains(text(context, "kycStatus"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_KYC_REVIEW_REQUIRED);
+        if (!text(context, "assetId").equals(metadata(context, "approvedAssetId"))) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_ASSET_MISMATCH);
         }
-        if (!profile.allowedAmlStatuses().contains(text(context, "amlStatus"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_AML_REVIEW_REQUIRED);
+        if (new BigDecimal(text(context, "amount")).compareTo(
+            new BigDecimal(metadata(context, "approvedMaxAmount"))
+        ) > 0) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED);
         }
-        if (profile.walletVerificationRequired() && !Boolean.TRUE.equals(value(context, "walletVerified"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_WALLET_REVIEW_REQUIRED);
+        if (!text(context, "walletAddress").equals(metadata(context, "approvedDestination"))) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH);
         }
-        if (new BigDecimal(text(context, "amount")).compareTo(profile.amountLimit()) > 0) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED);
+        if (!text(context, "beneficiaryReference").equals(metadata(context, "approvedBeneficiaryReference"))) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH);
+        }
+        OffsetDateTime approvedFrom = OffsetDateTime.parse(metadata(context, "approvedFrom"));
+        OffsetDateTime approvedUntil = OffsetDateTime.parse(metadata(context, "approvedUntil"));
+        if (requestStartedAt.isBefore(approvedFrom) || requestStartedAt.isAfter(approvedUntil)) {
+            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION);
         }
         return List.copyOf(reasons);
     }

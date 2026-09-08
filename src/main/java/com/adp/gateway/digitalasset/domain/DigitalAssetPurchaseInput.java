@@ -5,24 +5,31 @@ import java.util.Map;
 import java.util.Set;
 
 public record DigitalAssetPurchaseInput(
+    ApprovedTransactionReference approvedTransactionReference,
     String customerId,
     String accountId,
     String walletAddress,
     String assetId,
-    BigDecimal amount
+    BigDecimal amount,
+    String beneficiaryReference
 ) {
     private static final Set<String> KEYS = Set.of(
-        "customerId", "accountId", "walletAddress", "assetId", "amount"
+        "approvedTransactionReference", "customerId", "accountId", "walletAddress",
+        "assetId", "amount", "beneficiaryReference"
     );
 
     public static DigitalAssetPurchaseInput from(Map<String, Object> input) {
         if (input == null || !input.keySet().equals(KEYS)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_SCHEMA_MISMATCH");
         }
+        var approvedTransactionReference = new ApprovedTransactionReference(
+            text(input.get("approvedTransactionReference"))
+        );
         String customerId = text(input.get("customerId"));
         String accountId = text(input.get("accountId"));
         String walletAddress = text(input.get("walletAddress"));
         String assetId = text(input.get("assetId"));
+        String beneficiaryReference = text(input.get("beneficiaryReference"));
         if (!(input.get("amount") instanceof Number number)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_INVALID");
         }
@@ -31,7 +38,8 @@ public record DigitalAssetPurchaseInput(
             throw new IllegalArgumentException("DIGITAL_ASSET_AMOUNT_INVALID");
         }
         return new DigitalAssetPurchaseInput(
-            customerId, accountId, walletAddress, assetId, amount
+            approvedTransactionReference, customerId, accountId, walletAddress,
+            assetId, amount, beneficiaryReference
         );
     }
 

@@ -11,5 +11,9 @@ public interface ExecutionPackContextBuilder {
 
     void validate(Map<String, Object> input);
 
-    CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input);
+    CanonicalContext merge(
+        CanonicalContext retrievalContext,
+        Map<String, Object> input,
+        ExecutionPackRequestScope requestScope
+    );
 }

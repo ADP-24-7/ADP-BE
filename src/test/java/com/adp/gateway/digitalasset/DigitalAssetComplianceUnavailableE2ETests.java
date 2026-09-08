@@ -29,7 +29,7 @@ class DigitalAssetComplianceUnavailableE2ETests {
     private JdbcClient jdbcClient;
 
     @Test
-    void bootsButBlocksDigitalAssetExecutionBeforeConnectorWhenComplianceIsUnavailable() throws Exception {
+    void executesWithApprovedTransactionWhenLegacyCompliancePortIsUnavailable() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String idempotencyKey = "idem_asset_no_compliance_" + suffix;
 
@@ -43,11 +43,14 @@ class DigitalAssetComplianceUnavailableE2ETests {
                      "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
                      "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                      "idempotencyKey":"%s","processingContexts":["DIGITAL_ASSET"],
-                     "input":{"customerId":"customer-100","accountId":"acct-100-1",
-                     "walletAddress":"wallet-test-001","assetId":"asset-krw-token-001","amount":10000}}
+                     "input":{"approvedTransactionReference":"approved-tx-local-001",
+                     "customerId":"customer-100","accountId":"acct-100-1",
+                     "walletAddress":"wallet-test-001","assetId":"asset-krw-token-001","amount":10000,
+                     "beneficiaryReference":"beneficiary-local-001"}}
                     """.formatted(idempotencyKey)))
-            .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.reasonCode").value("DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED"));
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"));
 
         ExecutionState state = jdbcClient.sql("""
                 select re.status,
@@ -60,8 +63,8 @@ class DigitalAssetComplianceUnavailableE2ETests {
             .query(ExecutionState.class)
             .single();
 
-        assertThat(state.status()).isEqualTo("BLOCKED");
-        assertThat(state.connectorCount()).isZero();
+        assertThat(state.status()).isEqualTo("COMPLETED");
+        assertThat(state.connectorCount()).isEqualTo(1);
     }
 
     private record ExecutionState(String status, int connectorCount) {

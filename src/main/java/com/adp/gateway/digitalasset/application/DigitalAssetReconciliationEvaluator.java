@@ -11,10 +11,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetReconciliationEvaluator {
-    private static final java.util.Set<String> TRANSACTION_FIELDS = java.util.Arrays.stream(
-            DigitalAssetMismatchField.values()
-        )
-        .filter(field -> field.externalName() != null && field != DigitalAssetMismatchField.EXTERNAL_REQUEST_ID)
+    private static final java.util.Set<DigitalAssetMismatchField> ACTIVE_TRANSACTION_FIELDS = java.util.Set.of(
+        DigitalAssetMismatchField.CUSTOMER_TOKEN,
+        DigitalAssetMismatchField.ACCOUNT_TOKEN,
+        DigitalAssetMismatchField.WALLET_ADDRESS,
+        DigitalAssetMismatchField.ASSET_ID,
+        DigitalAssetMismatchField.AMOUNT
+    );
+    private static final java.util.Set<String> TRANSACTION_FIELDS = ACTIVE_TRANSACTION_FIELDS.stream()
         .map(DigitalAssetMismatchField::externalName)
         .collect(java.util.stream.Collectors.toUnmodifiableSet());
     private final CanonicalValueHasher hasher;
@@ -37,9 +41,7 @@ public class DigitalAssetReconciliationEvaluator {
                 DigitalAssetReconciliationResult.WAIT, java.util.List.of(), expectedDigest, actualDigest
             );
         }
-        var mismatchedFields = java.util.Arrays.stream(DigitalAssetMismatchField.values())
-            .filter(field -> field != DigitalAssetMismatchField.EXTERNAL_REQUEST_ID
-                && field != DigitalAssetMismatchField.UNEXPECTED_FIELD)
+        var mismatchedFields = ACTIVE_TRANSACTION_FIELDS.stream()
             .filter(field -> !java.util.Objects.equals(
                 expected.get(field.externalName()), actual.get(field.externalName())
             ))

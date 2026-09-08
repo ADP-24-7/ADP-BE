@@ -1,5 +1,8 @@
 # BE-8 Digital Asset Policy Gate
 
+> 이 문서는 PR #16 당시의 Legacy v1 계약이다. 현재 Active Runtime은
+> [DA-P0-2 Approved Transaction Trust Boundary](da-p0-2-approved-transaction-boundary.md)를 따른다.
+
 > Historical baseline: 최신 Active Runtime 책임경계와 후속 변경 기준은
 > [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를 따른다.
 

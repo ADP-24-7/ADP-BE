@@ -101,10 +101,7 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
                 new DestinationFieldContract("input.accountId", DataClass.ACCOUNT_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
                 new DestinationFieldContract("input.walletAddress", DataClass.TRANSACTION_IDENTIFIER, FieldObligation.REQUIRED_EXACT, true, true),
                 new DestinationFieldContract("input.assetId", DataClass.BUSINESS_METADATA, FieldObligation.REQUIRED_EXACT, true, true),
-                new DestinationFieldContract("input.amount", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true),
-                new DestinationFieldContract("input.kycStatus", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
-                new DestinationFieldContract("input.amlStatus", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
-                new DestinationFieldContract("input.walletVerified", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true)
+                new DestinationFieldContract("input.amount", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true)
             )
         );
     }

@@ -65,9 +65,6 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
             case "$.input.walletAddress" -> "walletAddress";
             case "$.input.assetId" -> "assetId";
             case "$.input.amount" -> "amount";
-            case "$.input.kycStatus" -> "kycStatus";
-            case "$.input.amlStatus" -> "amlStatus";
-            case "$.input.walletVerified" -> "walletVerified";
             default -> throw new IllegalArgumentException("Unsupported Digital Asset provider field");
         };
     }

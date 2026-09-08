@@ -61,7 +61,7 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
             actual.put("amount", "999999");
         }
         if ("asset-mismatch".equals(assetId)) {
-            actual.put("kycStatus", "REVIEW");
+            actual.put("walletAddress", "wallet-provider-mismatch");
         }
         if ("asset-unexpected-field".equals(assetId)) {
             actual.put("customer-100-sensitive-value", "unexpected");

@@ -23,7 +23,9 @@ class AiCanonicalContextBuilderTests {
 
     @Test
     void addsSafePromptToTheSameCanonicalContextAsRetrievedRagFields() {
-        CanonicalContext result = builder.merge(context(), Map.of("prompt", "Summarize the approved context"));
+        CanonicalContext result = builder.merge(
+            context(), Map.of("prompt", "Summarize the approved context"), requestScope()
+        );
 
         assertThat(result.fields()).hasSize(1);
         assertThat(result.fields().getFirst().path()).isEqualTo("$.input.prompt");
@@ -33,7 +35,7 @@ class AiCanonicalContextBuilderTests {
 
     @Test
     void marksPromptAsUnknownWhenSensitiveDataIsDetectedSoPolicyCannotAllowIt() {
-        CanonicalContext result = builder.merge(context(), Map.of("prompt", "Contact 010-1234-5678"));
+        CanonicalContext result = builder.merge(context(), Map.of("prompt", "Contact 010-1234-5678"), requestScope());
 
         assertThat(result.fields().getFirst().dataClass()).isEqualTo(DataClass.UNKNOWN);
         assertThat(result.toString()).doesNotContain("010-1234-5678");
@@ -41,7 +43,9 @@ class AiCanonicalContextBuilderTests {
 
     @Test
     void rejectsUnapprovedInputKeysWithoutEchoingValues() {
-        assertThatThrownBy(() -> builder.merge(context(), Map.of("prompt", "safe", "rawCustomer", "secret")))
+        assertThatThrownBy(() -> builder.merge(
+            context(), Map.of("prompt", "safe", "rawCustomer", "secret"), requestScope()
+        ))
             .isInstanceOf(ExecutionPackInputRejectedException.class)
             .hasMessageNotContaining("secret");
     }
@@ -57,6 +61,13 @@ class AiCanonicalContextBuilderTests {
             "subject_digest",
             List.of(),
             "retrieval_digest"
+        );
+    }
+
+    private com.adp.gateway.context.application.ExecutionPackRequestScope requestScope() {
+        return new com.adp.gateway.context.application.ExecutionPackRequestScope(
+            "institution_test", "customer_summary", "CUSTOMER_SUPPORT", "subject_digest",
+            "dest_test", java.time.OffsetDateTime.parse("2026-09-08T00:00:00Z")
         );
     }
 }

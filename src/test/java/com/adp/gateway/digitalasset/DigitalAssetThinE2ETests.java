@@ -56,11 +56,13 @@ class DigitalAssetThinE2ETests {
                       "idempotencyKey":"idem_asset_%s",
                       "processingContexts":["DIGITAL_ASSET"],
                       "input":{
+                        "approvedTransactionReference":"approved-tx-local-001",
                         "customerId":"customer-100",
                         "accountId":"acct-100-1",
                         "walletAddress":"wallet-test-001",
                         "assetId":"asset-krw-token-001",
-                        "amount":10000
+                        "amount":10000,
+                        "beneficiaryReference":"beneficiary-local-001"
                       }
                     }
                     """.formatted(suffix)))
@@ -96,6 +98,18 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(exactFields).isEqualTo(3);
 
+        Integer removedBindingFields = jdbcClient.sql("""
+                select count(*)
+                from runtime.transform_execution te
+                join runtime.transform_field tf on tf.transform_execution_id = te.transform_execution_id
+                where te.execution_id = :executionId
+                  and tf.field_path = '$.input.beneficiaryReference'
+                  and tf.strategy = 'REMOVE'
+                  and tf.transformed_value_digest is null
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(removedBindingFields).isEqualTo(1);
+
         Integer settlementEvidence = jdbcClient.sql("""
                 select count(*) from runtime.digital_asset_transaction
                 where execution_id = :executionId
@@ -119,7 +133,8 @@ class DigitalAssetThinE2ETests {
         assertThat(response)
             .doesNotContain("customer-100")
             .doesNotContain("acct-100-1")
-            .doesNotContain("wallet-test-001");
+            .doesNotContain("wallet-test-001")
+            .doesNotContain("beneficiary-local-001");
     }
 
     @Test
@@ -138,15 +153,40 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
-    void routesDigitalAssetPolicyViolationsToReviewBeforeConnector() throws Exception {
-        assertPolicyReview("kyc", "wallet-kyc-pending", "10000",
-            "DIGITAL_ASSET_KYC_REVIEW_REQUIRED");
-        assertPolicyReview("aml", "wallet-aml-review", "10000",
-            "DIGITAL_ASSET_AML_REVIEW_REQUIRED");
-        assertPolicyReview("wallet", "wallet-unverified", "10000",
-            "DIGITAL_ASSET_WALLET_REVIEW_REQUIRED");
-        assertPolicyReview("amount", "wallet-test-001", "10000001",
-            "DIGITAL_ASSET_AMOUNT_LIMIT_REVIEW_REQUIRED");
+    void blocksApprovedTransactionTermMismatchesBeforeConnector() throws Exception {
+        assertPolicyBlock(
+            "asset", "approved-tx-local-001", "wallet-test-001", "asset-settling", "10000",
+            "beneficiary-local-001", "DIGITAL_ASSET_APPROVED_ASSET_MISMATCH"
+        );
+        assertPolicyBlock(
+            "amount", "approved-tx-local-001", "wallet-test-001", "asset-krw-token-001", "10000001",
+            "beneficiary-local-001", "DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED"
+        );
+        assertPolicyBlock(
+            "destination", "approved-tx-local-001", "wallet-not-approved", "asset-krw-token-001", "10000",
+            "beneficiary-local-001", "DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH"
+        );
+        assertPolicyBlock(
+            "beneficiary", "approved-tx-local-001", "wallet-test-001", "asset-krw-token-001", "10000",
+            "beneficiary-not-approved", "DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH"
+        );
+        assertPolicyBlock(
+            "expired", "approved-tx-expired", "wallet-test-001", "asset-krw-token-001", "10000",
+            "beneficiary-local-001", "DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION"
+        );
+    }
+
+    @Test
+    void rejectsUnknownApprovedTransactionBeforeConnector() throws Exception {
+        String suffix = "unknown_" + token();
+        assetRequest(
+            suffix, "customer-100", "approved-tx-unknown", "wallet-test-001",
+            "asset-krw-token-001", "10000", "beneficiary-local-001"
+        )
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.reasonCode").value("DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND"));
+
+        assertThat(connectorCount("req_asset_case_" + suffix)).isZero();
     }
 
     @Test
@@ -185,7 +225,7 @@ class DigitalAssetThinE2ETests {
             .andReturn().getResponse().getContentAsString();
         String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
 
-        assertMismatchCase(executionId, "MISMATCH", "KYC_STATUS");
+        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "WALLET_ADDRESS");
     }
 
     @Test
@@ -299,6 +339,21 @@ class DigitalAssetThinE2ETests {
         String assetId,
         String amount
     ) throws Exception {
+        return assetRequest(
+            suffix, customerId, approvalReferenceFor(assetId), walletAddress, assetId, amount,
+            "beneficiary-local-001"
+        );
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assetRequest(
+        String suffix,
+        String customerId,
+        String approvedTransactionReference,
+        String walletAddress,
+        String assetId,
+        String amount,
+        String beneficiaryReference
+    ) throws Exception {
         return mockMvc.perform(post("/v1/runtime/executions")
             .header("X-Request-Id", "req_asset_case_" + suffix)
             .header("X-Trace-Id", "trace_asset_case_" + suffix)
@@ -309,24 +364,32 @@ class DigitalAssetThinE2ETests {
                  "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
                  "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                  "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
-                 "input":{"customerId":"%s","accountId":"acct-100-1","walletAddress":"%s",
-                 "assetId":"%s","amount":%s}}
-                """.formatted(suffix, customerId, walletAddress, assetId, amount)));
+                 "input":{"approvedTransactionReference":"%s","customerId":"%s",
+                 "accountId":"acct-100-1","walletAddress":"%s","assetId":"%s","amount":%s,
+                 "beneficiaryReference":"%s"}}
+                """.formatted(
+                    suffix, approvedTransactionReference, customerId, walletAddress, assetId, amount,
+                    beneficiaryReference
+                )));
     }
 
-    private void assertPolicyReview(
+    private void assertPolicyBlock(
         String label,
+        String approvedTransactionReference,
         String walletAddress,
+        String assetId,
         String amount,
+        String beneficiaryReference,
         String expectedReason
     ) throws Exception {
         String suffix = label + "_" + token();
         assetRequest(
-            suffix, "customer-100", walletAddress, "asset-krw-token-001", amount
+            suffix, "customer-100", approvedTransactionReference, walletAddress, assetId, amount,
+            beneficiaryReference
         )
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
-            .andExpect(jsonPath("$.finalAction").value("REVIEW"))
+            .andExpect(jsonPath("$.status").value("BLOCKED"))
+            .andExpect(jsonPath("$.finalAction").value("BLOCK"))
             .andExpect(jsonPath("$.connectorStatus").value("NOT_SENT"));
 
         PolicyGateEvidence evidence = jdbcClient.sql("""
@@ -341,15 +404,32 @@ class DigitalAssetThinE2ETests {
             .param("requestId", "req_asset_case_" + suffix)
             .query(PolicyGateEvidence.class)
             .single();
-        assertThat(evidence.profileVersion()).isEqualTo("1.0.0");
+        assertThat(evidence.profileVersion()).isEqualTo("0.2.0");
         assertThat(evidence.profileDigest()).matches("[0-9a-f]{64}");
-        assertThat(evidence.profileAction()).isEqualTo("REVIEW");
-        assertThat(evidence.finalAction()).isEqualTo("REVIEW");
+        assertThat(evidence.profileAction()).isEqualTo("BLOCK");
+        assertThat(evidence.finalAction()).isEqualTo("BLOCK");
         assertThat(evidence.reasonCodes()).contains(expectedReason);
-        assertThat(evidence.assertionSource()).isEqualTo("BANK_COMPLIANCE_FIXTURE");
-        assertThat(evidence.assertionVersion()).isEqualTo("1.0.0");
-        assertThat(evidence.assertionDigest()).matches("[0-9a-f]{64}");
+        assertThat(evidence.assertionSource()).isNull();
+        assertThat(evidence.assertionVersion()).isNull();
+        assertThat(evidence.assertionDigest()).isNull();
         assertThat(evidence.connectorCount()).isZero();
+    }
+
+    private int connectorCount(String requestId) {
+        return jdbcClient.sql("""
+                select count(*) from runtime.connector_execution ce
+                join runtime.runtime_execution re on re.execution_id = ce.execution_id
+                where re.request_id = :requestId
+                """)
+            .param("requestId", requestId)
+            .query(Integer.class)
+            .single();
+    }
+
+    private String approvalReferenceFor(String assetId) {
+        return "asset-krw-token-001".equals(assetId)
+            ? "approved-tx-local-001"
+            : "approved-tx-" + assetId;
     }
 
     private double terminalTransitions(String status) {
