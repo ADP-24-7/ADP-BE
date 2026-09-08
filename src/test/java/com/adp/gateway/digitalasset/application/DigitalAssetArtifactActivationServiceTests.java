@@ -47,17 +47,20 @@ class DigitalAssetArtifactActivationServiceTests {
         var service = service();
         var principal = principal();
         when(ingestionPersistence.find(any(), any(), any(), any())).thenReturn(Optional.of(ingestion()));
+        when(snapshotPersistence.loadActive("institution-local", "workload")).thenReturn(Optional.empty());
         when(lifecycleService.load(principal, "artifact", "1.0.0")).thenReturn(lifecycle(PolicyLifecycleStage.APPROVED));
 
         var active = service.activate(principal, "artifact", "1.0.0");
 
         assertThat(active.activatedBy()).isEqualTo("checker");
         InOrder order = inOrder(lifecycleService, snapshotPersistence);
-        order.verify(lifecycleService).transition(
+        order.verify(snapshotPersistence).lockActiveScope("institution-local", "workload");
+        order.verify(snapshotPersistence).loadActive("institution-local", "workload");
+        order.verify(lifecycleService).transitionForRuntimeSelection(
             principal, "artifact", "1.0.0", PolicyLifecycleStage.ACTIVE,
             PolicyLifecycleTransitionReason.ACTIVATION_APPROVED
         );
-        order.verify(snapshotPersistence).activate(active);
+        order.verify(snapshotPersistence).replaceActive(active);
     }
 
     @Test
@@ -65,13 +68,51 @@ class DigitalAssetArtifactActivationServiceTests {
         var service = service();
         var principal = principal();
         when(ingestionPersistence.find(any(), any(), any(), any())).thenReturn(Optional.of(ingestion()));
+        when(snapshotPersistence.loadActive("institution-local", "workload")).thenReturn(Optional.empty());
         when(lifecycleService.load(principal, "artifact", "1.0.0")).thenReturn(lifecycle(PolicyLifecycleStage.CANDIDATE));
 
         assertThatThrownBy(() -> service.activate(principal, "artifact", "1.0.0"))
             .isInstanceOf(DigitalAssetRuntimeSnapshotException.class)
             .extracting(exception -> ((DigitalAssetRuntimeSnapshotException) exception).reasonCode())
             .isEqualTo("DIGITAL_ASSET_ACTIVE_ARTIFACT_INVALID");
-        verify(snapshotPersistence, never()).activate(any());
+        verify(snapshotPersistence, never()).replaceActive(any());
+    }
+
+    @Test
+    void supersedesPreviousActiveBeforeReplacingSelection() {
+        var service = service();
+        var principal = principal();
+        DigitalAssetArtifactIngestion replacement = ingestion();
+        var previous = new com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact(
+            "institution-local", "workload", "PURPOSE", "artifact", "0.9.0", "e".repeat(64),
+            "destination", "0.9.0", "sha256:" + "f".repeat(64), "0.9.0",
+            "sha256:" + "1".repeat(64), "previous-checker", NOW.minusDays(1)
+        );
+        when(ingestionPersistence.find(any(), any(), any(), any())).thenReturn(Optional.of(replacement));
+        when(snapshotPersistence.loadActive("institution-local", "workload")).thenReturn(Optional.of(previous));
+        when(lifecycleService.load(principal, "artifact", "1.0.0"))
+            .thenReturn(lifecycle(PolicyLifecycleStage.APPROVED));
+        when(lifecycleService.load(principal, "artifact", "0.9.0"))
+            .thenReturn(new PolicyLifecycleRecord(
+                "artifact", "0.9.0", "e".repeat(64), "institution-local", PolicyLayer.WORKLOAD,
+                ExecutionPackType.DIGITAL_ASSET, "workload", "PURPOSE", PolicyLifecycleStage.ACTIVE,
+                "old-maker", 6, NOW.minusDays(1), NOW.minusDays(1)
+            ));
+
+        var active = service.activate(principal, "artifact", "1.0.0");
+
+        InOrder order = inOrder(lifecycleService, snapshotPersistence);
+        order.verify(snapshotPersistence).lockActiveScope("institution-local", "workload");
+        order.verify(snapshotPersistence).loadActive("institution-local", "workload");
+        order.verify(lifecycleService).transitionForRuntimeSelection(
+            principal, "artifact", "0.9.0", PolicyLifecycleStage.SUPERSEDED,
+            PolicyLifecycleTransitionReason.ACTIVE_VERSION_SUPERSEDED
+        );
+        order.verify(lifecycleService).transitionForRuntimeSelection(
+            principal, "artifact", "1.0.0", PolicyLifecycleStage.ACTIVE,
+            PolicyLifecycleTransitionReason.ACTIVATION_APPROVED
+        );
+        order.verify(snapshotPersistence).replaceActive(active);
     }
 
     private DigitalAssetArtifactActivationService service() {

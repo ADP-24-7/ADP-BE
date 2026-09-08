@@ -40,7 +40,7 @@ class DigitalAssetRuntimeSnapshotServiceTests {
     @Test
     void pinsAllVersionedIdentitiesIntoOneImmutableSnapshot() {
         var service = new DigitalAssetRuntimeSnapshotService(persistence, new DigitalAssetCanonicalJson());
-        when(persistence.loadActive("institution-local", "workload", "PURPOSE"))
+        when(persistence.loadActive("institution-local", "workload"))
             .thenReturn(Optional.of(active()));
 
         var result = service.pinIfRequired(
@@ -61,7 +61,7 @@ class DigitalAssetRuntimeSnapshotServiceTests {
     @Test
     void rejectsProvisionalPolicyBeforeSnapshotPersistence() {
         var service = new DigitalAssetRuntimeSnapshotService(persistence, new DigitalAssetCanonicalJson());
-        when(persistence.loadActive(any(), any(), any())).thenReturn(Optional.of(active()));
+        when(persistence.loadActive(any(), any())).thenReturn(Optional.of(active()));
 
         assertThatThrownBy(() -> service.pinIfRequired(
             "exec-1", "institution-local", "workload", "PURPOSE", destination(),
@@ -75,7 +75,7 @@ class DigitalAssetRuntimeSnapshotServiceTests {
     @Test
     void rejectsMissingActiveSelectionBeforeSnapshotPersistence() {
         var service = new DigitalAssetRuntimeSnapshotService(persistence, new DigitalAssetCanonicalJson());
-        when(persistence.loadActive(any(), any(), any())).thenReturn(Optional.empty());
+        when(persistence.loadActive(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.pinIfRequired(
             "exec-1", "institution-local", "workload", "PURPOSE", destination(),

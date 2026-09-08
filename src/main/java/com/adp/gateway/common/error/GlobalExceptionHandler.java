@@ -304,8 +304,7 @@ public class GlobalExceptionHandler {
         ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
         HttpStatus status = switch (reasonCode) {
             case DIGITAL_ASSET_ACTIVE_ARTIFACT_NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case DIGITAL_ASSET_ACTIVE_ARTIFACT_CONFLICT,
-                 DIGITAL_ASSET_RUNTIME_SNAPSHOT_CONFLICT -> HttpStatus.CONFLICT;
+            case DIGITAL_ASSET_RUNTIME_SNAPSHOT_CONFLICT -> HttpStatus.CONFLICT;
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };
         return errorResponse(reasonCode, "Digital Asset runtime snapshot rejected", status, request);

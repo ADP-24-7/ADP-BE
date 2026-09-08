@@ -6,12 +6,13 @@ import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 
 public interface DigitalAssetRuntimeSnapshotPersistence {
-    void activate(DigitalAssetActiveArtifact artifact);
+    void lockActiveScope(String institutionId, String workloadId);
+
+    void replaceActive(DigitalAssetActiveArtifact artifact);
 
     Optional<DigitalAssetActiveArtifact> loadActive(
         String institutionId,
-        String workloadId,
-        String purposeCode
+        String workloadId
     );
 
     void save(DigitalAssetRuntimeSnapshot snapshot);

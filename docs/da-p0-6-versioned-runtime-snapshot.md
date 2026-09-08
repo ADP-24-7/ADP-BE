@@ -44,8 +44,9 @@ Snapshot과 Evidence에 저장하지 않는다.
 POST /api/admin/digital-assets/artifacts/{artifactId}/versions/{artifactVersion}/activate
 ```
 
-`PRIVILEGED_OPERATOR`만 호출할 수 있다. 이미 같은 Institution과 Workload에 ACTIVE selection이 있으면 `409`로
-종료하며 기존 선택을 암묵적으로 교체하지 않는다.
+`PRIVILEGED_OPERATOR`만 호출할 수 있다. 같은 Institution과 Workload에 기존 ACTIVE가 있으면 scope lock 안에서
+기존 버전을 `SUPERSEDED`로 퇴역시키고 신규 APPROVED 버전을 ACTIVE로 전이한 뒤 selection을 원자적으로 교체한다.
+동일 버전의 재요청은 기존 selection을 반환한다.
 
 ```http
 GET /v1/runtime/executions/{executionId}
@@ -59,7 +60,6 @@ Digital Asset 실행은 `digitalAssetRuntimeSnapshot`을 포함한다. 다른 Ex
 
 - ACTIVE selection 없음: `DIGITAL_ASSET_ACTIVE_ARTIFACT_NOT_FOUND`
 - 선택 scope/digest/runtime metadata 불일치: `DIGITAL_ASSET_RUNTIME_SNAPSHOT_INVALID`
-- 동시 활성화 충돌: `DIGITAL_ASSET_ACTIVE_ARTIFACT_CONFLICT`
 - execution snapshot 중복: `DIGITAL_ASSET_RUNTIME_SNAPSHOT_CONFLICT`
 
 모든 선택/검증 실패는 Connector 전에 Runtime `BLOCKED`로 수렴한다.
@@ -76,6 +76,7 @@ Recovery도 Provider 상태만 조회하며 ACTIVE Artifact, Policy, Destination
 - ACTIVE Artifact가 없으면 저장 전 차단
 - Artifact/Policy/Destination/Control/Crosswalk identity 전체 저장
 - V28 schema와 Institution x Workload 단일 ACTIVE PK 검증
+- V29 `SUPERSEDED` 상태와 ACTIVE replacement migration 검증
+- v1 Snapshot 생성 후 v2 활성화 시 기존 실행은 v1, 신규 실행은 v2를 유지하는 DB E2E
 - Digital Asset E2E의 Snapshot DB, Runtime Trace, Audit Evidence 일치 검증
 - `SENT_UNKNOWN` Recovery 전후 Snapshot digest 불변 검증
-

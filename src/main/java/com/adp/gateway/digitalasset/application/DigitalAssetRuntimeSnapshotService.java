@@ -39,8 +39,11 @@ public class DigitalAssetRuntimeSnapshotService {
         if (destination.packType() != ExecutionPackType.DIGITAL_ASSET) {
             return Optional.empty();
         }
-        DigitalAssetActiveArtifact active = persistence.loadActive(institutionId, workloadId, purposeCode)
+        DigitalAssetActiveArtifact active = persistence.loadActive(institutionId, workloadId)
             .orElseThrow(() -> rejected("DIGITAL_ASSET_ACTIVE_ARTIFACT_NOT_FOUND"));
+        if (!active.purposeCode().equals(purposeCode)) {
+            throw rejected("DIGITAL_ASSET_RUNTIME_SNAPSHOT_INVALID");
+        }
         validate(active, destination, policy, selectedAt);
 
         String snapshotId = "dasnap_" + UUID.randomUUID();

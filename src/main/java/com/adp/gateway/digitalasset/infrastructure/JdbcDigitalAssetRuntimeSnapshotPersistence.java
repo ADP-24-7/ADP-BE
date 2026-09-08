@@ -20,9 +20,19 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
     }
 
     @Override
-    public void activate(DigitalAssetActiveArtifact value) {
-        try {
-            jdbcClient.sql("""
+    public void lockActiveScope(String institutionId, String workloadId) {
+        jdbcClient.sql("""
+                select 1
+                from (select pg_advisory_xact_lock(hashtextextended(:identity, 0))) acquired
+                """)
+            .param("identity", institutionId + "\u001f" + workloadId)
+            .query(Integer.class)
+            .single();
+    }
+
+    @Override
+    public void replaceActive(DigitalAssetActiveArtifact value) {
+        jdbcClient.sql("""
                     insert into policy.digital_asset_active_artifact (
                         institution_id, workload_id, purpose_code, artifact_id, artifact_version,
                         artifact_digest, activated_by, activated_at
@@ -30,6 +40,13 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                         :institutionId, :workloadId, :purposeCode, :artifactId, :artifactVersion,
                         :artifactDigest, :activatedBy, :activatedAt
                     )
+                    on conflict (institution_id, workload_id) do update set
+                        purpose_code = excluded.purpose_code,
+                        artifact_id = excluded.artifact_id,
+                        artifact_version = excluded.artifact_version,
+                        artifact_digest = excluded.artifact_digest,
+                        activated_by = excluded.activated_by,
+                        activated_at = excluded.activated_at
                     """)
                 .param("institutionId", value.institutionId())
                 .param("workloadId", value.workloadId())
@@ -38,20 +55,14 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                 .param("artifactVersion", value.artifactVersion())
                 .param("artifactDigest", value.artifactDigest())
                 .param("activatedBy", value.activatedBy())
-                .param("activatedAt", value.activatedAt())
-                .update();
-        } catch (DuplicateKeyException exception) {
-            throw new DigitalAssetRuntimeSnapshotException(
-                "DIGITAL_ASSET_ACTIVE_ARTIFACT_CONFLICT", exception
-            );
-        }
+            .param("activatedAt", value.activatedAt())
+            .update();
     }
 
     @Override
     public Optional<DigitalAssetActiveArtifact> loadActive(
         String institutionId,
-        String workloadId,
-        String purposeCode
+        String workloadId
     ) {
         return jdbcClient.sql("""
                 select aa.institution_id, aa.workload_id, aa.purpose_code,
@@ -70,7 +81,6 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                  and la.artifact_version = aa.artifact_version
                 where aa.institution_id = :institutionId
                   and aa.workload_id = :workloadId
-                  and aa.purpose_code = :purposeCode
                   and la.lifecycle_stage = 'ACTIVE'
                   and aa.artifact_digest = ai.artifact_digest
                   and aa.artifact_digest = la.artifact_digest
@@ -81,7 +91,6 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                 """)
             .param("institutionId", institutionId)
             .param("workloadId", workloadId)
-            .param("purposeCode", purposeCode)
             .query((rs, rowNum) -> new DigitalAssetActiveArtifact(
                 rs.getString("institution_id"), rs.getString("workload_id"), rs.getString("purpose_code"),
                 rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),

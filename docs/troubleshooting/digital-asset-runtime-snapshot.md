@@ -7,11 +7,21 @@
 수 있다. 별도 `digital_asset_active_artifact` 테이블을 authoritative selection으로 두고 Institution과 Workload를 PK로
 고정했다. Runtime은 Lifecycle의 ACTIVE row를 임의 검색하지 않고 이 선택 테이블만 사용한다.
 
-## 상태 전이와 ACTIVE 선택 사이의 중간 상태
+## INSERT-only ACTIVE가 새 버전을 영구 차단한 문제
 
-Lifecycle을 먼저 ACTIVE로 바꾸고 selection 저장이 충돌하면 실행 가능 여부가 불명확해진다. 전용 Activation Service에서
-APPROVED 검증, Maker-Checker ACTIVE 전이, selection insert를 하나의 transaction으로 처리했다. selection의 PK 충돌은
-전체 transaction을 rollback하므로 Lifecycle만 ACTIVE로 남는 중간 상태를 만들지 않는다.
+Institution과 Workload PK에 INSERT만 수행하면 단일 ACTIVE는 보장되지만 최초 버전을 새 버전으로 교체할 수 없다.
+`ROLLED_BACK`은 장애나 정책 철회를 의미하므로 정상적인 버전 승격에 재사용하지 않고 `SUPERSEDED` 상태와
+`ACTIVE_VERSION_SUPERSEDED` 사유를 추가했다.
+
+Activation Service는 Institution과 Workload advisory lock을 잡은 뒤 기존 ACTIVE를 `SUPERSEDED`로 전이하고 신규
+APPROVED를 ACTIVE로 만든 다음 selection을 UPSERT한다. 세 작업은 하나의 transaction이므로 실패 시 기존 selection과
+Lifecycle이 함께 복원된다. 동일 버전 활성화 요청은 현재 selection을 그대로 반환한다.
+
+Generic Lifecycle API에서 Digital Asset을 직접 ACTIVE/SUPERSEDED로 전이하면 authoritative selection을 우회할 수 있다.
+따라서 두 전이는 `transitionForRuntimeSelection` 경계에서만 허용하고 일반 Lifecycle transition 요청은 fail-closed한다.
+
+DB E2E는 실행 A가 v1을 pin한 상태에서 v2를 활성화하고 실행 B가 v2를 pin한 뒤에도 실행 A의 v1 Snapshot row와 digest가
+변하지 않는지 검증한다.
 
 ## V27 데이터에 Runtime 버전을 임의 backfill하는 위험
 
@@ -36,4 +46,3 @@ execution을 반환하고, Recovery는 저장된 Connector correlation/evidence�
 P0-5 sample Artifact ID를 Runtime ACTIVE fixture에도 사용하면 Loader 동시 적재 테스트와 상태가 충돌한다. 로컬 실행용
 ACTIVE identity를 `DA-DIGITAL-ASSET-RUNTIME-LOCAL-ACTIVE-001`로 분리하고, P0-5 sample은 Candidate ingestion 검증용으로
 유지했다.
-
