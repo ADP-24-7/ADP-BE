@@ -91,9 +91,7 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         if (!text(context, "walletAddress").equals(metadata(context, "approvedDestination"))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH);
         }
-        if (!metadata(context, "requestedBeneficiaryReference").equals(
-            metadata(context, "approvedBeneficiaryReference")
-        )) {
+        if (!text(context, "beneficiaryReference").equals(metadata(context, "approvedBeneficiaryReference"))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH);
         }
         OffsetDateTime approvedFrom = OffsetDateTime.parse(metadata(context, "approvedFrom"));

@@ -98,6 +98,18 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId).query(Integer.class).single();
         assertThat(exactFields).isEqualTo(3);
 
+        Integer removedBindingFields = jdbcClient.sql("""
+                select count(*)
+                from runtime.transform_execution te
+                join runtime.transform_field tf on tf.transform_execution_id = te.transform_execution_id
+                where te.execution_id = :executionId
+                  and tf.field_path = '$.input.beneficiaryReference'
+                  and tf.strategy = 'REMOVE'
+                  and tf.transformed_value_digest is null
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(removedBindingFields).isEqualTo(1);
+
         Integer settlementEvidence = jdbcClient.sql("""
                 select count(*) from runtime.digital_asset_transaction
                 where execution_id = :executionId
@@ -121,7 +133,8 @@ class DigitalAssetThinE2ETests {
         assertThat(response)
             .doesNotContain("customer-100")
             .doesNotContain("acct-100-1")
-            .doesNotContain("wallet-test-001");
+            .doesNotContain("wallet-test-001")
+            .doesNotContain("beneficiary-local-001");
     }
 
     @Test

@@ -11,6 +11,9 @@ public class ApprovedTransactionResolver {
 
     public ApprovedTransactionResolver(List<ApprovedTransactionPort> ports) {
         this.ports = List.copyOf(ports);
+        if (this.ports.size() > 1) {
+            throw new IllegalStateException("Multiple approved transaction authorities are configured");
+        }
     }
 
     public ApprovedTransactionSnapshot resolve(ApprovedTransactionLookup lookup) {

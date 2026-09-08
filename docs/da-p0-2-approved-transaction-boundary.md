@@ -23,12 +23,19 @@ Runtime authorization
 beneficiary, 유효기간은 `ApprovedTransactionPort`가 반환한 snapshot만 신뢰한다. Context digest에는
 승인 snapshot digest를 결속하고 Pack Policy Evidence의 profile identity에도 승인 ID/version/digest를 남긴다.
 
+Caller의 `beneficiaryReference`는 승인값과 비교하기 위한 일반 Canonical Field이며 `trustedMetadata`에 넣지 않는다.
+현재 Provider 계약에는 beneficiary 전송이 필요하지 않으므로 Transform에서 `REMOVE`하고 outbound payload에서도 제외한다.
+요청 결속 필드로서 Approval Scope에는 포함하지만 Destination Profile에는 포함하지 않는다. `trustedMetadata`에는
+server-owned `approved*` 값만 저장한다.
+
 ## Active/Legacy 분리
 
 - `DigitalAssetCanonicalContextBuilder`는 `DigitalAssetComplianceContextResolver`를 호출하지 않는다.
 - `DigitalAssetPolicyGate`는 `DigitalAssetPolicyProfilePort`를 조회하지 않는다.
 - Provider payload와 destination/approval field contract에서 `kycStatus`, `amlStatus`,
   `walletVerified`를 제거한다.
+- V19 `profile_*`에 승인 ID/version/digest를 기록하는 것은 기존 persistence와의 P0-2 transitional compatibility
+  mapping이다. Policy Profile과 Approved Transaction을 구분하는 canonical evidence schema는 P0-3/P0-4에서 정의한다.
 - 기존 Compliance Context, Policy Profile, reason code, V16~V20 schema는 과거 Evidence 해석을 위해
   삭제하지 않는다.
 - Local V4 fixture 이력은 유지하고 V5 local script가 Active retrieval field만 정리한다. 이 변경만을 위한
@@ -46,4 +53,5 @@ beneficiary, 유효기간은 `ApprovedTransactionPort`가 반환한 snapshot만 
 
 P0-3에서 `ApprovedTransaction`, `OutboundRequest`, `ExternalExecutionResult`의 최종 이름과 nullability를
 고정한다. P0-4에서는 identifier/enum/schema version을 DA와 함께 freeze한다. 현재 local adapter는 개발용
-server-owned fixture이며 운영 승인 원장 구현을 대신하지 않는다.
+server-owned fixture이며 운영 승인 원장 구현을 대신하지 않는다. Connector 직전 snapshot 재검증과 TOCTOU 방지는
+P0-7 PRE_EXECUTION Guard에서 처리한다.

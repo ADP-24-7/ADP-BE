@@ -74,6 +74,7 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         add(fields, "walletAddress", purchase.walletAddress(), DataClass.TRANSACTION_IDENTIFIER);
         add(fields, "assetId", purchase.assetId(), DataClass.BUSINESS_METADATA);
         add(fields, "amount", purchase.amount().toPlainString(), DataClass.FINANCIAL_AMOUNT);
+        add(fields, "beneficiaryReference", purchase.beneficiaryReference(), DataClass.BUSINESS_METADATA);
         fields.sort(Comparator.comparing(CanonicalContextField::path));
         var trustedMetadata = new java.util.HashMap<String, String>();
         trustedMetadata.put("approvedTransactionId", approved.approvedTransactionId());
@@ -84,7 +85,6 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         trustedMetadata.put("approvedDestinationProfileId", approved.approvedDestinationProfileId());
         trustedMetadata.put("approvedDestination", approved.approvedDestination());
         trustedMetadata.put("approvedBeneficiaryReference", approved.approvedBeneficiaryReference());
-        trustedMetadata.put("requestedBeneficiaryReference", purchase.beneficiaryReference());
         trustedMetadata.put("approvedFrom", approved.approvedFrom().toString());
         trustedMetadata.put("approvedUntil", approved.approvedUntil().toString());
         String digest = hasher.hash(

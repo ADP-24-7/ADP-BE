@@ -22,7 +22,9 @@ public record ApprovedTransactionSnapshot(
     public ApprovedTransactionSnapshot {
         requireText(approvedTransactionId, "approvedTransactionId");
         requireText(version, "version");
-        requireText(digest, "digest");
+        if (digest == null || !digest.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("digest must be a lowercase SHA-256 hex value");
+        }
         requireText(institutionId, "institutionId");
         requireText(subjectRefDigest, "subjectRefDigest");
         requireText(workloadId, "workloadId");

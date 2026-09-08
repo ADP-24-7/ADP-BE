@@ -45,6 +45,16 @@ class ApprovedTransactionResolverTests {
             .isInstanceOf(ApprovedTransactionUnavailableException.class);
     }
 
+    @Test
+    void rejectsMultipleApprovalAuthoritiesInsteadOfSelectingOneByBeanOrder() {
+        ApprovedTransactionPort first = lookup -> Optional.of(snapshot());
+        ApprovedTransactionPort second = lookup -> Optional.of(snapshot());
+
+        assertThatThrownBy(() -> new ApprovedTransactionResolver(List.of(first, second)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Multiple approved transaction authorities are configured");
+    }
+
     private ApprovedTransactionLookup lookup(String institutionId, String subjectDigest) {
         return new ApprovedTransactionLookup(
             new ApprovedTransactionReference("approved-tx-001"), institutionId, subjectDigest,
@@ -54,7 +64,7 @@ class ApprovedTransactionResolverTests {
 
     private ApprovedTransactionSnapshot snapshot() {
         return new ApprovedTransactionSnapshot(
-            "approved-tx-001", "0.2.0", "digest", "institution-a", "subject-digest-a",
+            "approved-tx-001", "0.2.0", "a".repeat(64), "institution-a", "subject-digest-a",
             "tokenized_asset_purchase", "DIGITAL_ASSET_PURCHASE", "asset-001",
             new BigDecimal("1000"), "dest-001", "wallet-001", "beneficiary-001",
             OffsetDateTime.parse("2026-01-01T00:00:00Z"),

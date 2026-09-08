@@ -112,7 +112,7 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
             "be-snapshot-local-fixture:digital-asset-purchase:mock-asset-platform",
             Set.of(AdpRole.RUNTIME_EXECUTOR), Set.of("DIGITAL_ASSET"),
             Set.of("request.customerId", "request.accountId", "request.walletAddress", "request.assetId",
-                "request.amount"),
+                "request.amount", "request.beneficiaryReference"),
             "dest_mock_asset_platform_v1", "1.0.0", OffsetDateTime.parse("2026-01-01T00:00:00Z"),
             null, List.of("PROJECT_PROVISIONAL_DIGITAL_ASSET_APPROVAL_EVIDENCE")
         );
