@@ -118,6 +118,7 @@ P0-4는 DB 상태를 추가하지 않으므로 Flyway migration이 없다. Artif
 - 한글과 supplementary Unicode를 포함한 cross-language golden vector 검증
 - Runtime Guard, Fake Connector, manifest의 External Result Schema Version 결속 검증
 - Java parser와 Schema의 approved reference 및 execution asset 길이 경계 검증
+- Provider amount의 decimal string-only 및 non-final execution tuple 길이 경계 검증
 - Manifest content/file digest 재계산 검증
 - Asset conditional field와 unknown field negative test
 - Common FinalAction에서 Digital Asset Decision으로의 분리 mapping 검증

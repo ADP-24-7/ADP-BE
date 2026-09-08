@@ -98,3 +98,14 @@ canonical digest 재현성 문제와 해결 결정을 정리한다.
   vector를 공개했다. Enum inventory도 Java 선언 순서와 exact list equality로 검증한다.
 - 교훈: canonicalization 설명만으로 cross-language 재현성을 주장하지 않고 입력, canonical bytes, digest vector를
   함께 배포해야 한다.
+
+## Provider Result의 상태별 Wire 검증이 달랐던 문제
+
+- 문제: External Result Schema는 amount를 decimal string으로 제한했지만 Java parser는 Number도 허용했다. 또한
+  chain ID, asset symbol, token ID 길이는 SETTLED에서만 검증해 SETTLING 등 non-final 결과가 Schema와 다르게
+  처리될 수 있었다.
+- 해결: Provider 결과 parser가 `DigitalAssetAmount.fromWire()`를 사용하도록 변경하고, execution tuple의 길이 제한을
+  상태와 무관하게 입력 단계에서 적용했다. SETTLED에서는 완전성, receipt, finality, asset kind 의미 검증을 추가로
+  수행한다.
+- 교훈: Wire type과 개별 필드 제약은 상태 전이 검증보다 먼저 적용하고, final 상태는 그 위에 semantic invariant를
+  추가해야 한다.

@@ -305,6 +305,36 @@ class DigitalAssetCanonicalContractTests {
     }
 
     @Test
+    void schemaAndRuntimeShareNonFinalExecutionAssetBoundaries() throws IOException {
+        JsonNode schemaNode = read(SCHEMA_PATH);
+        Schema resultSchema = schemaAt(schemaNode, "external_execution_result");
+        assertNonFinalResultBoundary(resultSchema, "executedChainId", 80);
+        assertNonFinalResultBoundary(resultSchema, "executedAssetSymbol", 64);
+        assertNonFinalResultBoundary(resultSchema, "tokenId", 160);
+    }
+
+    @Test
+    void schemaAndRuntimeRequireStringAmountsFromProvider() throws IOException {
+        JsonNode schemaNode = read(SCHEMA_PATH);
+        Schema resultSchema = schemaAt(schemaNode, "external_execution_result");
+        ObjectNode result = (ObjectNode) read(RESULT_SAMPLE_PATH);
+
+        result.put("executedAmount", "10000");
+        result.put("nativeValue", "0");
+        assertValid(resultSchema, result);
+        parseExternalResult(result);
+
+        result.put("executedAmount", 10000);
+        assertInvalid(resultSchema, result);
+        assertThatThrownBy(() -> parseExternalResult(result)).isInstanceOf(IllegalArgumentException.class);
+
+        result.put("executedAmount", "10000");
+        result.put("nativeValue", 0);
+        assertInvalid(resultSchema, result);
+        assertThatThrownBy(() -> parseExternalResult(result)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void schemaEnforcesConditionalAssetFieldsAndRejectsUnknownFields() throws IOException {
         JsonNode schemaNode = read(SCHEMA_PATH);
         Schema requestSchema = schemaAt(schemaNode, "runtime_request");
@@ -387,6 +417,17 @@ class DigitalAssetCanonicalContractTests {
 
     private void assertResultBoundary(Schema schema, String field, int maxLength) throws IOException {
         ObjectNode result = (ObjectNode) read(RESULT_SAMPLE_PATH);
+        result.put(field, "a".repeat(maxLength));
+        assertValid(schema, result);
+        parseExternalResult(result);
+        result.put(field, "a".repeat(maxLength + 1));
+        assertInvalid(schema, result);
+        assertThatThrownBy(() -> parseExternalResult(result)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private void assertNonFinalResultBoundary(Schema schema, String field, int maxLength) throws IOException {
+        ObjectNode result = (ObjectNode) read(RESULT_SAMPLE_PATH);
+        result.put("externalStatus", "SETTLING");
         result.put(field, "a".repeat(maxLength));
         assertValid(schema, result);
         parseExternalResult(result);

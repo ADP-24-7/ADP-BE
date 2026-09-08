@@ -62,11 +62,12 @@ public record ExternalExecutionResult(
             enumValue(DigitalAssetProviderStatus.class, source.get("providerStatus")),
             enumValue(DigitalAssetReceiptStatus.class, source.get("receiptStatus")),
             enumValue(DigitalAssetFinalityStatus.class, source.get("finalityStatus")),
-            nullableText(source.get("executedChainId")), nullableText(source.get("executedRecipientAddress")),
-            nullableEnum(DigitalAssetKind.class, source.get("executedAssetKind")), nullableText(source.get("executedAssetSymbol")),
-            nullableText(source.get("executedAssetContractAddress")), nullableAmount(source.get("executedAmount")),
-            nullableAmount(source.get("nativeValue")), nullableEnum(DigitalAssetOperation.class, source.get("operation")),
-            nullableText(source.get("tokenId")), nullableText(source.get("tokenTransferEvidenceRef")),
+            nullableText(source.get("executedChainId"), 80), nullableText(source.get("executedRecipientAddress")),
+            nullableEnum(DigitalAssetKind.class, source.get("executedAssetKind")),
+            nullableText(source.get("executedAssetSymbol"), 64),
+            nullableText(source.get("executedAssetContractAddress")), nullableWireAmount(source.get("executedAmount")),
+            nullableWireAmount(source.get("nativeValue")), nullableEnum(DigitalAssetOperation.class, source.get("operation")),
+            nullableText(source.get("tokenId"), 160), nullableText(source.get("tokenTransferEvidenceRef")),
             nullableText(source.get("internalTraceEvidenceRef")), nullableTime(source.get("executedAt")),
             nullableTime(source.get("finalizedAt")), responseDigest
         );
@@ -137,8 +138,8 @@ public record ExternalExecutionResult(
         return value == null ? null : enumValue(type, value);
     }
 
-    private static DigitalAssetAmount nullableAmount(Object value) {
-        return value == null ? null : DigitalAssetAmount.from(value);
+    private static DigitalAssetAmount nullableWireAmount(Object value) {
+        return value == null ? null : DigitalAssetAmount.fromWire(value);
     }
 
     private static OffsetDateTime nullableTime(Object value) {
@@ -161,6 +162,16 @@ public record ExternalExecutionResult(
 
     private static String nullableText(Object value) {
         return value == null ? null : text(value);
+    }
+
+    private static String nullableText(Object value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String text) || text.isBlank() || text.length() > maxLength) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_EXTERNAL_RESULT_INVALID");
+        }
+        return text;
     }
 
     private static String optional(String value, String name) {
