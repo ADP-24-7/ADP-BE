@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.adp.gateway.ai.domain.AiModelProfile;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.DestinationProfilePort;
 import com.adp.gateway.egress.domain.DestinationBinding;
@@ -34,7 +35,7 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
 
     @Override
     public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
-        if ("dest_mock_asset_platform_v1".equals(destinationProfileId)) {
+        if (DigitalAssetCanonicalContract.BASELINE_DESTINATION_PROFILE_ID.equals(destinationProfileId)) {
             meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
             return digitalAssetProfile(destinationProfileId);
         }
@@ -91,11 +92,17 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
 
     private DestinationProfile digitalAssetProfile(String destinationProfileId) {
         return new DestinationProfile(
-            destinationProfileId, "1.0.0", "local-digital-asset-destination-v1",
-            "digital-asset-egress-contract/v1", "mock-asset-platform", ExecutionPackType.DIGITAL_ASSET,
-            "digital-asset-request/v1", "tenant_local_asset", "KR", "SETTLEMENT_EVIDENCE_ONLY", false,
+            destinationProfileId, DigitalAssetCanonicalContract.BASELINE_DESTINATION_PROFILE_VERSION,
+            "local-digital-asset-destination-v1",
+            DigitalAssetCanonicalContract.BASELINE_DESTINATION_CONTRACT_VERSION,
+            "mock-asset-platform", ExecutionPackType.DIGITAL_ASSET,
+            DigitalAssetCanonicalContract.BASELINE_PROVIDER_REQUEST_SCHEMA_VERSION,
+            "tenant_local_asset", "KR", "SETTLEMENT_EVIDENCE_ONLY", false,
             "ACTIVE", OffsetDateTime.parse("2026-01-01T00:00:00Z"), null,
-            List.of(new DestinationBinding("tokenized_asset_purchase", "DIGITAL_ASSET_PURCHASE")),
+            List.of(new DestinationBinding(
+                DigitalAssetCanonicalContract.BASELINE_WORKLOAD_ID,
+                DigitalAssetCanonicalContract.BASELINE_PURPOSE_CODE
+            )),
             List.of(
                 new DestinationFieldContract("input.customerId", DataClass.CUSTOMER_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
                 new DestinationFieldContract("input.accountId", DataClass.ACCOUNT_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),

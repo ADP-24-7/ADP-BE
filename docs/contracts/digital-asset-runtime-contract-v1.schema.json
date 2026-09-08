@@ -1,0 +1,644 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adp.local/contracts/digital-asset-runtime-contract-v1.schema.json",
+  "title": "ADP Digital Asset Runtime Contract Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "artifact_version",
+    "canonicalization_version",
+    "content_digest",
+    "contract"
+  ],
+  "properties": {
+    "schema_version": { "const": "adp-digital-asset-runtime-contract/v1" },
+    "artifact_id": {
+      "const": "ADP-DIGITAL-ASSET-RUNTIME-CONTRACT"
+    },
+    "artifact_version": { "const": "1.0.0" },
+    "canonicalization_version": { "const": "adp-canonical-json/v1" },
+    "content_digest": { "$ref": "#/$defs/prefixed_sha256" },
+    "contract": { "$ref": "#/$defs/contract_content" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "prefixed_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "raw_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "chain_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "nullable_chain_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "asset_symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "nullable_asset_symbol": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "token_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "nullable_token_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "contract_content": {
+      "type": "object",
+      "required": ["identifiers", "enum_sets", "files"],
+      "properties": {
+        "identifiers": { "$ref": "#/$defs/identifiers" },
+        "enum_sets": { "$ref": "#/$defs/enum_sets" },
+        "files": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/contract_file" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "identifiers": {
+      "type": "object",
+      "required": [
+        "execution_pack",
+        "workload_id",
+        "purpose_code",
+        "destination_profile_id",
+        "destination_profile_version",
+        "destination_contract_version",
+        "provider_request_schema_version",
+        "external_result_schema_version"
+      ],
+      "properties": {
+        "execution_pack": { "const": "DIGITAL_ASSET" },
+        "workload_id": { "const": "tokenized_asset_purchase" },
+        "purpose_code": { "const": "DIGITAL_ASSET_PURCHASE" },
+        "destination_profile_id": { "const": "dest_mock_asset_platform_v1" },
+        "destination_profile_version": { "const": "1.0.0" },
+        "destination_contract_version": { "const": "digital-asset-egress-contract/v1" },
+        "provider_request_schema_version": { "const": "digital-asset-request/v1" },
+        "external_result_schema_version": { "const": "digital-asset-external-result/v1" }
+      },
+      "additionalProperties": false
+    },
+    "contract_file": {
+      "type": "object",
+      "required": ["path", "role", "digest"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^docs/contracts/(samples/)?[a-z0-9][a-z0-9._/-]+\\.json$"
+        },
+        "role": {
+          "enum": [
+            "JSON_SCHEMA",
+            "RUNTIME_REQUEST_SAMPLE",
+            "EXTERNAL_RESULT_SAMPLE",
+            "CANONICALIZATION_GOLDEN_VECTORS"
+          ]
+        },
+        "digest": { "$ref": "#/$defs/prefixed_sha256" }
+      },
+      "additionalProperties": false
+    },
+    "enum_sets": {
+      "type": "object",
+      "required": [
+        "runtime_data_classes",
+        "canonical_fields",
+        "decisions",
+        "transform_strategies",
+        "asset_kinds",
+        "operations",
+        "external_statuses",
+        "provider_statuses",
+        "receipt_statuses",
+        "finality_statuses",
+        "reconciliation_results",
+        "reason_codes"
+      ],
+      "properties": {
+        "runtime_data_classes": { "$ref": "#/$defs/runtime_data_class_set" },
+        "canonical_fields": { "$ref": "#/$defs/canonical_field_set" },
+        "decisions": { "$ref": "#/$defs/decision_set" },
+        "transform_strategies": { "$ref": "#/$defs/transform_strategy_set" },
+        "asset_kinds": { "$ref": "#/$defs/asset_kind_set" },
+        "operations": { "$ref": "#/$defs/operation_set" },
+        "external_statuses": { "$ref": "#/$defs/external_status_set" },
+        "provider_statuses": { "$ref": "#/$defs/provider_status_set" },
+        "receipt_statuses": { "$ref": "#/$defs/receipt_status_set" },
+        "finality_statuses": { "$ref": "#/$defs/finality_status_set" },
+        "reconciliation_results": { "$ref": "#/$defs/reconciliation_result_set" },
+        "reason_codes": { "$ref": "#/$defs/reason_code_set" }
+      },
+      "additionalProperties": false
+    },
+    "runtime_data_class_set": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "CUSTOMER_IDENTIFIER",
+          "ACCOUNT_IDENTIFIER",
+          "TRANSACTION_IDENTIFIER",
+          "FINANCIAL_AMOUNT",
+          "FINANCIAL_METADATA",
+          "BUSINESS_METADATA",
+          "UNKNOWN"
+        ]
+      }
+    },
+    "decision_set": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["PASS", "BLOCK", "REVIEW"] }
+    },
+    "canonical_field_set": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "chainId",
+          "recipientAddress",
+          "assetKind",
+          "assetSymbol",
+          "assetContractAddress",
+          "amount",
+          "operation",
+          "tokenId"
+        ]
+      }
+    },
+    "transform_strategy_set": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "MASK",
+          "HMAC_PSEUDO",
+          "VAULT_TOKEN",
+          "REMOVE",
+          "KEEP",
+          "GENERALIZE",
+          "FIELD_SEPARATION"
+        ]
+      }
+    },
+    "asset_kind_set": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN"] }
+    },
+    "operation_set": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "enum": ["TRANSFER", "CONTRACT_CALL"] }
+    },
+    "external_status_set": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "SUBMITTED",
+          "SETTLING",
+          "SETTLED",
+          "FAILED",
+          "SENT_UNKNOWN",
+          "RECONCILIATION_REQUIRED"
+        ]
+      }
+    },
+    "provider_status_set": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["ACKNOWLEDGED", "COMPLETED", "FAILED"] }
+    },
+    "receipt_status_set": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "enum": ["NOT_AVAILABLE", "PENDING", "SUCCESS", "FAILED"] }
+    },
+    "finality_status_set": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "enum": ["UNCONFIRMED", "CONFIRMED", "FINALIZED", "FAILED"] }
+    },
+    "reconciliation_result_set": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "enum": ["MATCH", "WAIT", "RECOVERED", "MISMATCH", "CRITICAL_MISMATCH"] }
+    },
+    "reason_code_set": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND",
+          "DIGITAL_ASSET_APPROVED_ASSET_MISMATCH",
+          "DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED",
+          "DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH",
+          "DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH",
+          "DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH",
+          "DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION",
+          "DIGITAL_ASSET_REQUIRED_OUTBOUND_FIELD_MISSING",
+          "DIGITAL_ASSET_REQUIRED_EXACT_VIOLATION",
+          "DIGITAL_ASSET_TRANSFORM_NOT_ALLOWED",
+          "DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED",
+          "DIGITAL_ASSET_TRACE_BINDING_INVALID",
+          "DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID",
+          "DIGITAL_ASSET_RUNTIME_DATA_CLASS_UNMAPPED",
+          "DIGITAL_ASSET_CONTRACT_GAP"
+        ]
+      }
+    },
+    "asset_descriptor": {
+      "type": "object",
+      "required": ["chainId", "assetKind", "assetSymbol", "operation"],
+      "properties": {
+        "chainId": { "$ref": "#/$defs/chain_id" },
+        "assetKind": { "enum": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN"] },
+        "assetSymbol": { "$ref": "#/$defs/asset_symbol" },
+        "assetContractAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "operation": { "enum": ["TRANSFER", "CONTRACT_CALL"] },
+        "tokenId": { "$ref": "#/$defs/nullable_token_id" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "assetKind": { "const": "NATIVE" } }, "required": ["assetKind"] },
+          "then": {
+            "properties": {
+              "assetContractAddress": { "type": "null" },
+              "tokenId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "assetKind": { "const": "FUNGIBLE_TOKEN" } }, "required": ["assetKind"] },
+          "then": {
+            "required": ["assetContractAddress"],
+            "properties": {
+              "assetContractAddress": { "type": "string" },
+              "tokenId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "assetKind": { "const": "NON_FUNGIBLE_TOKEN" } }, "required": ["assetKind"] },
+          "then": {
+            "required": ["assetContractAddress", "tokenId"],
+            "properties": {
+              "assetContractAddress": { "type": "string" },
+              "tokenId": { "$ref": "#/$defs/token_id" }
+            }
+          }
+        }
+      ]
+    },
+    "runtime_input": {
+      "type": "object",
+      "required": ["approvedTransactionReference", "customerId", "accountId", "outboundRequest"],
+      "properties": {
+        "approvedTransactionReference": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "accountId": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "outboundRequest": { "$ref": "#/$defs/outbound_request" }
+      },
+      "additionalProperties": false
+    },
+    "outbound_request": {
+      "type": "object",
+      "required": [
+        "requestedAsset",
+        "requestedAmount",
+        "requestedDestination",
+        "requestedBeneficiaryReference",
+        "regulatoryOutboundData"
+      ],
+      "properties": {
+        "requestedAsset": { "$ref": "#/$defs/asset_descriptor" },
+        "requestedAmount": { "type": "string", "pattern": "^(?!0+$)[0-9]{1,78}$" },
+        "requestedDestination": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "requestedBeneficiaryReference": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "regulatoryOutboundData": {
+          "type": "object",
+          "maxProperties": 0,
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtime_request": {
+      "type": "object",
+      "required": [
+        "institutionId",
+        "approvalReference",
+        "workloadId",
+        "purposeCode",
+        "subjectScope",
+        "destinationProfileId",
+        "idempotencyKey",
+        "processingContexts",
+        "input"
+      ],
+      "properties": {
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "approvalReference": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "workloadId": { "const": "tokenized_asset_purchase" },
+        "purposeCode": { "const": "DIGITAL_ASSET_PURCHASE" },
+        "subjectScope": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "destinationProfileId": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "processingContexts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "contains": { "const": "DIGITAL_ASSET" },
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "input": { "$ref": "#/$defs/runtime_input" }
+      },
+      "additionalProperties": false
+    },
+    "approved_transaction": {
+      "type": "object",
+      "required": [
+        "approvedTransactionId",
+        "version",
+        "digest",
+        "institutionId",
+        "subjectRefDigest",
+        "workloadId",
+        "purpose",
+        "approvedPolicySnapshotId",
+        "approvedAsset",
+        "approvedAmount",
+        "approvedAmountLimit",
+        "approvedDestinationProfileId",
+        "approvedDestination",
+        "approvedBeneficiaryReference",
+        "approvedFrom",
+        "approvedUntil"
+      ],
+      "properties": {
+        "approvedTransactionId": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/$defs/semver" },
+        "digest": { "$ref": "#/$defs/raw_sha256" },
+        "institutionId": { "type": "string", "minLength": 1 },
+        "subjectRefDigest": { "type": "string", "minLength": 1 },
+        "workloadId": { "const": "tokenized_asset_purchase" },
+        "purpose": { "const": "DIGITAL_ASSET_PURCHASE" },
+        "approvedPolicySnapshotId": { "type": "string", "minLength": 1 },
+        "approvedAsset": { "$ref": "#/$defs/asset_descriptor" },
+        "approvedAmount": {
+          "type": ["string", "null"],
+          "pattern": "^(?!0+$)[0-9]{1,78}$"
+        },
+        "approvedAmountLimit": {
+          "type": ["string", "null"],
+          "pattern": "^(?!0+$)[0-9]{1,78}$"
+        },
+        "approvedDestinationProfileId": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "approvedDestination": { "type": "string", "minLength": 1 },
+        "approvedBeneficiaryReference": { "type": "string", "minLength": 1 },
+        "approvedFrom": { "type": "string", "format": "date-time" },
+        "approvedUntil": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        { "properties": { "approvedAmount": { "type": "string" } } },
+        { "properties": { "approvedAmountLimit": { "type": "string" } } }
+      ]
+    },
+    "external_execution_result": {
+      "type": "object",
+      "required": [
+        "externalRequestId",
+        "externalReference",
+        "transactionHash",
+        "externalStatus",
+        "providerStatus",
+        "receiptStatus",
+        "finalityStatus",
+        "executedChainId",
+        "executedRecipientAddress",
+        "executedAssetKind",
+        "executedAssetSymbol",
+        "executedAssetContractAddress",
+        "executedAmount",
+        "nativeValue",
+        "operation",
+        "tokenId",
+        "tokenTransferEvidenceRef",
+        "internalTraceEvidenceRef",
+        "executedAt",
+        "finalizedAt"
+      ],
+      "properties": {
+        "externalRequestId": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "externalReference": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "transactionHash": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "externalStatus": {
+          "enum": ["SUBMITTED", "SETTLING", "SETTLED", "FAILED", "SENT_UNKNOWN", "RECONCILIATION_REQUIRED"]
+        },
+        "providerStatus": { "enum": ["ACKNOWLEDGED", "COMPLETED", "FAILED"] },
+        "receiptStatus": { "enum": ["NOT_AVAILABLE", "PENDING", "SUCCESS", "FAILED"] },
+        "finalityStatus": { "enum": ["UNCONFIRMED", "CONFIRMED", "FINALIZED", "FAILED"] },
+        "executedChainId": { "$ref": "#/$defs/nullable_chain_id" },
+        "executedRecipientAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "executedAssetKind": {
+          "type": ["string", "null"],
+          "enum": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN", null]
+        },
+        "executedAssetSymbol": { "$ref": "#/$defs/nullable_asset_symbol" },
+        "executedAssetContractAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "executedAmount": { "type": ["string", "null"], "pattern": "^[0-9]{1,78}$" },
+        "nativeValue": { "type": ["string", "null"], "pattern": "^[0-9]{1,78}$" },
+        "operation": {
+          "type": ["string", "null"],
+          "enum": ["TRANSFER", "CONTRACT_CALL", null]
+        },
+        "tokenId": { "$ref": "#/$defs/nullable_token_id" },
+        "tokenTransferEvidenceRef": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "internalTraceEvidenceRef": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "executedAt": { "type": ["string", "null"], "format": "date-time" },
+        "finalizedAt": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "externalStatus": { "const": "SETTLED" } }, "required": ["externalStatus"] },
+          "then": {
+            "properties": {
+              "transactionHash": { "type": "string" },
+              "providerStatus": { "enum": ["ACKNOWLEDGED", "COMPLETED"] },
+              "receiptStatus": { "const": "SUCCESS" },
+              "finalityStatus": { "const": "FINALIZED" },
+              "executedChainId": { "$ref": "#/$defs/chain_id" },
+              "executedRecipientAddress": { "type": "string" },
+              "executedAssetKind": { "type": "string" },
+              "executedAssetSymbol": { "$ref": "#/$defs/asset_symbol" },
+              "executedAmount": { "type": "string" },
+              "operation": { "type": "string" },
+              "executedAt": { "type": "string" },
+              "finalizedAt": { "type": "string" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "externalStatus": { "const": "SETTLED" },
+              "executedAssetKind": { "const": "NATIVE" }
+            },
+            "required": ["externalStatus", "executedAssetKind"]
+          },
+          "then": {
+            "properties": {
+              "executedAssetContractAddress": { "type": "null" },
+              "tokenId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "externalStatus": { "const": "SETTLED" },
+              "executedAssetKind": { "const": "FUNGIBLE_TOKEN" }
+            },
+            "required": ["externalStatus", "executedAssetKind"]
+          },
+          "then": {
+            "properties": {
+              "executedAssetContractAddress": { "type": "string" },
+              "tokenId": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "externalStatus": { "const": "SETTLED" },
+              "executedAssetKind": { "const": "NON_FUNGIBLE_TOKEN" }
+            },
+            "required": ["externalStatus", "executedAssetKind"]
+          },
+          "then": {
+            "properties": {
+              "executedAssetContractAddress": { "type": "string" },
+              "tokenId": { "$ref": "#/$defs/token_id" }
+            }
+          }
+        }
+      ]
+    },
+    "transform_instruction": {
+      "type": "object",
+      "required": [
+        "strategy",
+        "strategyVersion",
+        "keyVersion",
+        "mappingVersion",
+        "tokenTtl",
+        "parameters"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": ["MASK", "HMAC_PSEUDO", "VAULT_TOKEN", "REMOVE", "KEEP", "GENERALIZE", "FIELD_SEPARATION"]
+        },
+        "strategyVersion": { "type": ["string", "null"] },
+        "keyVersion": { "type": ["string", "null"] },
+        "mappingVersion": { "type": ["string", "null"] },
+        "tokenTtl": { "type": ["string", "null"], "pattern": "^P(T.*)?$" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "canonical_decision": {
+      "type": "object",
+      "required": ["decision", "transformInstructions", "reasonCodes"],
+      "properties": {
+        "decision": { "enum": ["PASS", "BLOCK", "REVIEW"] },
+        "transformInstructions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transform_instruction" }
+        },
+        "reasonCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND",
+              "DIGITAL_ASSET_APPROVED_ASSET_MISMATCH",
+              "DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED",
+              "DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH",
+              "DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH",
+              "DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH",
+              "DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION",
+              "DIGITAL_ASSET_REQUIRED_OUTBOUND_FIELD_MISSING",
+              "DIGITAL_ASSET_REQUIRED_EXACT_VIOLATION",
+              "DIGITAL_ASSET_TRANSFORM_NOT_ALLOWED",
+              "DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED",
+              "DIGITAL_ASSET_TRACE_BINDING_INVALID",
+              "DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID",
+              "DIGITAL_ASSET_RUNTIME_DATA_CLASS_UNMAPPED",
+              "DIGITAL_ASSET_CONTRACT_GAP"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -12,16 +12,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetReconciliationEvaluator {
-    private static final java.util.Set<DigitalAssetMismatchField> ACTIVE_TRANSACTION_FIELDS = java.util.Set.of(
-        DigitalAssetMismatchField.CHAIN_ID,
-        DigitalAssetMismatchField.RECIPIENT_ADDRESS,
-        DigitalAssetMismatchField.ASSET_KIND,
-        DigitalAssetMismatchField.ASSET_SYMBOL,
-        DigitalAssetMismatchField.ASSET_CONTRACT_ADDRESS,
-        DigitalAssetMismatchField.AMOUNT,
-        DigitalAssetMismatchField.OPERATION,
-        DigitalAssetMismatchField.TOKEN_ID
-    );
+    private static final java.util.Set<DigitalAssetMismatchField> ACTIVE_TRANSACTION_FIELDS =
+        DigitalAssetMismatchField.canonicalExecutionFields();
     private static final java.util.Set<String> TRANSACTION_FIELDS = ACTIVE_TRANSACTION_FIELDS.stream()
         .map(DigitalAssetMismatchField::externalName)
         .collect(java.util.stream.Collectors.toUnmodifiableSet());

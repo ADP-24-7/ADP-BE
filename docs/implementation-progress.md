@@ -91,7 +91,7 @@ Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적
 - [x] Eligibility Reason Code retain/deprecated 목록 확정
 - [x] DA-P0-2 server-owned Approved Transaction 선행 경계 + KYC/AML/Wallet Active Eligibility Gate 분리
 - [x] DA-P0-3 ApprovedTransaction/OutboundRequest/ExternalExecutionResult 계약
-- [ ] DA-P0-4 Canonical Identifier/Enum/Schema Freeze
+- [x] DA-P0-4 Canonical Identifier/Enum/Schema Freeze
 - [ ] DA-P0-5 Artifact Loader v1
 - [ ] DA-P0-6 Versioned Runtime Snapshot
 - [ ] DA-P0-7 6 Runtime Controls
@@ -101,7 +101,9 @@ DA-P0-2의 Active Runtime 계약과 fail-closed 증적은
 [DA-P0-2 Approved Transaction Trust Boundary](da-p0-2-approved-transaction-boundary.md)에서 관리한다.
 P0-3의 최종 Java 타입, strict input/result validation, canonical execution tuple은
 [DA-P0-3 Digital Asset Domain Contracts](da-p0-3-domain-contracts.md)에서 관리한다.
-`regulatoryOutboundData`의 non-empty allowlist와 typed Provider `SENT_UNKNOWN` recovery 연결은 각각 P0-4와
+P0-4의 versioned Schema, manifest, canonical digest와 DA/FE sample은
+[DA-P0-4 Canonical Contract Freeze](da-p0-4-canonical-contract.md)에서 관리한다.
+`regulatoryOutboundData`의 non-empty allowlist와 typed Provider `SENT_UNKNOWN` recovery 연결은 각각 P0-7과
 P0-8에서 완료한다.
 
 ## BE-10 Parallel Tracking

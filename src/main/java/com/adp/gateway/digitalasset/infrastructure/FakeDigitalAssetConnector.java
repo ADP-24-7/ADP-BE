@@ -12,6 +12,7 @@ import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
@@ -94,7 +95,7 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         String responseDigest = hasher.hash(json(response));
         return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
             ConnectorStatus.ACKNOWLEDGED, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
-            responseDigest, "digital-asset-external-execution-result/v1", response);
+            responseDigest, DigitalAssetCanonicalContract.EXTERNAL_RESULT_SCHEMA_VERSION, response);
     }
 
     private Map<String, Object> transaction(Map<String, Object> payload) {

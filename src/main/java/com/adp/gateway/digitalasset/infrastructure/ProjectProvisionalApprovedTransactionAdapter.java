@@ -11,6 +11,7 @@ import com.adp.gateway.digitalasset.application.ApprovedTransactionLookup;
 import com.adp.gateway.digitalasset.application.ApprovedTransactionPort;
 import com.adp.gateway.digitalasset.domain.ApprovedTransaction;
 import com.adp.gateway.digitalasset.domain.DigitalAssetAmount;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.digitalasset.domain.DigitalAssetDescriptor;
 import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
 import com.adp.gateway.digitalasset.domain.DigitalAssetOperation;
@@ -23,10 +24,11 @@ public class ProjectProvisionalApprovedTransactionAdapter implements ApprovedTra
     public static final String BENEFICIARY_REFERENCE = "beneficiary-local-001";
     public static final String DEFAULT_REFERENCE = "approved-tx-local-001";
     private static final String INSTITUTION_ID = "institution_local";
-    private static final String WORKLOAD_ID = "tokenized_asset_purchase";
-    private static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
+    private static final String WORKLOAD_ID = DigitalAssetCanonicalContract.BASELINE_WORKLOAD_ID;
+    private static final String PURPOSE = DigitalAssetCanonicalContract.BASELINE_PURPOSE_CODE;
     private static final String POLICY_SNAPSHOT_ID = "approved-policy-local-v1";
-    private static final String DESTINATION_PROFILE_ID = "dest_mock_asset_platform_v1";
+    private static final String DESTINATION_PROFILE_ID =
+        DigitalAssetCanonicalContract.BASELINE_DESTINATION_PROFILE_ID;
     private static final String DESTINATION = "wallet-test-001";
     private static final Map<String, String> APPROVED_ASSETS = Map.of(
         DEFAULT_REFERENCE, "asset-krw-token-001",

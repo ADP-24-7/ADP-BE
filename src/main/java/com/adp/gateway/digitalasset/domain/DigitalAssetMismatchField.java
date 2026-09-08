@@ -1,5 +1,8 @@
 package com.adp.gateway.digitalasset.domain;
 
+import java.util.List;
+import java.util.Set;
+
 public enum DigitalAssetMismatchField {
     CUSTOMER_TOKEN("customerToken", true),
     ACCOUNT_TOKEN("accountToken", true),
@@ -33,5 +36,22 @@ public enum DigitalAssetMismatchField {
 
     public boolean critical() {
         return critical;
+    }
+
+    public static Set<DigitalAssetMismatchField> canonicalExecutionFields() {
+        return Set.copyOf(canonicalExecutionFieldOrder());
+    }
+
+    public static List<DigitalAssetMismatchField> canonicalExecutionFieldOrder() {
+        return List.of(
+            CHAIN_ID,
+            RECIPIENT_ADDRESS,
+            ASSET_KIND,
+            ASSET_SYMBOL,
+            ASSET_CONTRACT_ADDRESS,
+            AMOUNT,
+            OPERATION,
+            TOKEN_ID
+        );
     }
 }

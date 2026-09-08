@@ -1,0 +1,32 @@
+[
+  {
+    "name": "nested-key-order",
+    "input": { "z": "last", "a": { "b": "second", "a": "first" } },
+    "canonical": "{\"a\":{\"a\":\"first\",\"b\":\"second\"},\"z\":\"last\"}",
+    "digest": "sha256:a5bedefb9d89604256cbad387c1a1ec8c878aa098837aeda026ec7e72e8614d0"
+  },
+  {
+    "name": "null-preservation",
+    "input": { "present": null },
+    "canonical": "{\"present\":null}",
+    "digest": "sha256:924c481da1aca4bbd856f20e4aaef20f67c34fccd0b5e27cb2647b8c45ee21ac"
+  },
+  {
+    "name": "unicode-korean",
+    "input": { "한글": "값", "ascii": "value" },
+    "canonical": "{\"ascii\":\"value\",\"한글\":\"값\"}",
+    "digest": "sha256:4dccce7bb294be3da48c03aab78345933cb683c46fbaca969a221b4556a0946c"
+  },
+  {
+    "name": "utf16-supplementary-key-order",
+    "input": { "": "private-use", "😀": "supplementary" },
+    "canonical": "{\"😀\":\"supplementary\",\"\":\"private-use\"}",
+    "digest": "sha256:f6976de069fbbbe5603efba61dea0f0f307733b0520f29a0708c088f34077408"
+  },
+  {
+    "name": "array-order",
+    "input": { "items": ["B", "A", null] },
+    "canonical": "{\"items\":[\"B\",\"A\",null]}",
+    "digest": "sha256:46f04a8d25db08db6c711e83b5f035985a55ff9a490885974c70abfa645678a6"
+  }
+]
