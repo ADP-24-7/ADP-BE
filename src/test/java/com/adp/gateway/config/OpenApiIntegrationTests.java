@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,19 @@ class OpenApiIntegrationTests {
             .andExpect(jsonPath("$.paths['/v1/runtime/executions']").exists())
             .andExpect(jsonPath("$.components.schemas.DigitalAssetRuntimeInput").exists())
             .andExpect(jsonPath("$.components.schemas.DigitalAssetOutboundRequest").exists())
+            .andExpect(jsonPath("$.components.schemas.DigitalAssetRuntimeInput.required", hasItems(
+                "approvedTransactionReference", "customerId", "accountId", "outboundRequest"
+            )))
+            .andExpect(jsonPath("$.components.schemas.DigitalAssetOutboundRequest.required", hasItems(
+                "requestedAsset", "requestedAmount", "requestedDestination",
+                "requestedBeneficiaryReference", "regulatoryOutboundData"
+            )))
+            .andExpect(jsonPath(
+                "$.components.schemas.DigitalAssetOutboundRequest.properties.requestedAmount.pattern"
+            ).value("(?!0+$)[0-9]{1,78}"))
+            .andExpect(jsonPath(
+                "$.components.schemas.DigitalAssetOutboundRequest.properties.regulatoryOutboundData.additionalProperties"
+            ).value(false))
             .andExpect(content().string(containsString("digitalAsset")))
             .andExpect(content().string(containsString("requestedBeneficiaryReference")))
             .andExpect(content().string(containsString("FUNGIBLE_TOKEN")))

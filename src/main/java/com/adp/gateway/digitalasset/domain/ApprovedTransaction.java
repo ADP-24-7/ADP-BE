@@ -48,19 +48,6 @@ public record ApprovedTransaction(
         }
     }
 
-    public boolean permits(OutboundRequest request) {
-        boolean amountMatches = approvedAmount != null
-            ? approvedAmount.equals(request.requestedAmount())
-            : request.requestedAmount().compareTo(approvedAmountLimit) <= 0;
-        return approvedAsset.equals(request.requestedAsset())
-            && amountMatches
-            && approvedDestinationProfileId.equals(request.destinationProfileId())
-            && approvedDestination.equals(request.requestedDestination())
-            && approvedBeneficiaryReference.equals(request.requestedBeneficiaryReference())
-            && !request.requestedAt().isBefore(approvedFrom)
-            && !request.requestedAt().isAfter(approvedUntil);
-    }
-
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");

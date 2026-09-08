@@ -14,23 +14,37 @@ public record OutboundRequest(
     String idempotencyKey
 ) {
     public OutboundRequest {
-        if (requestedAsset == null || requestedAmount == null || requestedAmount.atomicUnits().signum() <= 0
-            || requestedAt == null) {
+        validateCallerControlled(
+            requestedAsset, requestedAmount, requestedDestination,
+            requestedBeneficiaryReference, regulatoryOutboundData
+        );
+        if (requestedAt == null) {
             throw new IllegalArgumentException("DIGITAL_ASSET_OUTBOUND_REQUEST_INVALID");
         }
-        requireText(requestedDestination, "requestedDestination", 240);
-        requireText(requestedBeneficiaryReference, "requestedBeneficiaryReference", 240);
         requireText(destinationProfileId, "destinationProfileId", 120);
         requireText(idempotencyKey, "idempotencyKey", 120);
-        regulatoryOutboundData = Map.copyOf(regulatoryOutboundData == null ? Map.of() : regulatoryOutboundData);
-        if (regulatoryOutboundData.size() > 20 || regulatoryOutboundData.entrySet().stream().anyMatch(entry ->
-            invalid(entry.getKey(), 80) || invalid(entry.getValue(), 240))) {
-            throw new IllegalArgumentException("DIGITAL_ASSET_REGULATORY_DATA_INVALID");
-        }
+        regulatoryOutboundData = Map.copyOf(regulatoryOutboundData);
     }
 
     public String canonicalBindingValue() {
         return requestedAsset.canonicalValue() + "|" + requestedDestination + "|" + requestedAmount;
+    }
+
+    static void validateCallerControlled(
+        DigitalAssetDescriptor requestedAsset,
+        DigitalAssetAmount requestedAmount,
+        String requestedDestination,
+        String requestedBeneficiaryReference,
+        Map<String, String> regulatoryOutboundData
+    ) {
+        if (requestedAsset == null || requestedAmount == null || requestedAmount.atomicUnits().signum() <= 0) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_OUTBOUND_REQUEST_INVALID");
+        }
+        requireText(requestedDestination, "requestedDestination", 240);
+        requireText(requestedBeneficiaryReference, "requestedBeneficiaryReference", 240);
+        if (regulatoryOutboundData == null || !regulatoryOutboundData.isEmpty()) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_REGULATORY_DATA_NOT_SUPPORTED");
+        }
     }
 
     private static void requireText(String value, String name, int maxLength) {

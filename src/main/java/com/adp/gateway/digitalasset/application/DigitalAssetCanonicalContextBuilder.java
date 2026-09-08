@@ -27,15 +27,18 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     private final CanonicalValueHasher hasher;
     private final SubjectRefHasher subjectRefHasher;
     private final ApprovedTransactionResolver approvedTransactionResolver;
+    private final ApprovedTransactionBindingEvaluator bindingEvaluator;
 
     public DigitalAssetCanonicalContextBuilder(
         CanonicalValueHasher hasher,
         SubjectRefHasher subjectRefHasher,
-        ApprovedTransactionResolver approvedTransactionResolver
+        ApprovedTransactionResolver approvedTransactionResolver,
+        ApprovedTransactionBindingEvaluator bindingEvaluator
     ) {
         this.hasher = hasher;
         this.subjectRefHasher = subjectRefHasher;
         this.approvedTransactionResolver = approvedTransactionResolver;
+        this.bindingEvaluator = bindingEvaluator;
     }
 
     @Override
@@ -84,9 +87,6 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         add(fields, "outboundRequest.requestedDestination", outbound.requestedDestination(), DataClass.TRANSACTION_IDENTIFIER);
         add(fields, "outboundRequest.requestedBeneficiaryReference",
             outbound.requestedBeneficiaryReference(), DataClass.BUSINESS_METADATA);
-        outbound.regulatoryOutboundData().forEach((key, value) ->
-            add(fields, "outboundRequest.regulatoryOutboundData." + key, value, DataClass.FINANCIAL_METADATA)
-        );
         fields.sort(Comparator.comparing(CanonicalContextField::path));
         var trustedMetadata = new java.util.HashMap<String, String>();
         trustedMetadata.put("approvedTransactionId", approved.approvedTransactionId());
@@ -105,6 +105,10 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         trustedMetadata.put("approvedBeneficiaryReference", approved.approvedBeneficiaryReference());
         trustedMetadata.put("approvedFrom", approved.approvedFrom().toString());
         trustedMetadata.put("approvedUntil", approved.approvedUntil().toString());
+        List<com.adp.gateway.common.error.ReasonCode> bindingReasons = bindingEvaluator.evaluate(approved, outbound);
+        trustedMetadata.put("approvedBindingReasonCodes", bindingReasons.isEmpty()
+            ? "NONE"
+            : bindingReasons.stream().map(Enum::name).sorted().collect(Collectors.joining(",")));
         String digest = hasher.hash(
             fields.stream()
                 .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
@@ -128,7 +132,11 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     }
 
     private DigitalAssetRuntimeInput parse(Map<String, Object> input, ExecutionPackRequestScope requestScope) {
-        return DigitalAssetRuntimeInput.from(input, requestScope);
+        try {
+            return DigitalAssetRuntimeInput.from(input, requestScope);
+        } catch (IllegalArgumentException exception) {
+            throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, exception.getMessage());
+        }
     }
 
     private void add(List<CanonicalContextField> fields, String name, Object value, DataClass dataClass) {

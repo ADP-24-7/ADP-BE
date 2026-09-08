@@ -208,6 +208,14 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
+    void rejectsInvalidCallerContractWith422BeforeConnector() throws Exception {
+        assertInvalidInput("zero_" + token(), "\"0\"", "{}");
+        assertInvalidInput("numeric_" + token(), "10000", "{}");
+        assertInvalidInput("fractional_" + token(), "1.5", "{}");
+        assertInvalidInput("regulatory_" + token(), "\"10000\"", "{\"travelRule\":\"value\"}");
+    }
+
+    @Test
     void keepsRuntimeEgressingWhileSettlementIsNotFinal() throws Exception {
         assetRequest(token(), "customer-100", "asset-settling")
             .andExpect(status().isOk())
@@ -439,6 +447,32 @@ class DigitalAssetThinE2ETests {
         assertThat(evidence.assertionVersion()).isNull();
         assertThat(evidence.assertionDigest()).isNull();
         assertThat(evidence.connectorCount()).isZero();
+    }
+
+    private void assertInvalidInput(String suffix, String amountJson, String regulatoryJson) throws Exception {
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_asset_invalid_" + suffix)
+                .header("X-Trace-Id", "trace_asset_invalid_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {"institutionId":"institution_local","approvalReference":"approval_digital_asset_purchase_v1",
+                     "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
+                     "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
+                     "idempotencyKey":"idem_asset_invalid_%s","processingContexts":["DIGITAL_ASSET"],
+                     "input":{"approvedTransactionReference":"approved-tx-local-001","customerId":"customer-100",
+                     "accountId":"acct-100-1","outboundRequest":{"requestedAsset":{"chainId":"eip155:1",
+                     "assetKind":"FUNGIBLE_TOKEN","assetSymbol":"asset-krw-token-001",
+                     "assetContractAddress":"0x0000000000000000000000000000000000000001",
+                     "operation":"TRANSFER","tokenId":null},"requestedAmount":%s,
+                     "requestedDestination":"wallet-test-001",
+                     "requestedBeneficiaryReference":"beneficiary-local-001",
+                     "regulatoryOutboundData":%s}}}
+                    """.formatted(suffix, amountJson, regulatoryJson)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("EXECUTION_PACK_INPUT_REJECTED"));
+
+        assertThat(connectorCount("req_asset_invalid_" + suffix)).isZero();
     }
 
     private int connectorCount(String requestId) {

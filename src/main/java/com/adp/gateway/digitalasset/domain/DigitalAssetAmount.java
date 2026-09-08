@@ -29,6 +29,13 @@ public record DigitalAssetAmount(BigInteger atomicUnits) implements Comparable<D
         throw new IllegalArgumentException("DIGITAL_ASSET_AMOUNT_INVALID");
     }
 
+    public static DigitalAssetAmount fromWire(Object value) {
+        if (!(value instanceof String text) || !text.matches("[0-9]{1,78}")) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_AMOUNT_INVALID");
+        }
+        return new DigitalAssetAmount(new BigInteger(text));
+    }
+
     @Override
     public int compareTo(DigitalAssetAmount other) {
         return atomicUnits.compareTo(other.atomicUnits);

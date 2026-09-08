@@ -1,6 +1,7 @@
 package com.adp.gateway.digitalasset.domain;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -12,14 +13,52 @@ import org.junit.jupiter.api.Test;
 class DigitalAssetRuntimeInputTests {
 
     @Test
+    void acceptsPositiveAtomicAmountOnlyAsAString() {
+        assertThat(DigitalAssetRuntimeInput.from(validInput(), scope()).outboundRequest().requestedAmount().toString())
+            .isEqualTo("10000");
+
+        Map<String, Object> numeric = validInput();
+        outbound(numeric).put("requestedAmount", 10000);
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(numeric, scope()))
+            .hasMessage("DIGITAL_ASSET_AMOUNT_INVALID");
+
+        Map<String, Object> fractionalNumber = validInput();
+        outbound(fractionalNumber).put("requestedAmount", 1.5);
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(fractionalNumber, scope()))
+            .hasMessage("DIGITAL_ASSET_AMOUNT_INVALID");
+
+        Map<String, Object> fractionalString = validInput();
+        outbound(fractionalString).put("requestedAmount", "1.5");
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(fractionalString, scope()))
+            .hasMessage("DIGITAL_ASSET_AMOUNT_INVALID");
+    }
+
+    @Test
+    void appliesTheSameCallerInvariantsDuringShapeValidationAndParsing() {
+        Map<String, Object> zero = validInput();
+        outbound(zero).put("requestedAmount", "0");
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.validateShape(zero))
+            .hasMessage("DIGITAL_ASSET_OUTBOUND_REQUEST_INVALID");
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(zero, scope()))
+            .hasMessage("DIGITAL_ASSET_OUTBOUND_REQUEST_INVALID");
+
+        Map<String, Object> regulatory = validInput();
+        outbound(regulatory).put("regulatoryOutboundData", Map.of("travelRule", "value"));
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.validateShape(regulatory))
+            .hasMessage("DIGITAL_ASSET_REGULATORY_DATA_NOT_SUPPORTED");
+        assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(regulatory, scope()))
+            .hasMessage("DIGITAL_ASSET_REGULATORY_DATA_NOT_SUPPORTED");
+    }
+
+    @Test
     void rejectsMissingAndUnknownOutboundFields() {
         Map<String, Object> missing = validInput();
-        ((Map<?, ?>) missing.get("outboundRequest")).remove("requestedAmount");
+        outbound(missing).remove("requestedAmount");
         assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(missing, scope()))
             .hasMessage("DIGITAL_ASSET_OUTBOUND_REQUEST_SCHEMA_MISMATCH");
 
         Map<String, Object> unknown = validInput();
-        ((Map<String, Object>) unknown.get("outboundRequest")).put("approvedAmount", "10000");
+        outbound(unknown).put("approvedAmount", "10000");
         assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(unknown, scope()))
             .hasMessage("DIGITAL_ASSET_OUTBOUND_REQUEST_SCHEMA_MISMATCH");
     }
@@ -27,7 +66,7 @@ class DigitalAssetRuntimeInputTests {
     @Test
     void rejectsCallerReportedServerOwnedFields() {
         Map<String, Object> input = validInput();
-        ((Map<String, Object>) input.get("outboundRequest")).put("requestedAt", "2026-09-08T00:00:00Z");
+        outbound(input).put("requestedAt", "2026-09-08T00:00:00Z");
 
         assertThatThrownBy(() -> DigitalAssetRuntimeInput.from(input, scope()))
             .hasMessage("DIGITAL_ASSET_OUTBOUND_REQUEST_SCHEMA_MISMATCH");
@@ -60,5 +99,10 @@ class DigitalAssetRuntimeInputTests {
             "institution-a", "workload-a", "purpose-a", "subject-digest-a",
             "destination-a", "idem-a", OffsetDateTime.parse("2026-09-08T00:00:00Z")
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> outbound(Map<String, Object> input) {
+        return (Map<String, Object>) input.get("outboundRequest");
     }
 }

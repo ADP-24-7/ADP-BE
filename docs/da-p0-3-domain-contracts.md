@@ -23,12 +23,13 @@ Digital Asset Runtime의 승인 근거, caller 요청, 외부 실행 결과를 �
 
 caller 입력과 server-owned request scope를 결합한 실행 요청이다.
 
-- caller 입력: requested asset/amount/destination/beneficiary와 regulatory outbound data
+- caller 입력: requested asset/amount/destination/beneficiary
 - server-owned: `requestedAt`, `destinationProfileId`, `idempotencyKey`
 - amount: 최대 78자리의 0 이상 atomic-unit 정수이며 wire에서는 decimal string을 사용한다.
 
-실행 금액은 0보다 커야 하며 소수, 음수, 부동소수점 반올림을 허용하지 않는다. 입력 객체와 nested asset 객체의
-누락 또는 미지 field는 fail closed한다.
+실행 금액은 0보다 커야 하며 JSON Number, 소수, 음수, 부동소수점 반올림을 허용하지 않는다. 입력 객체와 nested
+asset 객체의 누락 또는 미지 field는 fail closed한다. `regulatoryOutboundData`는 P0-4 allowlist가 확정되기
+전까지 필수 empty object이며 값이 있으면 HTTP 422로 차단한다.
 
 ### ExternalExecutionResult
 
@@ -65,7 +66,7 @@ evidence에 저장하지 않고 digest와 server-owned mismatch enum만 남긴�
 Runtime request
 -> DigitalAssetRuntimeInput strict parse
 -> server-owned ApprovedTransaction resolve/pin
--> approval/request identity binding
+-> ApprovedTransactionBindingEvaluator typed identity binding
 -> Canonical Context + Policy Gate
 -> Transform + Provider Request
 -> ExternalExecutionResult strict parse
@@ -87,6 +88,7 @@ Local V6 migration은 P0-3 이전 request field(`walletAddress`, `assetId`, `amo
 - 승인 조건과 outbound identity 전체 binding
 - amount precision/범위 검증
 - request 누락/미지/server-owned field 주입 차단
+- JSON Number/0/소수 amount와 non-empty regulatory data를 HTTP 422, Connector 0으로 차단
 - external result 미지 field와 불완전 finality 차단
 - canonical tuple mismatch와 non-final WAIT 분리
 - Digital Asset Thin E2E와 OpenAPI contract test
@@ -96,3 +98,7 @@ Local V6 migration은 P0-3 이전 request field(`walletAddress`, `assetId`, `amo
 P0-4에서 enum/identifier의 외부 canonical value, versioned JSON Schema, canonical serialization과 DA consumer
 contract를 freeze한다. 운영 승인 원장과 실제 Provider adapter, PRE_EXECUTION 재검증은 각각 후속 P0 단계의
 책임이다.
+
+Provider가 typed `externalStatus=SENT_UNKNOWN`을 반환하는 경우의 recovery scheduling은 실제 Provider adapter와
+POST_EXECUTION recovery를 재연결하는 P0-8에서 처리한다. 현재 recovery는 Connector transport 결과가
+`SENT_UNKNOWN`인 경로만 scheduling한다.

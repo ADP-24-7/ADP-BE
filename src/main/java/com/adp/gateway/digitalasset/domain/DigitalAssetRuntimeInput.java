@@ -20,24 +20,15 @@ public record DigitalAssetRuntimeInput(
     );
 
     public static DigitalAssetRuntimeInput from(Map<String, Object> input, ExecutionPackRequestScope scope) {
-        if (scope == null || input == null || !input.keySet().equals(KEYS)) {
-            throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_SCHEMA_MISMATCH");
+        if (scope == null) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_RUNTIME_SCOPE_MISMATCH");
         }
-        Map<?, ?> outbound = map(input.get("outboundRequest"));
-        if (!stringKeys(outbound).equals(OUTBOUND_KEYS)) {
-            throw new IllegalArgumentException("DIGITAL_ASSET_OUTBOUND_REQUEST_SCHEMA_MISMATCH");
-        }
+        CallerControlledInput parsed = parseCallerControlled(input);
         return new DigitalAssetRuntimeInput(
-            new ApprovedTransactionReference(text(input.get("approvedTransactionReference"))),
-            text(input.get("customerId")),
-            text(input.get("accountId")),
+            parsed.approvedTransactionReference(), parsed.customerId(), parsed.accountId(),
             new OutboundRequest(
-                DigitalAssetDescriptor.from(outbound.get("requestedAsset")),
-                DigitalAssetAmount.from(outbound.get("requestedAmount")),
-                text(outbound.get("requestedDestination")),
-                text(outbound.get("requestedBeneficiaryReference")),
-                scope.requestStartedAt(),
-                regulatoryData(outbound.get("regulatoryOutboundData")),
+                parsed.requestedAsset(), parsed.requestedAmount(), parsed.requestedDestination(),
+                parsed.requestedBeneficiaryReference(), scope.requestStartedAt(), parsed.regulatoryOutboundData(),
                 scope.destinationProfileId(),
                 scope.idempotencyKey()
             )
@@ -45,6 +36,10 @@ public record DigitalAssetRuntimeInput(
     }
 
     public static void validateShape(Map<String, Object> input) {
+        parseCallerControlled(input);
+    }
+
+    private static CallerControlledInput parseCallerControlled(Map<String, Object> input) {
         if (input == null || !input.keySet().equals(KEYS)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_SCHEMA_MISMATCH");
         }
@@ -52,14 +47,19 @@ public record DigitalAssetRuntimeInput(
         if (!stringKeys(outbound).equals(OUTBOUND_KEYS)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_OUTBOUND_REQUEST_SCHEMA_MISMATCH");
         }
-        new ApprovedTransactionReference(text(input.get("approvedTransactionReference")));
-        text(input.get("customerId"));
-        text(input.get("accountId"));
-        DigitalAssetDescriptor.from(outbound.get("requestedAsset"));
-        DigitalAssetAmount.from(outbound.get("requestedAmount"));
-        text(outbound.get("requestedDestination"));
-        text(outbound.get("requestedBeneficiaryReference"));
-        regulatoryData(outbound.get("regulatoryOutboundData"));
+        ApprovedTransactionReference reference =
+            new ApprovedTransactionReference(text(input.get("approvedTransactionReference")));
+        String customerId = text(input.get("customerId"));
+        String accountId = text(input.get("accountId"));
+        DigitalAssetDescriptor asset = DigitalAssetDescriptor.from(outbound.get("requestedAsset"));
+        DigitalAssetAmount amount = DigitalAssetAmount.fromWire(outbound.get("requestedAmount"));
+        String destination = text(outbound.get("requestedDestination"));
+        String beneficiary = text(outbound.get("requestedBeneficiaryReference"));
+        Map<String, String> regulatoryData = regulatoryData(outbound.get("regulatoryOutboundData"));
+        OutboundRequest.validateCallerControlled(asset, amount, destination, beneficiary, regulatoryData);
+        return new CallerControlledInput(
+            reference, customerId, accountId, asset, amount, destination, beneficiary, regulatoryData
+        );
     }
 
     private static Map<?, ?> map(Object value) {
@@ -92,5 +92,17 @@ public record DigitalAssetRuntimeInput(
             throw new IllegalArgumentException("DIGITAL_ASSET_INPUT_INVALID");
         }
         return text;
+    }
+
+    private record CallerControlledInput(
+        ApprovedTransactionReference approvedTransactionReference,
+        String customerId,
+        String accountId,
+        DigitalAssetDescriptor requestedAsset,
+        DigitalAssetAmount requestedAmount,
+        String requestedDestination,
+        String requestedBeneficiaryReference,
+        Map<String, String> regulatoryOutboundData
+    ) {
     }
 }

@@ -101,6 +101,8 @@ DA-P0-2의 Active Runtime 계약과 fail-closed 증적은
 [DA-P0-2 Approved Transaction Trust Boundary](da-p0-2-approved-transaction-boundary.md)에서 관리한다.
 P0-3의 최종 Java 타입, strict input/result validation, canonical execution tuple은
 [DA-P0-3 Digital Asset Domain Contracts](da-p0-3-domain-contracts.md)에서 관리한다.
+`regulatoryOutboundData`의 non-empty allowlist와 typed Provider `SENT_UNKNOWN` recovery 연결은 각각 P0-4와
+P0-8에서 완료한다.
 
 ## BE-10 Parallel Tracking
 
