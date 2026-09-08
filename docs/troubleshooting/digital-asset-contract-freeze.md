@@ -65,3 +65,36 @@ canonical digest 재현성 문제와 해결 결정을 정리한다.
 - 해결: Draft 2020-12 validation에 더해 sample을 `DigitalAssetRuntimeInput`과 `ExternalExecutionResult` parser로 다시
   통과시키고 Java enum과 Schema enum set equality를 검증한다.
 - 교훈: Schema 문법 검증만으로 producer contract 일치는 증명되지 않는다. 실제 parser와 양방향으로 묶어야 한다.
+
+## External Result Schema Version이 Runtime과 Manifest에서 달라진 문제
+
+- 문제: Manifest는 `digital-asset-external-result/v1`을 공개했지만 Fake Connector와 Response Guard는 과거 문자열인
+  `digital-asset-external-execution-result/v1`을 사용했다. Schema와 sample 테스트만 통과해 실제 Runtime drift를
+  발견하지 못했다.
+- 해결: Connector와 Guard가 `DigitalAssetCanonicalContract.EXTERNAL_RESULT_SCHEMA_VERSION`을 직접 참조하게 하고,
+  실제 Connector 결과가 Guard를 통과하며 manifest 값과도 같은지 검증하는 테스트를 추가했다.
+- 교훈: 계약 테스트는 파일끼리의 일관성뿐 아니라 실제 producer와 consumer boundary를 함께 실행해야 한다.
+
+## Schema 길이 제한이 Domain Parser보다 넓었던 문제
+
+- 문제: 승인 거래 참조와 SETTLED execution tuple의 chain, symbol, token ID가 Schema에서는 Java Domain보다 긴 값을
+  허용해 Schema PASS 이후 Runtime 422가 발생할 수 있었다.
+- 해결: 공통 `$defs`로 identifier 길이를 고정하고 request/result Schema에서 재사용했다. 최대 길이와 최대 길이 + 1을
+  Schema와 실제 parser 양쪽에 통과시켜 동일 경계를 검증한다.
+- 교훈: 정상 sample 하나로는 Schema가 parser보다 느슨한지 증명할 수 없으므로 boundary negative test가 필요하다.
+
+## Baseline Fixture를 전역 타입 계약으로 고정한 문제
+
+- 문제: local mock destination ID를 Runtime Schema의 `const`로 두면 실제 Provider destination이 추가될 때 Java는
+  지원해도 v1 Schema가 거부한다.
+- 해결: destination ID 타입은 1~120자 환경 중립 identifier로 정의하고 mock ID는 manifest와 sample의 baseline
+  compatibility 값으로만 유지했다.
+- 교훈: fixture identity와 wire type contract를 분리해야 계약 버전을 불필요하게 올리지 않는다.
+
+## 언어별 문자열 정렬 차이로 Digest가 달라질 수 있는 문제
+
+- 문제: Java 문자열 정렬과 Python 문자열 정렬은 supplementary Unicode key에서 순서가 달라질 수 있다.
+- 해결: v1 정렬을 UTF-16 code unit lexical order로 명시하고 null, array, 한글, supplementary key를 포함한 golden
+  vector를 공개했다. Enum inventory도 Java 선언 순서와 exact list equality로 검증한다.
+- 교훈: canonicalization 설명만으로 cross-language 재현성을 주장하지 않고 입력, canonical bytes, digest vector를
+  함께 배포해야 한다.

@@ -35,6 +35,36 @@
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
     },
+    "chain_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "nullable_chain_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "asset_symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "nullable_asset_symbol": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "token_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "nullable_token_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 160
+    },
     "contract_content": {
       "type": "object",
       "required": ["identifiers", "enum_sets", "files"],
@@ -43,8 +73,8 @@
         "enum_sets": { "$ref": "#/$defs/enum_sets" },
         "files": {
           "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
+          "minItems": 4,
+          "maxItems": 4,
           "items": { "$ref": "#/$defs/contract_file" }
         }
       },
@@ -83,7 +113,12 @@
           "pattern": "^docs/contracts/(samples/)?[a-z0-9][a-z0-9._/-]+\\.json$"
         },
         "role": {
-          "enum": ["JSON_SCHEMA", "RUNTIME_REQUEST_SAMPLE", "EXTERNAL_RESULT_SAMPLE"]
+          "enum": [
+            "JSON_SCHEMA",
+            "RUNTIME_REQUEST_SAMPLE",
+            "EXTERNAL_RESULT_SAMPLE",
+            "CANONICALIZATION_GOLDEN_VECTORS"
+          ]
         },
         "digest": { "$ref": "#/$defs/prefixed_sha256" }
       },
@@ -267,12 +302,12 @@
       "type": "object",
       "required": ["chainId", "assetKind", "assetSymbol", "operation"],
       "properties": {
-        "chainId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "chainId": { "$ref": "#/$defs/chain_id" },
         "assetKind": { "enum": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN"] },
-        "assetSymbol": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "assetSymbol": { "$ref": "#/$defs/asset_symbol" },
         "assetContractAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
         "operation": { "enum": ["TRANSFER", "CONTRACT_CALL"] },
-        "tokenId": { "type": ["string", "null"], "minLength": 1, "maxLength": 160 }
+        "tokenId": { "$ref": "#/$defs/nullable_token_id" }
       },
       "additionalProperties": false,
       "allOf": [
@@ -301,7 +336,7 @@
             "required": ["assetContractAddress", "tokenId"],
             "properties": {
               "assetContractAddress": { "type": "string" },
-              "tokenId": { "type": "string" }
+              "tokenId": { "$ref": "#/$defs/token_id" }
             }
           }
         }
@@ -311,7 +346,7 @@
       "type": "object",
       "required": ["approvedTransactionReference", "customerId", "accountId", "outboundRequest"],
       "properties": {
-        "approvedTransactionReference": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "approvedTransactionReference": { "type": "string", "minLength": 1, "maxLength": 160 },
         "customerId": { "type": "string", "minLength": 1, "maxLength": 240 },
         "accountId": { "type": "string", "minLength": 1, "maxLength": 240 },
         "outboundRequest": { "$ref": "#/$defs/outbound_request" }
@@ -359,7 +394,7 @@
         "workloadId": { "const": "tokenized_asset_purchase" },
         "purposeCode": { "const": "DIGITAL_ASSET_PURCHASE" },
         "subjectScope": { "type": "string", "minLength": 1, "maxLength": 240 },
-        "destinationProfileId": { "const": "dest_mock_asset_platform_v1" },
+        "destinationProfileId": { "type": "string", "minLength": 1, "maxLength": 120 },
         "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 120 },
         "processingContexts": {
           "type": "array",
@@ -411,7 +446,7 @@
           "type": ["string", "null"],
           "pattern": "^(?!0+$)[0-9]{1,78}$"
         },
-        "approvedDestinationProfileId": { "const": "dest_mock_asset_platform_v1" },
+        "approvedDestinationProfileId": { "type": "string", "minLength": 1, "maxLength": 120 },
         "approvedDestination": { "type": "string", "minLength": 1 },
         "approvedBeneficiaryReference": { "type": "string", "minLength": 1 },
         "approvedFrom": { "type": "string", "format": "date-time" },
@@ -457,13 +492,13 @@
         "providerStatus": { "enum": ["ACKNOWLEDGED", "COMPLETED", "FAILED"] },
         "receiptStatus": { "enum": ["NOT_AVAILABLE", "PENDING", "SUCCESS", "FAILED"] },
         "finalityStatus": { "enum": ["UNCONFIRMED", "CONFIRMED", "FINALIZED", "FAILED"] },
-        "executedChainId": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "executedChainId": { "$ref": "#/$defs/nullable_chain_id" },
         "executedRecipientAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
         "executedAssetKind": {
           "type": ["string", "null"],
           "enum": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN", null]
         },
-        "executedAssetSymbol": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "executedAssetSymbol": { "$ref": "#/$defs/nullable_asset_symbol" },
         "executedAssetContractAddress": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
         "executedAmount": { "type": ["string", "null"], "pattern": "^[0-9]{1,78}$" },
         "nativeValue": { "type": ["string", "null"], "pattern": "^[0-9]{1,78}$" },
@@ -471,7 +506,7 @@
           "type": ["string", "null"],
           "enum": ["TRANSFER", "CONTRACT_CALL", null]
         },
-        "tokenId": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
+        "tokenId": { "$ref": "#/$defs/nullable_token_id" },
         "tokenTransferEvidenceRef": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
         "internalTraceEvidenceRef": { "type": ["string", "null"], "minLength": 1, "maxLength": 240 },
         "executedAt": { "type": ["string", "null"], "format": "date-time" },
@@ -487,10 +522,10 @@
               "providerStatus": { "enum": ["ACKNOWLEDGED", "COMPLETED"] },
               "receiptStatus": { "const": "SUCCESS" },
               "finalityStatus": { "const": "FINALIZED" },
-              "executedChainId": { "type": "string" },
+              "executedChainId": { "$ref": "#/$defs/chain_id" },
               "executedRecipientAddress": { "type": "string" },
               "executedAssetKind": { "type": "string" },
-              "executedAssetSymbol": { "type": "string" },
+              "executedAssetSymbol": { "$ref": "#/$defs/asset_symbol" },
               "executedAmount": { "type": "string" },
               "operation": { "type": "string" },
               "executedAt": { "type": "string" },
@@ -539,7 +574,7 @@
           "then": {
             "properties": {
               "executedAssetContractAddress": { "type": "string" },
-              "tokenId": { "type": "string" }
+              "tokenId": { "$ref": "#/$defs/token_id" }
             }
           }
         }

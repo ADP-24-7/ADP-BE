@@ -14,6 +14,7 @@ JSON Schema, manifest, sample은 자동 테스트로 이 값과 일치해야 한
 | `docs/contracts/digital-asset-runtime-contract-v1.json` | Version, identifier, enum inventory와 파일 digest manifest |
 | `docs/contracts/samples/digital-asset-runtime-request-v1.json` | FE/DA가 참조할 Runtime 요청 sample |
 | `docs/contracts/samples/digital-asset-external-result-v1.json` | Provider 결과와 POST_EXECUTION 분석용 sample |
+| `docs/contracts/canonical/digital-asset-canonical-json-v1-vectors.json` | BE/DA 독립 구현이 공유하는 canonical golden vector |
 
 Schema의 `$defs`는 `runtime_request`, `runtime_input`, `approved_transaction`, `outbound_request`,
 `external_execution_result`, `transform_instruction`, `canonical_decision`을 제공한다.
@@ -60,19 +61,27 @@ manifest의 `enum_sets`를 사용한다. Java enum에 값을 추가하거나 제
 
 `adp-canonical-json/v1`은 다음 규칙을 사용한다.
 
-1. JSON object key를 Java `String` natural order로 재귀 정렬한다.
+1. JSON object key를 UTF-16 code unit의 unsigned lexical order로 재귀 정렬한다. Java `String` natural order와
+   같으며 DA 구현도 Unicode code point order가 아닌 이 순서를 사용한다.
 2. Array 순서는 업무 의미가 있으므로 유지한다.
 3. `null` field를 제거하지 않는다.
-4. UTF-8 compact JSON으로 직렬화한다.
-5. SHA-256 결과는 lowercase hex와 `sha256:` prefix로 표현한다.
+4. 문자열은 Unicode normalization을 수행하지 않으며 JSON 필수 escape만 적용하고 non-ASCII 문자는 escape하지 않는다.
+5. 숫자는 입력 JSON token을 임의 변환하지 않는다. 현재 v1 digest 대상 업무 값은 amount와 version을 포함해 문자열로
+   표현하며 숫자 표현 정규화가 필요한 필드는 v1에 추가하지 않는다.
+6. UTF-8 compact JSON으로 직렬화한다.
+7. SHA-256 결과는 lowercase hex와 `sha256:` prefix로 표현한다.
 
 Manifest `content_digest`는 `content_digest` 자체를 제외한 manifest 전체를 canonicalize해 계산한다. `files[]`의
 digest는 각 JSON 파일 전체를 같은 방식으로 계산한다. 이 값은 accidental tamper와 drift 검출용이며 전자서명이나
 외부 anchoring을 의미하지 않는다.
 
+DA의 Python canonicalizer는 golden vector의 `canonical`과 `digest`를 모두 재현해야 한다. 특히 supplementary
+Unicode key vector는 Python 기본 code point 정렬을 그대로 사용해서는 통과하지 않도록 구성했다.
+
 ## JSON 계약
 
 - Runtime wire name은 현재 API와 같은 camelCase다.
+- `destinationProfileId`는 환경 중립적인 1~120자 identifier이며 mock destination은 manifest/sample의 baseline 값이다.
 - Artifact manifest metadata는 기존 DA/BE Artifact 관례에 따라 snake_case다.
 - Amount는 최대 78자리 decimal string이며 Runtime request에서는 0보다 커야 한다.
 - Asset conditional field 규칙은 P0-3과 동일하다.
@@ -106,6 +115,9 @@ P0-4는 DB 상태를 추가하지 않으므로 Flyway migration이 없다. Artif
 - Java enum, canonical field, active reason code와 Schema/manifest inventory equality 검증
 - Identifier/version 상수와 manifest equality 검증
 - Object insertion order 독립성, null 보존, array order 민감성 검증
+- 한글과 supplementary Unicode를 포함한 cross-language golden vector 검증
+- Runtime Guard, Fake Connector, manifest의 External Result Schema Version 결속 검증
+- Java parser와 Schema의 approved reference 및 execution asset 길이 경계 검증
 - Manifest content/file digest 재계산 검증
 - Asset conditional field와 unknown field negative test
 - Common FinalAction에서 Digital Asset Decision으로의 분리 mapping 검증

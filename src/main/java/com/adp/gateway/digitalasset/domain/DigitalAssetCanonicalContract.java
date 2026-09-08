@@ -1,6 +1,6 @@
 package com.adp.gateway.digitalasset.domain;
 
-import java.util.Set;
+import java.util.List;
 
 import com.adp.gateway.common.error.ReasonCode;
 
@@ -19,7 +19,7 @@ public final class DigitalAssetCanonicalContract {
     public static final String BASELINE_PROVIDER_REQUEST_SCHEMA_VERSION = "digital-asset-request/v1";
     public static final String EXTERNAL_RESULT_SCHEMA_VERSION = "digital-asset-external-result/v1";
 
-    public static final Set<ReasonCode> ACTIVE_REASON_CODES = Set.of(
+    public static final List<ReasonCode> ACTIVE_REASON_CODES = List.of(
         ReasonCode.DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND,
         ReasonCode.DIGITAL_ASSET_APPROVED_ASSET_MISMATCH,
         ReasonCode.DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED,

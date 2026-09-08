@@ -1,5 +1,6 @@
 package com.adp.gateway.digitalasset.domain;
 
+import java.util.List;
 import java.util.Set;
 
 public enum DigitalAssetMismatchField {
@@ -38,7 +39,11 @@ public enum DigitalAssetMismatchField {
     }
 
     public static Set<DigitalAssetMismatchField> canonicalExecutionFields() {
-        return Set.of(
+        return Set.copyOf(canonicalExecutionFieldOrder());
+    }
+
+    public static List<DigitalAssetMismatchField> canonicalExecutionFieldOrder() {
+        return List.of(
             CHAIN_ID,
             RECIPIENT_ADDRESS,
             ASSET_KIND,

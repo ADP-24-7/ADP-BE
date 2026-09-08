@@ -9,6 +9,7 @@ import com.adp.gateway.egress.application.ResponseGuardPort;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,7 @@ public class DigitalAssetResponseGuard implements ResponseGuardPort {
         if (result.status() != ConnectorStatus.ACKNOWLEDGED && result.status() != ConnectorStatus.COMPLETED) {
             return ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED"));
         }
-        if (!"digital-asset-external-execution-result/v1".equals(result.responseSchemaVersion())
+        if (!DigitalAssetCanonicalContract.EXTERNAL_RESULT_SCHEMA_VERSION.equals(result.responseSchemaVersion())
             || !(result.responsePayload() instanceof Map<?, ?> response)) {
             return ResponseGuardResult.rejected(List.of("SETTLEMENT_RESPONSE_INVALID"));
         }

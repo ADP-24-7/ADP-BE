@@ -3,7 +3,7 @@
   "artifact_id": "ADP-DIGITAL-ASSET-RUNTIME-CONTRACT",
   "artifact_version": "1.0.0",
   "canonicalization_version": "adp-canonical-json/v1",
-  "content_digest": "sha256:7a385271fd5729c26f40f7ba482ffb5881c6dff30c4ff3f18d147ced115c00ca",
+  "content_digest": "sha256:886842702fad124a95e73f0f714ffacef56d5cbd5a4c0f222440279d106b3504",
   "contract": {
     "identifiers": {
       "execution_pack": "DIGITAL_ASSET",
@@ -81,7 +81,7 @@
       {
         "path": "docs/contracts/digital-asset-runtime-contract-v1.schema.json",
         "role": "JSON_SCHEMA",
-        "digest": "sha256:0842abf6c43abcd6ffe0049c4517380254e518c5ba2e7193b1a38bd3792b33d1"
+        "digest": "sha256:1799464c4433f966fba510c96eacc8cf598d66cbf6f2b6ebc50b6421f588b4fe"
       },
       {
         "path": "docs/contracts/samples/digital-asset-runtime-request-v1.json",
@@ -92,6 +92,11 @@
         "path": "docs/contracts/samples/digital-asset-external-result-v1.json",
         "role": "EXTERNAL_RESULT_SAMPLE",
         "digest": "sha256:a33a70d8fa9591969a67ca8a859685f35a6d64a7cdbe437760ca9768ec9cd3a7"
+      },
+      {
+        "path": "docs/contracts/canonical/digital-asset-canonical-json-v1-vectors.json",
+        "role": "CANONICALIZATION_GOLDEN_VECTORS",
+        "digest": "sha256:965dfaff568ebe80e2d3f944be20e53727ea4e6e6f24f5629f6b1438aa1bda5d"
       }
     ]
   }
