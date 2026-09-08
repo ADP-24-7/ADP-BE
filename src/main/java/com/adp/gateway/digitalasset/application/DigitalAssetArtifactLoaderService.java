@@ -49,6 +49,9 @@ public class DigitalAssetArtifactLoaderService {
         );
         requireBinding(principal, bundle);
 
+        persistence.lockIdentity(
+            principal.institutionId(), bundle.artifactId(), bundle.artifactVersion()
+        );
         var existing = persistence.find(
             principal.institutionId(), principal.workloadIds(), bundle.artifactId(), bundle.artifactVersion()
         );

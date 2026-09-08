@@ -7,7 +7,21 @@
     "artifact_id": { "type": "string", "minLength": 1, "maxLength": 120 },
     "artifact_version": { "const": "1.0.0" },
     "status": { "const": "VALIDATED" },
-    "payload": { "type": "object" }
+    "payload": {
+      "type": "object",
+      "required": ["decision_semantics", "external_action_on_unresolved"],
+      "properties": {
+        "decision_semantics": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "enum": ["PASS", "BLOCK", "REVIEW"] }
+        },
+        "external_action_on_unresolved": { "const": "DENY" }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -62,7 +63,9 @@ public class SecurityConfig {
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/policy-lifecycle/**")
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
-                    .requestMatchers("/api/admin/digital-assets/artifacts/**")
+                    .requestMatchers(HttpMethod.POST, "/api/admin/digital-assets/artifacts/ingestions")
+                    .hasRole("OPERATOR")
+                    .requestMatchers(HttpMethod.GET, "/api/admin/digital-assets/artifacts/**")
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers("/api/runtime/**").hasRole("RUNTIME_EXECUTOR")
                     .requestMatchers("/v1/runtime/**").hasRole("RUNTIME_EXECUTOR")

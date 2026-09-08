@@ -13,16 +13,32 @@ Lifecycle의 `CANDIDATE`로 등록한다.
 -> Manifest 로드 및 Schema 검증
 -> Manifest expected/self digest 검증
 -> P0-4 Canonical Contract version/digest 검증
--> 필수 5개 Artifact와 Schema reference 로드
--> Artifact/Schema digest 및 JSON Schema 검증
+-> 필수 5개 Artifact와 trusted Schema reference 결속
+-> Artifact digest 및 BE-owned role Schema 검증
 -> Blocking gap 탐지
--> Institution/Workload binding 검증
+-> Bundle Binding/Crosswalk/Control/Pipeline 의미 검증
+-> Institution/Workload scope 검증
 -> DRAFT -> VALIDATED -> CANDIDATE
 -> Ingestion metadata 저장
 ```
 
 필수 Artifact role은 `OUTBOUND_REQUIREMENT_MATRIX`, `POLICY_EVALUATION`, `BINDING`,
 `RUNTIME_DATA_CROSSWALK`, `RUNTIME_PIPELINE`이다. role 또는 reference 중복과 누락은 거부한다.
+
+## Trusted Schema와 Semantic Binding
+
+Artifact producer가 전달한 Schema를 검증 기준으로 사용하지 않는다. BE는
+`src/main/resources/contracts/digital-asset-artifacts`의 role별 strict Schema를 소유한다. Manifest의
+`schema_reference`와 `schema_digest`는 해당 BE-owned Schema와 정확히 일치해야 하며, 실제 문서 검증도 classpath의
+trusted Schema로 수행한다.
+
+파일별 Schema 통과 후 다음 Bundle-level invariant를 추가로 검증한다.
+
+- Manifest와 `BINDING`의 execution pack, workload, purpose, destination 일치
+- `RUNTIME_DATA_CROSSWALK`가 P0-4 `DataClass` subset이고 `UNKNOWN`을 포함하지 않음
+- `POLICY_EVALUATION`의 Decision이 `PASS/BLOCK/REVIEW` 전체 집합이며 unresolved action은 `DENY`
+- `OUTBOUND_REQUIREMENT_MATRIX`가 고정된 6개 canonical control 전체 집합과 일치
+- `RUNTIME_PIPELINE`이 승인된 5개 stage와 순서를 정확히 유지
 
 ## API와 설정
 
@@ -45,14 +61,18 @@ version/digest, 기관·워크로드·목적지 binding, file count와 Lifecycle
 dataset은 DB에 저장하지 않는다. 같은 기관의 동일 artifact ID/version/digest/reference 재요청은 기존 결과를 반환하고,
 동일 ID/version의 다른 digest 또는 reference는 충돌로 거부한다.
 
+동일 identity의 동시 요청은 PostgreSQL transaction advisory lock으로 직렬화한다. lock 이후 기존 metadata를 다시
+조회하므로 같은 digest/reference의 동시 요청은 409가 아니라 동일 Candidate replay로 수렴한다.
+
 ## Fail-closed 계약
 
-- Manifest/Artifact/Schema JSON 또는 JSON Schema 불일치
+- Manifest/Artifact JSON 또는 BE-owned JSON Schema 불일치
 - expected digest, manifest self digest, file/schema digest 불일치
 - P0-4 artifact ID/version/digest 불일치
 - 필수 role 누락, 중복 role/reference, dangling reference
 - `UNMAPPED`, `TBD`, `CONTRACT_GAP`이 남은 Artifact
 - 다른 institution 또는 허용되지 않은 workload binding
+- Manifest와 Binding 불일치, unknown DataClass, 잘못된 Control 또는 Pipeline 순서
 - 절대 경로, 상위 경로 이동, 역슬래시, symlink root escape, 크기 제한 초과
 
 검증과 Lifecycle 전이는 하나의 트랜잭션에서 수행한다. 저장 실패 시 `CANDIDATE`만 남는 중간 상태를 만들지 않는다.
@@ -74,4 +94,7 @@ Snapshot과 ACTIVE 선택은 P0-6 이후 책임이다.
 - 인가 실패 시 Store 접근 없음
 - cross-institution/cross-workload binding 차단
 - 동일 ID/version의 다른 digest 충돌
+- producer-selected permissive Schema 차단
+- Manifest/Binding 불일치와 Crosswalk/Pipeline drift 차단
+- 동일 identity 동시 요청 replay 수렴
 - V27 schema/constraint 및 전체 회귀 테스트

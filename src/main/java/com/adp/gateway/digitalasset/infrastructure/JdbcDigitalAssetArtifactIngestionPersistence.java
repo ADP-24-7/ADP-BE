@@ -21,6 +21,17 @@ public class JdbcDigitalAssetArtifactIngestionPersistence implements DigitalAsse
     }
 
     @Override
+    public void lockIdentity(String institutionId, String artifactId, String artifactVersion) {
+        jdbcClient.sql("""
+                select 1
+                from (select pg_advisory_xact_lock(hashtextextended(:identity, 0))) acquired
+                """)
+            .param("identity", institutionId + "\u001f" + artifactId + "\u001f" + artifactVersion)
+            .query(Integer.class)
+            .single();
+    }
+
+    @Override
     public DigitalAssetArtifactIngestion create(DigitalAssetArtifactIngestion value) {
         try {
             jdbcClient.sql("""

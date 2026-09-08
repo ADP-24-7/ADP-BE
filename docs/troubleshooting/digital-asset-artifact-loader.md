@@ -1,5 +1,24 @@
 # Digital Asset Artifact Loader 트러블슈팅
 
+## Producer가 Schema까지 제출하는 신뢰 역전
+
+초기 구현은 manifest의 `schema_reference/schema_digest`로 producer가 함께 게시한 Schema를 읽어 Artifact를
+검증했다. 이 구조에서는 오류가 있는 문서와 permissive Schema를 함께 제출해도 둘의 digest만 맞으면 통과할 수 있었다.
+검증 기준을 BE classpath의 role별 strict Schema로 옮겼고, manifest의 Schema 정보는 trusted reference/digest와
+일치하는지 확인하는 evidence로만 사용한다.
+
+## 파일별 Valid와 Bundle 전체 Consistent의 차이
+
+5개 문서가 각각 Schema를 통과해도 Manifest의 destination과 Binding의 destination이 다르거나 Crosswalk에
+`UNKNOWN`이 남아 있으면 하나의 Runtime Candidate로 사용할 수 없다. 별도 semantic validator에서 Binding equality,
+DataClass subset, Decision/Control exact set, Pipeline stage order를 검증한 뒤에만 Lifecycle Candidate로 전이한다.
+
+## 동시 Replay가 Conflict가 되는 Race
+
+`find -> create`만 사용하면 같은 Artifact를 동시에 요청한 두 transaction이 모두 미존재로 판단하고 하나가 PK conflict로
+끝날 수 있다. institution/artifact ID/version으로 PostgreSQL transaction advisory lock을 획득한 다음 metadata를
+조회하도록 변경했다. 동일 내용은 기존 Candidate를 반환하고 다른 digest/reference만 실제 conflict로 남는다.
+
 ## Digest 검증에서 공백 변경은 tamper가 아니었던 문제
 
 초기 negative test는 JSON 뒤에 공백을 추가해 tamper를 만들었다. 그러나 `adp-canonical-json/v1` digest는 파싱된

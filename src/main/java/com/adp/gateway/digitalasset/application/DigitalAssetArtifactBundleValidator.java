@@ -3,6 +3,7 @@ package com.adp.gateway.digitalasset.application;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -28,11 +29,20 @@ public class DigitalAssetArtifactBundleValidator {
 
     private final ObjectMapper mapper;
     private final DigitalAssetCanonicalJson canonicalJson;
+    private final DigitalAssetArtifactSchemaRegistry schemaRegistry;
+    private final DigitalAssetArtifactBundleSemanticValidator semanticValidator;
     private final Schema manifestSchema;
 
-    public DigitalAssetArtifactBundleValidator(ObjectMapper mapper, DigitalAssetCanonicalJson canonicalJson) {
+    public DigitalAssetArtifactBundleValidator(
+        ObjectMapper mapper,
+        DigitalAssetCanonicalJson canonicalJson,
+        DigitalAssetArtifactSchemaRegistry schemaRegistry,
+        DigitalAssetArtifactBundleSemanticValidator semanticValidator
+    ) {
         this.mapper = mapper;
         this.canonicalJson = canonicalJson;
+        this.schemaRegistry = schemaRegistry;
+        this.semanticValidator = semanticValidator;
         this.manifestSchema = loadManifestSchema();
     }
 
@@ -50,6 +60,8 @@ public class DigitalAssetArtifactBundleValidator {
         verifyCanonicalContract(manifest.path("canonical_contract"));
 
         List<ValidatedDigitalAssetArtifactBundle.ArtifactFile> files = new ArrayList<>();
+        EnumMap<DigitalAssetArtifactFileRole, JsonNode> documents =
+            new EnumMap<>(DigitalAssetArtifactFileRole.class);
         Set<DigitalAssetArtifactFileRole> roles = EnumSet.noneOf(DigitalAssetArtifactFileRole.class);
         Set<String> references = new HashSet<>();
         for (JsonNode file : manifest.path("files")) {
@@ -59,14 +71,19 @@ public class DigitalAssetArtifactBundleValidator {
             if (!roles.add(role) || !references.add(reference)) {
                 throw invalid("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID");
             }
+            DigitalAssetArtifactSchemaRegistry.TrustedSchema trustedSchema = schemaRegistry.get(role);
+            if (!trustedSchema.reference().equals(schemaReference)) {
+                throw invalid("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID");
+            }
+            if (!trustedSchema.digest().equals(file.path("schema_digest").asText())) {
+                throw invalid("DIGITAL_ASSET_ARTIFACT_DIGEST_MISMATCH");
+            }
             String content = store.load(reference, ARTIFACT_MAX_BYTES);
-            String schemaContent = store.load(schemaReference, MANIFEST_MAX_BYTES);
             JsonNode document = parse(content, "DIGITAL_ASSET_ARTIFACT_SCHEMA_INVALID");
-            JsonNode schemaDocument = parse(schemaContent, "DIGITAL_ASSET_ARTIFACT_SCHEMA_INVALID");
             verifyDigest(document, file.path("digest").asText());
-            verifyDigest(schemaDocument, file.path("schema_digest").asText());
-            validateDocument(document, schemaDocument);
             rejectBlockingGap(document);
+            validateDocument(document, trustedSchema.schema());
+            documents.put(role, document);
             files.add(new ValidatedDigitalAssetArtifactBundle.ArtifactFile(
                 role, reference, file.path("digest").asText(), schemaReference,
                 file.path("schema_digest").asText()
@@ -75,6 +92,7 @@ public class DigitalAssetArtifactBundleValidator {
         if (!roles.equals(EnumSet.allOf(DigitalAssetArtifactFileRole.class))) {
             throw invalid("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID");
         }
+        semanticValidator.validate(manifest, documents);
 
         JsonNode binding = manifest.path("binding");
         return new ValidatedDigitalAssetArtifactBundle(
@@ -113,10 +131,8 @@ public class DigitalAssetArtifactBundleValidator {
         }
     }
 
-    private void validateDocument(JsonNode document, JsonNode schemaDocument) {
+    private void validateDocument(JsonNode document, Schema schema) {
         try {
-            Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-                .getSchema(schemaDocument);
             if (!schema.validate(document).isEmpty()) {
                 throw invalid("DIGITAL_ASSET_ARTIFACT_SCHEMA_INVALID");
             }

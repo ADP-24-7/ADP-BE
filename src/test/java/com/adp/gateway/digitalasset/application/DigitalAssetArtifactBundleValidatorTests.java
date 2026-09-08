@@ -6,10 +6,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactControl;
+import com.adp.gateway.digitalasset.domain.DigitalAssetDecision;
+import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimePipelineStage;
 import com.adp.gateway.digitalasset.infrastructure.LocalDigitalAssetArtifactContentStore;
+import com.adp.gateway.retrieval.domain.DataClass;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,7 +33,12 @@ class DigitalAssetArtifactBundleValidatorTests {
 
     @BeforeEach
     void setUp() throws IOException {
-        validator = new DigitalAssetArtifactBundleValidator(mapper, canonicalJson);
+        validator = new DigitalAssetArtifactBundleValidator(
+            mapper,
+            canonicalJson,
+            new DigitalAssetArtifactSchemaRegistry(mapper, canonicalJson),
+            new DigitalAssetArtifactBundleSemanticValidator()
+        );
         store = new MapStore();
         try (var files = Files.list(Path.of(ROOT))) {
             for (Path path : files.toList()) {
@@ -86,6 +98,90 @@ class DigitalAssetArtifactBundleValidatorTests {
     }
 
     @Test
+    void rejectsProducerSelectedSchemaAndCrossArtifactBindingMismatch() throws IOException {
+        ObjectNode manifest = (ObjectNode) mapper.readTree(store.values.get(MANIFEST));
+        ((ObjectNode) findFile(manifest, "BINDING"))
+            .put("schema_reference", "producer/permissive.schema.json");
+        store.values.put(MANIFEST, mapper.writeValueAsString(manifest));
+        String untrustedSchemaDigest = refreshManifestDigest();
+
+        assertThatThrownBy(() -> validator.validate(MANIFEST, untrustedSchemaDigest, store))
+            .isInstanceOf(DigitalAssetArtifactIngestionException.class)
+            .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
+            .isEqualTo("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID");
+
+        setUp();
+        mutateDocument("BINDING", document ->
+            ((ObjectNode) document.path("payload")).put("destination_profile_id", "dest-other")
+        );
+        String bindingMismatchDigest = refreshManifestDigest();
+        assertThatThrownBy(() -> validator.validate(MANIFEST, bindingMismatchDigest, store))
+            .isInstanceOf(DigitalAssetArtifactIngestionException.class)
+            .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
+            .isEqualTo("DIGITAL_ASSET_ARTIFACT_BINDING_INVALID");
+    }
+
+    @Test
+    void rejectsUnknownRuntimeDataClassAndPipelineOrderChange() throws IOException {
+        mutateDocument("RUNTIME_DATA_CROSSWALK", document ->
+            ((com.fasterxml.jackson.databind.node.ArrayNode) document.path("payload")
+                .path("runtime_data_classes")).add("UNKNOWN")
+        );
+        String unknownDigest = refreshManifestDigest();
+        assertThatThrownBy(() -> validator.validate(MANIFEST, unknownDigest, store))
+            .isInstanceOf(DigitalAssetArtifactIngestionException.class)
+            .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
+            .isEqualTo("DIGITAL_ASSET_ARTIFACT_BLOCKING_GAP");
+
+        setUp();
+        mutateDocument("RUNTIME_PIPELINE", document -> {
+            var stages = (com.fasterxml.jackson.databind.node.ArrayNode) document.path("payload").path("stages");
+            JsonNode first = stages.get(0);
+            stages.set(0, stages.get(1));
+            stages.set(1, first);
+        });
+        String pipelineDigest = refreshManifestDigest();
+        assertThatThrownBy(() -> validator.validate(MANIFEST, pipelineDigest, store))
+            .isInstanceOf(DigitalAssetArtifactIngestionException.class)
+            .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
+            .isEqualTo("DIGITAL_ASSET_ARTIFACT_SCHEMA_INVALID");
+    }
+
+    @Test
+    void trustedSchemasRemainBoundToCanonicalJavaEnums() throws IOException {
+        JsonNode policySchema = mapper.readTree(Files.readString(Path.of(
+            "src/main/resources/contracts/digital-asset-artifacts/policy-evaluation-v1.schema.json"
+        )));
+        JsonNode crosswalkSchema = mapper.readTree(Files.readString(Path.of(
+            "src/main/resources/contracts/digital-asset-artifacts/runtime-data-crosswalk-v1.schema.json"
+        )));
+        JsonNode controlSchema = mapper.readTree(Files.readString(Path.of(
+            "src/main/resources/contracts/digital-asset-artifacts/outbound-requirement-matrix-v1.schema.json"
+        )));
+        JsonNode pipelineSchema = mapper.readTree(Files.readString(Path.of(
+            "src/main/resources/contracts/digital-asset-artifacts/runtime-pipeline-v1.schema.json"
+        )));
+
+        assertThat(textSet(policySchema.path("properties").path("payload").path("properties")
+            .path("decision_semantics").path("items").path("enum")))
+            .isEqualTo(Arrays.stream(DigitalAssetDecision.values())
+                .map(Enum::name).collect(Collectors.toSet()));
+        assertThat(textSet(crosswalkSchema.path("properties").path("payload").path("properties")
+            .path("runtime_data_classes").path("items").path("enum")))
+            .isEqualTo(Arrays.stream(DataClass.values()).map(Enum::name).collect(Collectors.toSet()));
+        assertThat(textSet(controlSchema.path("properties").path("payload").path("properties")
+            .path("controls").path("items").path("enum")))
+            .isEqualTo(Arrays.stream(DigitalAssetArtifactControl.values())
+                .map(Enum::name).collect(Collectors.toSet()));
+        assertThat(java.util.stream.StreamSupport.stream(
+                pipelineSchema.path("properties").path("payload").path("properties")
+                    .path("stages").path("prefixItems").spliterator(), false
+            ).map(item -> item.path("const").asText()).toList())
+            .containsExactly(Arrays.stream(DigitalAssetRuntimePipelineStage.values())
+                .map(Enum::name).toArray(String[]::new));
+    }
+
+    @Test
     void localStoreRejectsTraversalBeforeReading() {
         LocalDigitalAssetArtifactContentStore local = new LocalDigitalAssetArtifactContentStore(".");
         assertThatThrownBy(() -> local.load("../ADP-DA/secret.json", 1024))
@@ -122,6 +218,12 @@ class DigitalAssetArtifactBundleValidatorTests {
             }
         }
         throw new IllegalArgumentException("role not found");
+    }
+
+    private Set<String> textSet(JsonNode values) {
+        return java.util.stream.StreamSupport.stream(values.spliterator(), false)
+            .map(JsonNode::asText)
+            .collect(Collectors.toSet());
     }
 
     private static final class MapStore implements DigitalAssetArtifactContentStore {

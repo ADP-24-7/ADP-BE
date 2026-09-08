@@ -92,6 +92,9 @@ class DigitalAssetArtifactLoaderServiceTests {
             .isEqualTo("DIGITAL_ASSET_ARTIFACT_CONFLICT");
 
         verify(lifecycleService, never()).create(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(persistence).lockIdentity(
+            "institution-local", candidate.artifactId(), candidate.artifactVersion()
+        );
     }
 
     private ValidatedDigitalAssetArtifactBundle bundle(String institutionId, String workloadId, String digest) {
