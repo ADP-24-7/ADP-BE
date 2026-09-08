@@ -3,8 +3,8 @@
 ## 목적
 
 Digital Asset 외부 실행의 허용 근거를 caller 입력이나 KYC/AML/Wallet eligibility 값이 아니라
-서버가 조회한 Approved Transaction snapshot으로 고정한다. 이 문서는 P0-3 최종 DTO/Schema Freeze 전의
-최소 신뢰 경계이며, Active Runtime 기준 계약이다.
+서버가 조회한 Approved Transaction snapshot으로 고정한다. 이 문서는 P0-3 전의 최소 신뢰 경계를 설명하며,
+현재 Active 타입 계약은 [DA-P0-3 Digital Asset Domain Contracts](da-p0-3-domain-contracts.md)를 따른다.
 
 ## 실행 경계
 
@@ -51,7 +51,7 @@ server-owned `approved*` 값만 저장한다.
 
 ## 후속 범위
 
-P0-3에서 `ApprovedTransaction`, `OutboundRequest`, `ExternalExecutionResult`의 최종 이름과 nullability를
-고정한다. P0-4에서는 identifier/enum/schema version을 DA와 함께 freeze한다. 현재 local adapter는 개발용
+P0-3에서 `ApprovedTransaction`, `OutboundRequest`, `ExternalExecutionResult`의 Java 계약과 nullability를
+고정했다. P0-4에서는 identifier/enum/schema version을 DA와 함께 freeze한다. 현재 local adapter는 개발용
 server-owned fixture이며 운영 승인 원장 구현을 대신하지 않는다. Connector 직전 snapshot 재검증과 TOCTOU 방지는
 P0-7 PRE_EXECUTION Guard에서 처리한다.

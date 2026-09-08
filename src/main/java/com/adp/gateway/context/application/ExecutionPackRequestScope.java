@@ -8,6 +8,7 @@ public record ExecutionPackRequestScope(
     String purpose,
     String subjectRefDigest,
     String destinationProfileId,
+    String idempotencyKey,
     OffsetDateTime requestStartedAt
 ) {
 }

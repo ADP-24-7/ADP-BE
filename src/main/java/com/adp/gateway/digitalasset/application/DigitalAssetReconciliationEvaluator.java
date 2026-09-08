@@ -7,16 +7,20 @@ import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.digitalasset.domain.DigitalAssetReconciliationAssessment;
 import com.adp.gateway.digitalasset.domain.DigitalAssetMismatchField;
 import com.adp.gateway.digitalasset.domain.DigitalAssetReconciliationResult;
+import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DigitalAssetReconciliationEvaluator {
     private static final java.util.Set<DigitalAssetMismatchField> ACTIVE_TRANSACTION_FIELDS = java.util.Set.of(
-        DigitalAssetMismatchField.CUSTOMER_TOKEN,
-        DigitalAssetMismatchField.ACCOUNT_TOKEN,
-        DigitalAssetMismatchField.WALLET_ADDRESS,
-        DigitalAssetMismatchField.ASSET_ID,
-        DigitalAssetMismatchField.AMOUNT
+        DigitalAssetMismatchField.CHAIN_ID,
+        DigitalAssetMismatchField.RECIPIENT_ADDRESS,
+        DigitalAssetMismatchField.ASSET_KIND,
+        DigitalAssetMismatchField.ASSET_SYMBOL,
+        DigitalAssetMismatchField.ASSET_CONTRACT_ADDRESS,
+        DigitalAssetMismatchField.AMOUNT,
+        DigitalAssetMismatchField.OPERATION,
+        DigitalAssetMismatchField.TOKEN_ID
     );
     private static final java.util.Set<String> TRANSACTION_FIELDS = ACTIVE_TRANSACTION_FIELDS.stream()
         .map(DigitalAssetMismatchField::externalName)
@@ -29,14 +33,13 @@ public class DigitalAssetReconciliationEvaluator {
 
     public DigitalAssetReconciliationAssessment evaluate(
         Map<String, Object> requestPayload,
-        Map<?, ?> response,
-        String settlementStatus
+        ExternalExecutionResult result
     ) {
-        Map<String, Object> expected = map(requestPayload.get("transaction"));
-        Map<String, Object> actual = map(response.get("settledTransaction"));
+        Map<String, Object> expected = projection(map(requestPayload.get("transaction")));
+        Map<String, Object> actual = result.executionProjection();
         String expectedDigest = digest(expected);
         String actualDigest = digest(actual);
-        if (!"SETTLED".equals(settlementStatus)) {
+        if (!result.isFinalSuccess()) {
             return new DigitalAssetReconciliationAssessment(
                 DigitalAssetReconciliationResult.WAIT, java.util.List.of(), expectedDigest, actualDigest
             );
@@ -53,12 +56,14 @@ public class DigitalAssetReconciliationEvaluator {
             ).toList();
             actualDigest = hasher.hash(actualDigest + "|UNEXPECTED_FIELD_PRESENT");
         }
-        DigitalAssetReconciliationResult result = mismatchedFields.isEmpty()
+        DigitalAssetReconciliationResult reconciliationResult = mismatchedFields.isEmpty()
             ? DigitalAssetReconciliationResult.MATCH
             : mismatchedFields.stream().anyMatch(DigitalAssetMismatchField::critical)
                 ? DigitalAssetReconciliationResult.CRITICAL_MISMATCH
                 : DigitalAssetReconciliationResult.MISMATCH;
-        return new DigitalAssetReconciliationAssessment(result, mismatchedFields, expectedDigest, actualDigest);
+        return new DigitalAssetReconciliationAssessment(
+            reconciliationResult, mismatchedFields, expectedDigest, actualDigest
+        );
     }
 
     public DigitalAssetReconciliationAssessment criticalCorrelationMismatch(String expected, String actual) {
@@ -75,6 +80,16 @@ public class DigitalAssetReconciliationEvaluator {
         if (value instanceof Map<?, ?> map) {
             map.forEach((key, item) -> result.put(String.valueOf(key), item));
         }
+        return result;
+    }
+
+    private Map<String, Object> projection(Map<String, Object> value) {
+        Map<String, Object> result = new TreeMap<>();
+        TRANSACTION_FIELDS.forEach(field -> {
+            if (value.get(field) != null) {
+                result.put(field, value.get(field));
+            }
+        });
         return result;
     }
 

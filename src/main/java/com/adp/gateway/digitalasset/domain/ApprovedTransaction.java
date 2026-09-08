@@ -1,9 +1,8 @@
 package com.adp.gateway.digitalasset.domain;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
-public record ApprovedTransactionSnapshot(
+public record ApprovedTransaction(
     String approvedTransactionId,
     String version,
     String digest,
@@ -11,15 +10,17 @@ public record ApprovedTransactionSnapshot(
     String subjectRefDigest,
     String workloadId,
     String purpose,
-    String approvedAssetId,
-    BigDecimal approvedMaxAmount,
+    String approvedPolicySnapshotId,
+    DigitalAssetDescriptor approvedAsset,
+    DigitalAssetAmount approvedAmount,
+    DigitalAssetAmount approvedAmountLimit,
     String approvedDestinationProfileId,
     String approvedDestination,
     String approvedBeneficiaryReference,
     OffsetDateTime approvedFrom,
     OffsetDateTime approvedUntil
 ) {
-    public ApprovedTransactionSnapshot {
+    public ApprovedTransaction {
         requireText(approvedTransactionId, "approvedTransactionId");
         requireText(version, "version");
         if (digest == null || !digest.matches("[0-9a-f]{64}")) {
@@ -29,20 +30,22 @@ public record ApprovedTransactionSnapshot(
         requireText(subjectRefDigest, "subjectRefDigest");
         requireText(workloadId, "workloadId");
         requireText(purpose, "purpose");
-        requireText(approvedAssetId, "approvedAssetId");
+        requireText(approvedPolicySnapshotId, "approvedPolicySnapshotId");
         requireText(approvedDestinationProfileId, "approvedDestinationProfileId");
         requireText(approvedDestination, "approvedDestination");
         requireText(approvedBeneficiaryReference, "approvedBeneficiaryReference");
-        if (approvedMaxAmount == null || approvedMaxAmount.signum() <= 0) {
-            throw new IllegalArgumentException("approvedMaxAmount must be positive");
+        if (approvedAsset == null || (approvedAmount == null && approvedAmountLimit == null)
+            || (approvedAmount != null && approvedAmount.atomicUnits().signum() <= 0)
+            || (approvedAmountLimit != null && approvedAmountLimit.atomicUnits().signum() <= 0)) {
+            throw new IllegalArgumentException("approved transaction terms are incomplete");
+        }
+        if (approvedAmount != null && approvedAmountLimit != null
+            && approvedAmount.compareTo(approvedAmountLimit) > 0) {
+            throw new IllegalArgumentException("approvedAmount exceeds approvedAmountLimit");
         }
         if (approvedFrom == null || approvedUntil == null || approvedFrom.isAfter(approvedUntil)) {
             throw new IllegalArgumentException("approved period is invalid");
         }
-    }
-
-    public boolean isEffectiveAt(OffsetDateTime instant) {
-        return instant != null && !instant.isBefore(approvedFrom) && !instant.isAfter(approvedUntil);
     }
 
     private static void requireText(String value, String name) {

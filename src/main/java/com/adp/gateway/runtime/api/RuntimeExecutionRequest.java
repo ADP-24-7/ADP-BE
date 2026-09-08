@@ -5,6 +5,7 @@ import java.util.Map;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public record RuntimeExecutionRequest(
     @NotBlank @Size(max = 120) String institutionId,
@@ -17,6 +18,10 @@ public record RuntimeExecutionRequest(
     @Size(max = 120) String evaluationRunId,
     @Size(max = 120) String evalCaseId,
     @Size(max = 10) List<@NotBlank @Size(max = 80) String> processingContexts,
+    @Schema(
+        description = "Execution-pack-specific input. Unknown fields are rejected by the selected pack.",
+        oneOf = {AiRuntimeInputContract.class, DigitalAssetRuntimeInputContract.class}
+    )
     Map<String, Object> input
 ) {
 }

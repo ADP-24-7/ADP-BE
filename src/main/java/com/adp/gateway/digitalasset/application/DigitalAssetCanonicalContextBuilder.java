@@ -14,7 +14,7 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
-import com.adp.gateway.digitalasset.domain.DigitalAssetPurchaseInput;
+import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeInput;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.retrieval.domain.DataClass;
 import org.springframework.stereotype.Component;
@@ -27,15 +27,18 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     private final CanonicalValueHasher hasher;
     private final SubjectRefHasher subjectRefHasher;
     private final ApprovedTransactionResolver approvedTransactionResolver;
+    private final ApprovedTransactionBindingEvaluator bindingEvaluator;
 
     public DigitalAssetCanonicalContextBuilder(
         CanonicalValueHasher hasher,
         SubjectRefHasher subjectRefHasher,
-        ApprovedTransactionResolver approvedTransactionResolver
+        ApprovedTransactionResolver approvedTransactionResolver,
+        ApprovedTransactionBindingEvaluator bindingEvaluator
     ) {
         this.hasher = hasher;
         this.subjectRefHasher = subjectRefHasher;
         this.approvedTransactionResolver = approvedTransactionResolver;
+        this.bindingEvaluator = bindingEvaluator;
     }
 
     @Override
@@ -50,8 +53,8 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
         ExecutionPackRequestScope requestScope
     ) {
         validate(input);
-        DigitalAssetPurchaseInput purchase = parse(input);
-        String inputSubjectDigest = subjectRefHasher.hash(new SubjectRef("customer", purchase.customerId()));
+        DigitalAssetRuntimeInput runtimeInput = parse(input, requestScope);
+        String inputSubjectDigest = subjectRefHasher.hash(new SubjectRef("customer", runtimeInput.customerId()));
         if (!inputSubjectDigest.equals(retrievalContext.subjectRefDigest())) {
             throw new ExecutionPackInputRejectedException(
                 ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_SUBJECT_MISMATCH"
@@ -65,28 +68,47 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
             );
         }
         var approved = approvedTransactionResolver.resolve(new ApprovedTransactionLookup(
-            purchase.approvedTransactionReference(), requestScope.institutionId(), inputSubjectDigest,
+            runtimeInput.approvedTransactionReference(), requestScope.institutionId(), inputSubjectDigest,
             requestScope.workloadId(), requestScope.purpose()
         ));
+        var outbound = runtimeInput.outboundRequest();
         List<CanonicalContextField> fields = new ArrayList<>(retrievalContext.fields());
-        add(fields, "customerId", purchase.customerId(), DataClass.CUSTOMER_IDENTIFIER);
-        add(fields, "accountId", purchase.accountId(), DataClass.ACCOUNT_IDENTIFIER);
-        add(fields, "walletAddress", purchase.walletAddress(), DataClass.TRANSACTION_IDENTIFIER);
-        add(fields, "assetId", purchase.assetId(), DataClass.BUSINESS_METADATA);
-        add(fields, "amount", purchase.amount().toPlainString(), DataClass.FINANCIAL_AMOUNT);
-        add(fields, "beneficiaryReference", purchase.beneficiaryReference(), DataClass.BUSINESS_METADATA);
+        add(fields, "customerId", runtimeInput.customerId(), DataClass.CUSTOMER_IDENTIFIER);
+        add(fields, "accountId", runtimeInput.accountId(), DataClass.ACCOUNT_IDENTIFIER);
+        add(fields, "outboundRequest.requestedAsset.chainId", outbound.requestedAsset().chainId(), DataClass.BUSINESS_METADATA);
+        add(fields, "outboundRequest.requestedAsset.assetKind", outbound.requestedAsset().assetKind().name(), DataClass.BUSINESS_METADATA);
+        add(fields, "outboundRequest.requestedAsset.assetSymbol", outbound.requestedAsset().assetSymbol(), DataClass.BUSINESS_METADATA);
+        addOptional(fields, "outboundRequest.requestedAsset.assetContractAddress",
+            outbound.requestedAsset().assetContractAddress(), DataClass.TRANSACTION_IDENTIFIER);
+        add(fields, "outboundRequest.requestedAsset.operation", outbound.requestedAsset().operation().name(), DataClass.BUSINESS_METADATA);
+        addOptional(fields, "outboundRequest.requestedAsset.tokenId",
+            outbound.requestedAsset().tokenId(), DataClass.TRANSACTION_IDENTIFIER);
+        add(fields, "outboundRequest.requestedAmount", outbound.requestedAmount().toString(), DataClass.FINANCIAL_AMOUNT);
+        add(fields, "outboundRequest.requestedDestination", outbound.requestedDestination(), DataClass.TRANSACTION_IDENTIFIER);
+        add(fields, "outboundRequest.requestedBeneficiaryReference",
+            outbound.requestedBeneficiaryReference(), DataClass.BUSINESS_METADATA);
         fields.sort(Comparator.comparing(CanonicalContextField::path));
         var trustedMetadata = new java.util.HashMap<String, String>();
         trustedMetadata.put("approvedTransactionId", approved.approvedTransactionId());
         trustedMetadata.put("approvedTransactionVersion", approved.version());
         trustedMetadata.put("approvedTransactionDigest", approved.digest());
-        trustedMetadata.put("approvedAssetId", approved.approvedAssetId());
-        trustedMetadata.put("approvedMaxAmount", approved.approvedMaxAmount().toPlainString());
+        trustedMetadata.put("approvedPolicySnapshotId", approved.approvedPolicySnapshotId());
+        trustedMetadata.put("approvedAsset", approved.approvedAsset().canonicalValue());
+        if (approved.approvedAmount() != null) {
+            trustedMetadata.put("approvedAmount", approved.approvedAmount().toString());
+        }
+        if (approved.approvedAmountLimit() != null) {
+            trustedMetadata.put("approvedAmountLimit", approved.approvedAmountLimit().toString());
+        }
         trustedMetadata.put("approvedDestinationProfileId", approved.approvedDestinationProfileId());
         trustedMetadata.put("approvedDestination", approved.approvedDestination());
         trustedMetadata.put("approvedBeneficiaryReference", approved.approvedBeneficiaryReference());
         trustedMetadata.put("approvedFrom", approved.approvedFrom().toString());
         trustedMetadata.put("approvedUntil", approved.approvedUntil().toString());
+        List<com.adp.gateway.common.error.ReasonCode> bindingReasons = bindingEvaluator.evaluate(approved, outbound);
+        trustedMetadata.put("approvedBindingReasonCodes", bindingReasons.isEmpty()
+            ? "NONE"
+            : bindingReasons.stream().map(Enum::name).sorted().collect(Collectors.joining(",")));
         String digest = hasher.hash(
             fields.stream()
                 .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
@@ -103,19 +125,34 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     @Override
     public void validate(Map<String, Object> input) {
         try {
-            DigitalAssetPurchaseInput.from(input);
+            DigitalAssetRuntimeInput.validateShape(input);
         } catch (IllegalArgumentException exception) {
             throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, exception.getMessage());
         }
     }
 
-    private DigitalAssetPurchaseInput parse(Map<String, Object> input) {
-        return DigitalAssetPurchaseInput.from(input);
+    private DigitalAssetRuntimeInput parse(Map<String, Object> input, ExecutionPackRequestScope requestScope) {
+        try {
+            return DigitalAssetRuntimeInput.from(input, requestScope);
+        } catch (IllegalArgumentException exception) {
+            throw new ExecutionPackInputRejectedException(ExecutionPackType.DIGITAL_ASSET, exception.getMessage());
+        }
     }
 
     private void add(List<CanonicalContextField> fields, String name, Object value, DataClass dataClass) {
         String path = "$.input." + name;
         fields.add(new CanonicalContextField(path, "request", name, dataClass, value,
             hasher.hash(path + ":" + dataClass + ":" + value)));
+    }
+
+    private void addOptional(
+        List<CanonicalContextField> fields,
+        String name,
+        Object value,
+        DataClass dataClass
+    ) {
+        if (value != null) {
+            add(fields, name, value, dataClass);
+        }
     }
 }

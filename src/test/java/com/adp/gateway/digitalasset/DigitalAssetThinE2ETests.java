@@ -59,10 +59,20 @@ class DigitalAssetThinE2ETests {
                         "approvedTransactionReference":"approved-tx-local-001",
                         "customerId":"customer-100",
                         "accountId":"acct-100-1",
-                        "walletAddress":"wallet-test-001",
-                        "assetId":"asset-krw-token-001",
-                        "amount":10000,
-                        "beneficiaryReference":"beneficiary-local-001"
+                        "outboundRequest":{
+                          "requestedAsset":{
+                            "chainId":"eip155:1",
+                            "assetKind":"FUNGIBLE_TOKEN",
+                            "assetSymbol":"asset-krw-token-001",
+                            "assetContractAddress":"0x0000000000000000000000000000000000000001",
+                            "operation":"TRANSFER",
+                            "tokenId":null
+                          },
+                          "requestedAmount":"10000",
+                          "requestedDestination":"wallet-test-001",
+                          "requestedBeneficiaryReference":"beneficiary-local-001",
+                          "regulatoryOutboundData":{}
+                        }
                       }
                     }
                     """.formatted(suffix)))
@@ -92,18 +102,26 @@ class DigitalAssetThinE2ETests {
                 from runtime.transform_execution te
                 join runtime.transform_field tf on tf.transform_execution_id = te.transform_execution_id
                 where te.execution_id = :executionId
-                  and tf.field_path in ('$.input.walletAddress', '$.input.assetId', '$.input.amount')
+                  and tf.field_path in (
+                    '$.input.outboundRequest.requestedAsset.chainId',
+                    '$.input.outboundRequest.requestedAsset.assetKind',
+                    '$.input.outboundRequest.requestedAsset.assetSymbol',
+                    '$.input.outboundRequest.requestedAsset.assetContractAddress',
+                    '$.input.outboundRequest.requestedAsset.operation',
+                    '$.input.outboundRequest.requestedAmount',
+                    '$.input.outboundRequest.requestedDestination'
+                  )
                   and tf.strategy = 'KEEP'
                 """)
             .param("executionId", executionId).query(Integer.class).single();
-        assertThat(exactFields).isEqualTo(3);
+        assertThat(exactFields).isEqualTo(7);
 
         Integer removedBindingFields = jdbcClient.sql("""
                 select count(*)
                 from runtime.transform_execution te
                 join runtime.transform_field tf on tf.transform_execution_id = te.transform_execution_id
                 where te.execution_id = :executionId
-                  and tf.field_path = '$.input.beneficiaryReference'
+                  and tf.field_path = '$.input.outboundRequest.requestedBeneficiaryReference'
                   and tf.strategy = 'REMOVE'
                   and tf.transformed_value_digest is null
                 """)
@@ -190,6 +208,14 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
+    void rejectsInvalidCallerContractWith422BeforeConnector() throws Exception {
+        assertInvalidInput("zero_" + token(), "\"0\"", "{}");
+        assertInvalidInput("numeric_" + token(), "10000", "{}");
+        assertInvalidInput("fractional_" + token(), "1.5", "{}");
+        assertInvalidInput("regulatory_" + token(), "\"10000\"", "{\"travelRule\":\"value\"}");
+    }
+
+    @Test
     void keepsRuntimeEgressingWhileSettlementIsNotFinal() throws Exception {
         assetRequest(token(), "customer-100", "asset-settling")
             .andExpect(status().isOk())
@@ -225,7 +251,7 @@ class DigitalAssetThinE2ETests {
             .andReturn().getResponse().getContentAsString();
         String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
 
-        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "WALLET_ADDRESS");
+        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "RECIPIENT_ADDRESS");
     }
 
     @Test
@@ -245,23 +271,22 @@ class DigitalAssetThinE2ETests {
     }
 
     @Test
-    void neverPersistsUntrustedProviderKeyAsMismatchEvidence() throws Exception {
+    void rejectsUntrustedProviderResultFieldBeforeOutcomeReconciliation() throws Exception {
         String response = assetRequest(token(), "customer-100", "asset-unexpected-field")
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.status").value("BLOCKED"))
+            .andExpect(jsonPath("$.responseGuardStatus").value("REJECTED"))
             .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
             .andReturn().getResponse().getContentAsString();
         String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
 
-        assertMismatchCase(executionId, "CRITICAL_MISMATCH", "UNEXPECTED_FIELD");
-        String fields = jdbcClient.sql("""
-                select mismatched_fields::text from runtime.digital_asset_mismatch_case
-                where execution_id = :executionId
+        Integer mismatchCount = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_mismatch_case where execution_id = :executionId
                 """)
             .param("executionId", executionId)
-            .query(String.class)
+            .query(Integer.class)
             .single();
-        assertThat(fields).doesNotContain("customer-100-sensitive-value");
+        assertThat(mismatchCount).isZero();
     }
 
     @Test
@@ -288,13 +313,18 @@ class DigitalAssetThinE2ETests {
         assertThat(recoveryCount).isEqualTo(1);
         Integer activeRecoveryCount = jdbcClient.sql("""
                 select count(*) from runtime.external_interaction_recovery
-                where recovery_status in ('PENDING', 'RETRY_SCHEDULED', 'CLAIMED')
+                where execution_id = :executionId
+                  and recovery_status in ('PENDING', 'RETRY_SCHEDULED', 'CLAIMED')
                 """)
+            .param("executionId", executionId)
             .query(Integer.class)
             .single();
         assertThat(activeRecoveryCount).isEqualTo(1);
 
-        assertThat(recoveryService.processNext("digital-asset-e2e-worker")).isTrue();
+        for (int attempt = 0; attempt < 50 && !isRecoveryReconciled(executionId); attempt++) {
+            assertThat(recoveryService.processNext("digital-asset-e2e-worker")).isTrue();
+        }
+        assertThat(isRecoveryReconciled(executionId)).isTrue();
 
         ReconciledState reconciled = jdbcClient.sql("""
                 select re.status as runtime_status, re.connector_status,
@@ -365,10 +395,14 @@ class DigitalAssetThinE2ETests {
                  "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                  "idempotencyKey":"idem_asset_case_%s","processingContexts":["DIGITAL_ASSET"],
                  "input":{"approvedTransactionReference":"%s","customerId":"%s",
-                 "accountId":"acct-100-1","walletAddress":"%s","assetId":"%s","amount":%s,
-                 "beneficiaryReference":"%s"}}
+                 "accountId":"acct-100-1","outboundRequest":{"requestedAsset":{
+                 "chainId":"eip155:1","assetKind":"FUNGIBLE_TOKEN","assetSymbol":"%s",
+                 "assetContractAddress":"0x0000000000000000000000000000000000000001",
+                 "operation":"TRANSFER","tokenId":null},"requestedAmount":"%s",
+                 "requestedDestination":"%s","requestedBeneficiaryReference":"%s",
+                 "regulatoryOutboundData":{}}}}
                 """.formatted(
-                    suffix, approvedTransactionReference, customerId, walletAddress, assetId, amount,
+                    suffix, approvedTransactionReference, customerId, assetId, amount, walletAddress,
                     beneficiaryReference
                 )));
     }
@@ -404,7 +438,7 @@ class DigitalAssetThinE2ETests {
             .param("requestId", "req_asset_case_" + suffix)
             .query(PolicyGateEvidence.class)
             .single();
-        assertThat(evidence.profileVersion()).isEqualTo("0.2.0");
+        assertThat(evidence.profileVersion()).isEqualTo("0.3.0");
         assertThat(evidence.profileDigest()).matches("[0-9a-f]{64}");
         assertThat(evidence.profileAction()).isEqualTo("BLOCK");
         assertThat(evidence.finalAction()).isEqualTo("BLOCK");
@@ -415,6 +449,32 @@ class DigitalAssetThinE2ETests {
         assertThat(evidence.connectorCount()).isZero();
     }
 
+    private void assertInvalidInput(String suffix, String amountJson, String regulatoryJson) throws Exception {
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_asset_invalid_" + suffix)
+                .header("X-Trace-Id", "trace_asset_invalid_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content("""
+                    {"institutionId":"institution_local","approvalReference":"approval_digital_asset_purchase_v1",
+                     "workloadId":"tokenized_asset_purchase","purposeCode":"DIGITAL_ASSET_PURCHASE",
+                     "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
+                     "idempotencyKey":"idem_asset_invalid_%s","processingContexts":["DIGITAL_ASSET"],
+                     "input":{"approvedTransactionReference":"approved-tx-local-001","customerId":"customer-100",
+                     "accountId":"acct-100-1","outboundRequest":{"requestedAsset":{"chainId":"eip155:1",
+                     "assetKind":"FUNGIBLE_TOKEN","assetSymbol":"asset-krw-token-001",
+                     "assetContractAddress":"0x0000000000000000000000000000000000000001",
+                     "operation":"TRANSFER","tokenId":null},"requestedAmount":%s,
+                     "requestedDestination":"wallet-test-001",
+                     "requestedBeneficiaryReference":"beneficiary-local-001",
+                     "regulatoryOutboundData":%s}}}
+                    """.formatted(suffix, amountJson, regulatoryJson)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("EXECUTION_PACK_INPUT_REJECTED"));
+
+        assertThat(connectorCount("req_asset_invalid_" + suffix)).isZero();
+    }
+
     private int connectorCount(String requestId) {
         return jdbcClient.sql("""
                 select count(*) from runtime.connector_execution ce
@@ -423,6 +483,17 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("requestId", requestId)
             .query(Integer.class)
+            .single();
+    }
+
+    private boolean isRecoveryReconciled(String executionId) {
+        return jdbcClient.sql("""
+                select recovery_status = 'RECONCILED'
+                from runtime.external_interaction_recovery
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(Boolean.class)
             .single();
     }
 

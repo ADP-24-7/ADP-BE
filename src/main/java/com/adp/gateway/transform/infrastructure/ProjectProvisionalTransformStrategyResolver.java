@@ -37,7 +37,7 @@ public class ProjectProvisionalTransformStrategyResolver implements TransformStr
     }
 
     private TransformStrategy digitalAssetStrategy(TransformResolutionContext context) {
-        if (context.fieldPath().endsWith(".beneficiaryReference")) {
+        if (context.fieldPath().endsWith(".requestedBeneficiaryReference")) {
             return TransformStrategy.REMOVE;
         }
         if (context.fieldPath().endsWith(".customerId") || context.fieldPath().endsWith(".accountId")) {

@@ -67,7 +67,7 @@ class AiCanonicalContextBuilderTests {
     private com.adp.gateway.context.application.ExecutionPackRequestScope requestScope() {
         return new com.adp.gateway.context.application.ExecutionPackRequestScope(
             "institution_test", "customer_summary", "CUSTOMER_SUPPORT", "subject_digest",
-            "dest_test", java.time.OffsetDateTime.parse("2026-09-08T00:00:00Z")
+            "dest_test", "idem_test", java.time.OffsetDateTime.parse("2026-09-08T00:00:00Z")
         );
     }
 }

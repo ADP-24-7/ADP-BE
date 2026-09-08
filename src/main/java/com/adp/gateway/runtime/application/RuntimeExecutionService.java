@@ -274,6 +274,7 @@ public class RuntimeExecutionService {
                     requestContext.purpose(),
                     subjectRefDigest,
                     destinationProfileId,
+                    requestContext.idempotencyKey(),
                     now
                 )
             );

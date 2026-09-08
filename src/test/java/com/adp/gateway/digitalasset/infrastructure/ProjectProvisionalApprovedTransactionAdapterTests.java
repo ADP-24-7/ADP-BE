@@ -29,7 +29,10 @@ class ProjectProvisionalApprovedTransactionAdapterTests {
 
         var snapshot = adapter.find(lookup("institution_local", subjectDigest)).orElseThrow();
 
-        assertThat(snapshot.approvedAssetId()).isEqualTo("asset-krw-token-001");
+        assertThat(snapshot.approvedAsset().assetSymbol()).isEqualTo("asset-krw-token-001");
+        assertThat(snapshot.approvedPolicySnapshotId()).isEqualTo("approved-policy-local-v1");
+        assertThat(snapshot.approvedAmount()).isNull();
+        assertThat(snapshot.approvedAmountLimit().toString()).isEqualTo("10000000");
         assertThat(snapshot.approvedDestinationProfileId()).isEqualTo("dest_mock_asset_platform_v1");
         assertThat(snapshot.approvedDestination()).isEqualTo("wallet-test-001");
         assertThat(snapshot.approvedBeneficiaryReference()).isEqualTo("beneficiary-local-001");

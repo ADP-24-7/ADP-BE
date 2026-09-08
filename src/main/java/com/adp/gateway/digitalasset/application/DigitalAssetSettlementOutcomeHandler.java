@@ -11,6 +11,8 @@ import com.adp.gateway.runtime.application.ExecutionPackOutcome;
 import com.adp.gateway.runtime.application.ExecutionPackOutcomeHandler;
 import com.adp.gateway.runtime.domain.ControlledDeliveryResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetExternalStatus;
+import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -51,27 +53,31 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
             return outcome(RuntimeExecutionStatus.BLOCKED, connector, "SETTLEMENT_RESPONSE_REJECTED");
         }
 
-        String responseRequestId = string(response.get("externalRequestId"));
-        if (!request.providerCorrelationKey().equals(responseRequestId)) {
+        ExternalExecutionResult externalResult;
+        try {
+            externalResult = ExternalExecutionResult.from(response, connector.responseDigest());
+        } catch (IllegalArgumentException exception) {
+            return outcome(RuntimeExecutionStatus.BLOCKED, connector, "EXTERNAL_EXECUTION_RESULT_INVALID");
+        }
+        if (!request.providerCorrelationKey().equals(externalResult.externalRequestId())) {
             mismatchPersistence.open(executionId, reconciliationEvaluator.criticalCorrelationMismatch(
-                request.providerCorrelationKey(), responseRequestId
+                request.providerCorrelationKey(), externalResult.externalRequestId()
             ));
             return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "EXTERNAL_REQUEST_CORRELATION_MISMATCH");
         }
 
-        String settlementStatus = String.valueOf(response.get("settlementStatus"));
-        var assessment = reconciliationEvaluator.evaluate(request.payload(), response, settlementStatus);
+        String settlementStatus = externalResult.externalStatus().name();
+        var assessment = reconciliationEvaluator.evaluate(request.payload(), externalResult);
         String reconciliation = assessment.result().name();
-        String externalTransactionId = string(response.get("externalTransactionId"));
-        String settlementId = string(response.get("settlementId"));
-        persistence.record(executionId, request.providerCorrelationKey(), externalTransactionId, settlementId,
+        persistence.record(executionId, request.providerCorrelationKey(), externalResult.externalReference(),
+            externalResult.transactionHash(),
             settlementStatus, reconciliation, connector.responseDigest());
         if (assessment.requiresReview()) {
             mismatchPersistence.open(executionId, assessment);
         }
 
         if (("MATCH".equals(reconciliation) || "RECOVERED".equals(reconciliation))
-            && "SETTLED".equals(settlementStatus)) {
+            && externalResult.isFinalSuccess()) {
             return new ExecutionPackOutcome(RuntimeExecutionStatus.COMPLETED,
                 ControlledDeliveryResult.delivered("SETTLED", connector.responseDigest()));
         }
@@ -79,14 +85,10 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
             || "RECONCILIATION_REQUIRED".equals(settlementStatus)) {
             return outcome(RuntimeExecutionStatus.REVIEW_REQUIRED, connector, "SETTLEMENT_RECONCILIATION_REQUIRED");
         }
-        if ("FAILED".equals(settlementStatus)) {
+        if (externalResult.externalStatus() == DigitalAssetExternalStatus.FAILED) {
             return outcome(RuntimeExecutionStatus.FAILED, connector, "SETTLEMENT_FAILED");
         }
         return outcome(RuntimeExecutionStatus.EGRESSING, connector, "SETTLEMENT_PENDING");
-    }
-
-    private String string(Object value) {
-        return value instanceof String text && !text.isBlank() ? text : null;
     }
 
     private ExecutionPackOutcome outcome(RuntimeExecutionStatus status, ConnectorResult connector, String reason) {

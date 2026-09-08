@@ -641,6 +641,16 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(1);
         assertThat(constraintCount).isEqualTo(6);
+        String fieldConstraint = jdbcClient.sql("""
+                select check_clause from information_schema.check_constraints
+                where constraint_schema = 'runtime'
+                  and constraint_name = 'chk_digital_asset_mismatch_fields'
+                """).query(String.class).single();
+        assertThat(fieldConstraint)
+            .contains("WALLET_ADDRESS")
+            .contains("RECIPIENT_ADDRESS")
+            .contains("ASSET_CONTRACT_ADDRESS")
+            .contains("TOKEN_ID");
     }
 
     @Test

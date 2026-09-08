@@ -1,6 +1,5 @@
 package com.adp.gateway.digitalasset.infrastructure;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -10,7 +9,11 @@ import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.digitalasset.application.ApprovedTransactionLookup;
 import com.adp.gateway.digitalasset.application.ApprovedTransactionPort;
-import com.adp.gateway.digitalasset.domain.ApprovedTransactionSnapshot;
+import com.adp.gateway.digitalasset.domain.ApprovedTransaction;
+import com.adp.gateway.digitalasset.domain.DigitalAssetAmount;
+import com.adp.gateway.digitalasset.domain.DigitalAssetDescriptor;
+import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
+import com.adp.gateway.digitalasset.domain.DigitalAssetOperation;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +25,7 @@ public class ProjectProvisionalApprovedTransactionAdapter implements ApprovedTra
     private static final String INSTITUTION_ID = "institution_local";
     private static final String WORKLOAD_ID = "tokenized_asset_purchase";
     private static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
+    private static final String POLICY_SNAPSHOT_ID = "approved-policy-local-v1";
     private static final String DESTINATION_PROFILE_ID = "dest_mock_asset_platform_v1";
     private static final String DESTINATION = "wallet-test-001";
     private static final Map<String, String> APPROVED_ASSETS = Map.of(
@@ -47,29 +51,35 @@ public class ProjectProvisionalApprovedTransactionAdapter implements ApprovedTra
     }
 
     @Override
-    public Optional<ApprovedTransactionSnapshot> find(ApprovedTransactionLookup lookup) {
-        String assetId = APPROVED_ASSETS.get(lookup.reference().value());
+    public Optional<ApprovedTransaction> find(ApprovedTransactionLookup lookup) {
+        String assetSymbol = APPROVED_ASSETS.get(lookup.reference().value());
         String subjectDigest = subjectRefHasher.hash(new SubjectRef("customer", "customer-100"));
-        if (assetId == null
+        if (assetSymbol == null
             || !INSTITUTION_ID.equals(lookup.institutionId())
             || !subjectDigest.equals(lookup.subjectRefDigest())
             || !WORKLOAD_ID.equals(lookup.workloadId())
             || !PURPOSE.equals(lookup.purpose())) {
             return Optional.empty();
         }
-        String version = "0.2.0";
+        String version = "0.3.0";
+        DigitalAssetDescriptor approvedAsset = new DigitalAssetDescriptor(
+            "eip155:1", DigitalAssetKind.FUNGIBLE_TOKEN, assetSymbol,
+            "0x0000000000000000000000000000000000000001", DigitalAssetOperation.TRANSFER, null
+        );
         OffsetDateTime approvedFrom = OffsetDateTime.parse("2026-01-01T00:00:00Z");
         OffsetDateTime approvedUntil = "approved-tx-expired".equals(lookup.reference().value())
             ? OffsetDateTime.parse("2026-01-02T00:00:00Z")
             : OffsetDateTime.parse("2027-01-01T00:00:00Z");
         String identity = String.join("|",
             lookup.reference().value(), version, INSTITUTION_ID, subjectDigest, WORKLOAD_ID, PURPOSE,
-            assetId, "10000000", DESTINATION_PROFILE_ID, DESTINATION, BENEFICIARY_REFERENCE,
+            POLICY_SNAPSHOT_ID, approvedAsset.canonicalValue(), "10000000",
+            DESTINATION_PROFILE_ID, DESTINATION, BENEFICIARY_REFERENCE,
             approvedFrom.toString(), approvedUntil.toString()
         );
-        return Optional.of(new ApprovedTransactionSnapshot(
+        return Optional.of(new ApprovedTransaction(
             lookup.reference().value(), version, hasher.hash(identity), INSTITUTION_ID, subjectDigest,
-            WORKLOAD_ID, PURPOSE, assetId, new BigDecimal("10000000"), DESTINATION_PROFILE_ID,
+            WORKLOAD_ID, PURPOSE, POLICY_SNAPSHOT_ID, approvedAsset, null,
+            DigitalAssetAmount.from("10000000"), DESTINATION_PROFILE_ID,
             DESTINATION, BENEFICIARY_REFERENCE, approvedFrom, approvedUntil
         ));
     }

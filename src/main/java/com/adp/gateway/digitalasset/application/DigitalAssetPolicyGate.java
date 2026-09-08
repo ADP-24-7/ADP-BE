@@ -1,6 +1,5 @@
 package com.adp.gateway.digitalasset.application;
 
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -35,7 +34,7 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         RuntimeDecision baselineDecision,
         OffsetDateTime requestStartedAt
     ) {
-        List<ReasonCode> reasons = reasons(context, destinationProfile, requestStartedAt);
+        List<ReasonCode> reasons = bindingReasons(context);
         FinalAction profileAction = reasons.isEmpty() ? FinalAction.ALLOW : FinalAction.BLOCK;
         FinalAction finalAction = profileAction.isAtLeastAsRestrictiveAs(baselineDecision.finalAction())
             ? profileAction : baselineDecision.finalAction();
@@ -69,49 +68,18 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         );
     }
 
-    private List<ReasonCode> reasons(
-        CanonicalContext context,
-        DestinationProfile destinationProfile,
-        OffsetDateTime requestStartedAt
-    ) {
-        List<ReasonCode> reasons = new ArrayList<>();
-        if (!destinationProfile.destinationProfileId().equals(
-            metadata(context, "approvedDestinationProfileId")
-        )) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH);
+    private List<ReasonCode> bindingReasons(CanonicalContext context) {
+        String value = metadata(context, "approvedBindingReasonCodes");
+        if ("NONE".equals(value)) {
+            return List.of();
         }
-        if (!text(context, "assetId").equals(metadata(context, "approvedAssetId"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_ASSET_MISMATCH);
+        try {
+            return java.util.Arrays.stream(value.split(","))
+                .map(ReasonCode::valueOf)
+                .toList();
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Digital asset binding reason metadata is invalid", exception);
         }
-        if (new BigDecimal(text(context, "amount")).compareTo(
-            new BigDecimal(metadata(context, "approvedMaxAmount"))
-        ) > 0) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED);
-        }
-        if (!text(context, "walletAddress").equals(metadata(context, "approvedDestination"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH);
-        }
-        if (!text(context, "beneficiaryReference").equals(metadata(context, "approvedBeneficiaryReference"))) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH);
-        }
-        OffsetDateTime approvedFrom = OffsetDateTime.parse(metadata(context, "approvedFrom"));
-        OffsetDateTime approvedUntil = OffsetDateTime.parse(metadata(context, "approvedUntil"));
-        if (requestStartedAt.isBefore(approvedFrom) || requestStartedAt.isAfter(approvedUntil)) {
-            reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION);
-        }
-        return List.copyOf(reasons);
-    }
-
-    private String text(CanonicalContext context, String fieldName) {
-        return String.valueOf(value(context, fieldName));
-    }
-
-    private Object value(CanonicalContext context, String fieldName) {
-        return context.fields().stream()
-            .filter(field -> field.path().equals("$.input." + fieldName))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("Digital asset policy field is missing"))
-            .value();
     }
 
     private String metadata(CanonicalContext context, String name) {
