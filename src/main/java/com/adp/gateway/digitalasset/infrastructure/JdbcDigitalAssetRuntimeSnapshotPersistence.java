@@ -243,18 +243,19 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
     public void savePostExecutionEvidence(DigitalAssetPostExecutionEvidence value) {
         jdbcClient.sql("""
                 insert into runtime.digital_asset_post_execution_evidence (
-                    execution_id, status, external_status, provider_status, receipt_status, finality_status,
+                    execution_id, status, evidence_source_type, external_status, provider_status, receipt_status, finality_status,
                     amount_source, transaction_detail_digest, receipt_finality_digest, transfer_evidence_digest,
                     internal_trace_evidence_digest, exact_amount_digest, expected_projection_digest,
                     actual_projection_digest, mismatch_fields, provider_response_digest, observed_at
                 ) values (
-                    :executionId, :status, :externalStatus, :providerStatus, :receiptStatus, :finalityStatus,
+                    :executionId, :status, :sourceType, :externalStatus, :providerStatus, :receiptStatus, :finalityStatus,
                     :amountSource, :transactionDigest, :receiptDigest, :transferDigest, :traceDigest,
                     :amountDigest, :expectedDigest, :actualDigest, cast(:mismatchFields as jsonb),
                     :responseDigest, :observedAt
                 )
                 on conflict (execution_id) do update set
                     status = excluded.status,
+                    evidence_source_type = excluded.evidence_source_type,
                     external_status = excluded.external_status,
                     provider_status = excluded.provider_status,
                     receipt_status = excluded.receipt_status,
@@ -272,6 +273,7 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                     observed_at = excluded.observed_at
                 """)
             .param("executionId", value.executionId()).param("status", value.status().name())
+            .param("sourceType", value.evidenceSourceType().name())
             .param("externalStatus", value.externalStatus().name()).param("providerStatus", value.providerStatus().name())
             .param("receiptStatus", value.receiptStatus().name()).param("finalityStatus", value.finalityStatus().name())
             .param("amountSource", value.amountSource()).param("transactionDigest", value.transactionDetailDigest())
@@ -286,7 +288,7 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
     @Override
     public Optional<DigitalAssetPostExecutionEvidence> findPostExecutionEvidence(String executionId) {
         return jdbcClient.sql("""
-                select execution_id, status, external_status, provider_status, receipt_status, finality_status,
+                select execution_id, status, evidence_source_type, external_status, provider_status, receipt_status, finality_status,
                        amount_source, transaction_detail_digest, receipt_finality_digest, transfer_evidence_digest,
                        internal_trace_evidence_digest, exact_amount_digest, expected_projection_digest,
                        actual_projection_digest, mismatch_fields::text as mismatch_fields,
@@ -296,6 +298,9 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
             .param("executionId", executionId)
             .query((rs, rowNum) -> new DigitalAssetPostExecutionEvidence(
                 rs.getString("execution_id"), DigitalAssetPostExecutionStatus.valueOf(rs.getString("status")),
+                com.adp.gateway.digitalasset.domain.DigitalAssetEvidenceSourceType.valueOf(
+                    rs.getString("evidence_source_type")
+                ),
                 DigitalAssetExternalStatus.valueOf(rs.getString("external_status")),
                 DigitalAssetProviderStatus.valueOf(rs.getString("provider_status")),
                 DigitalAssetReceiptStatus.valueOf(rs.getString("receipt_status")),

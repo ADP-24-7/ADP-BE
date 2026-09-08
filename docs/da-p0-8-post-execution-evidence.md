@@ -9,11 +9,11 @@ Executed tuple을 다시 결속한다.
 ## 처리 흐름
 
 ```text
-Connector Result
+Connector Result (lookup identity only)
 -> ExternalExecutionResult strict parse
--> TransactionDetailResolver
--> ReceiptFinalityResolver
--> TokenTransferResolver / InternalTraceResolver
+-> independent TransactionDetailResolver
+-> independent ReceiptFinalityResolver
+-> independent TokenTransferResolver / InternalTraceResolver
 -> ExactExecutionAmountResolver
 -> Requested vs Executed reconciliation
 -> POST_EXECUTION Evidence 저장
@@ -31,6 +31,12 @@ Connector Result
 - Native Asset은 transaction value, Token/NFT는 transfer evidence에서 exact amount 확인
 - P0-7 PRE_EXECUTION Guard가 존재하고 PASS한 execution
 - Requested/Executed canonical tuple digest와 server-owned mismatch field 검증 완료
+- 모든 Resolver provenance가 `INDEPENDENT_EXTERNAL`
+
+기본 `ProviderResponsePostExecutionResolver`는 외부 Evidence Adapter가 구성되지 않은 환경의 provisional fallback이다.
+이 결과는 `PROVIDER_RESPONSE`로 표시되며 값이 모두 일치해도 `VERIFIED` 또는 `COMPLETED`를 만들 수 없다. 로컬 fixture는
+Fake Connector 응답과 분리된 Fake Platform State Store를 조회해 source disagreement를 재현한다. 실제 배포에서는 Chain/
+Provider Status, Receipt, Transfer Log/Trace 조회 Adapter로 교체해야 한다.
 
 `tx.value=0`인 Token 실행은 이동 없음이 아니다. Token Transfer Evidence의 amount를 authoritative source로 사용한다.
 
@@ -52,6 +58,7 @@ V31 `runtime.digital_asset_post_execution_evidence`는 다음 privacy-safe 값�
 - expected/actual canonical projection digest
 - server-owned mismatch field enum
 - Provider/Receipt/Finality 및 POST_EXECUTION 상태
+- Evidence source provenance (`PROVIDER_RESPONSE`, `INDEPENDENT_EXTERNAL`)
 - 관측 시각과 Provider response digest
 
 원문 지갑 주소, 금액, transaction payload, transfer log, internal trace는 저장하지 않는다. P0-7 Guard FK를 통해
@@ -67,6 +74,8 @@ Approved/Requested 검증과 POST_EXECUTION Evidence의 lineage를 강제한다.
 ## 검증
 
 - Token `nativeValue=0` + Transfer Evidence 성공
+- Provider response와 독립 source amount 불일치 시 Review
+- Provider-derived evidence만 존재할 때 VERIFIED 차단
 - settled token에서 Transfer Evidence 누락 시 Review
 - transaction hash만 존재하고 Receipt/Finality 미확정 시 Pending
 - typed Provider `SENT_UNKNOWN` Recovery 예약

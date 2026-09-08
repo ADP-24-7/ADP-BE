@@ -86,10 +86,11 @@ public class DigitalAssetSettlementOutcomeHandler implements ExecutionPackOutcom
         }
 
         String settlementStatus = externalResult.externalStatus().name();
-        var assessment = reconciliationEvaluator.evaluate(request.payload(), externalResult);
-        var postExecutionEvidence = postExecutionEvidenceService.resolve(
-            executionId, externalResult, assessment, OffsetDateTime.now(clock)
+        var resolution = postExecutionEvidenceService.resolve(
+            executionId, request.payload(), externalResult, OffsetDateTime.now(clock)
         );
+        var assessment = resolution.assessment();
+        var postExecutionEvidence = resolution.evidence();
         snapshotPersistence.savePostExecutionEvidence(postExecutionEvidence);
         if (externalResult.externalStatus() == DigitalAssetExternalStatus.SENT_UNKNOWN
             && connector.status() != ConnectorStatus.SENT_UNKNOWN) {

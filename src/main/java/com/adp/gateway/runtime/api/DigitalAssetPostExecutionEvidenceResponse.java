@@ -7,6 +7,7 @@ import com.adp.gateway.digitalasset.domain.DigitalAssetPostExecutionEvidence;
 
 public record DigitalAssetPostExecutionEvidenceResponse(
     String status,
+    String evidenceSourceType,
     String externalStatus,
     String providerStatus,
     String receiptStatus,
@@ -28,7 +29,7 @@ public record DigitalAssetPostExecutionEvidenceResponse(
             return null;
         }
         return new DigitalAssetPostExecutionEvidenceResponse(
-            value.status().name(), value.externalStatus().name(), value.providerStatus().name(),
+            value.status().name(), value.evidenceSourceType().name(), value.externalStatus().name(), value.providerStatus().name(),
             value.receiptStatus().name(), value.finalityStatus().name(), value.amountSource(),
             value.transactionDetailDigest(), value.receiptFinalityDigest(), value.transferEvidenceDigest(),
             value.internalTraceEvidenceDigest(), value.exactAmountDigest(), value.expectedProjectionDigest(),

@@ -199,6 +199,8 @@ class DigitalAssetThinE2ETests {
             .andExpect(jsonPath("$.digitalAssetPreExecutionGuard.controlResults.length()").value(6))
             .andExpect(jsonPath("$.stages[?(@.stage == 'PRE_EXECUTION_GUARD')].status").value("COMPLETED"))
             .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.status").value("VERIFIED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.evidenceSourceType")
+                .value("INDEPENDENT_EXTERNAL"))
             .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.amountSource").value("TOKEN_TRANSFER"))
             .andExpect(jsonPath("$.stages[?(@.stage == 'POST_EXECUTION_REBINDING')].status")
                 .value("COMPLETED"))

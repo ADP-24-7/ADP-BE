@@ -13,6 +13,12 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
+import com.adp.gateway.digitalasset.domain.DigitalAssetAmount;
+import com.adp.gateway.digitalasset.domain.DigitalAssetDescriptor;
+import com.adp.gateway.digitalasset.domain.DigitalAssetFinalityStatus;
+import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
+import com.adp.gateway.digitalasset.domain.DigitalAssetOperation;
+import com.adp.gateway.digitalasset.domain.DigitalAssetReceiptStatus;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
@@ -91,6 +97,19 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         OffsetDateTime executedAt = OffsetDateTime.parse("2026-09-08T00:00:00Z");
         response.put("executedAt", executedAt.toString());
         response.put("finalizedAt", "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1).toString() : null);
+        var asset = new DigitalAssetDescriptor(
+            String.valueOf(actual.get("chainId")), DigitalAssetKind.valueOf(String.valueOf(actual.get("assetKind"))),
+            String.valueOf(actual.get("assetSymbol")), nullable(actual.get("assetContractAddress")),
+            DigitalAssetOperation.valueOf(String.valueOf(actual.get("operation"))), nullable(actual.get("tokenId"))
+        );
+        stateStore.recordExecution(externalReference, new FakeDigitalAssetExecutionObservation(
+            transactionHash, asset, String.valueOf(actual.get("recipientAddress")), DigitalAssetAmount.from("0"),
+            DigitalAssetAmount.from(String.valueOf(actual.get("amount"))),
+            DigitalAssetReceiptStatus.valueOf(String.valueOf(response.get("receiptStatus"))),
+            DigitalAssetFinalityStatus.valueOf(String.valueOf(response.get("finalityStatus"))),
+            "token-transfer:" + externalReference, null, executedAt,
+            "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1) : null
+        ));
         if ("asset-unexpected-field".equals(assetSymbol)) {
             response.put("customer-100-sensitive-value", "unexpected");
         }
@@ -116,5 +135,9 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Digital asset response could not be canonicalized", exception);
         }
+    }
+
+    private String nullable(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 }

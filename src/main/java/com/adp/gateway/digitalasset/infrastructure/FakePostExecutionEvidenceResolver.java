@@ -8,70 +8,69 @@ import com.adp.gateway.digitalasset.application.InternalTraceResolver;
 import com.adp.gateway.digitalasset.application.ReceiptFinalityResolver;
 import com.adp.gateway.digitalasset.application.TokenTransferResolver;
 import com.adp.gateway.digitalasset.application.TransactionDetailResolver;
-import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
 import com.adp.gateway.digitalasset.domain.DigitalAssetEvidenceSourceType;
+import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
 import com.adp.gateway.digitalasset.domain.ExactExecutionAmountEvidence;
 import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import com.adp.gateway.digitalasset.domain.ReceiptFinalityEvidence;
 import com.adp.gateway.digitalasset.domain.TransactionDetailEvidence;
 import com.adp.gateway.digitalasset.domain.TransferExecutionEvidence;
-import com.adp.gateway.digitalasset.domain.DigitalAssetDescriptor;
-import org.springframework.stereotype.Component;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "false", matchIfMissing = true)
-public class ProviderResponsePostExecutionResolver implements TransactionDetailResolver, ReceiptFinalityResolver,
+@ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
+public class FakePostExecutionEvidenceResolver implements TransactionDetailResolver, ReceiptFinalityResolver,
     TokenTransferResolver, InternalTraceResolver, ExactExecutionAmountResolver {
 
     private final CanonicalValueHasher hasher;
+    private final FakeDigitalAssetPlatformStateStore stateStore;
 
-    public ProviderResponsePostExecutionResolver(CanonicalValueHasher hasher) {
+    public FakePostExecutionEvidenceResolver(
+        CanonicalValueHasher hasher,
+        FakeDigitalAssetPlatformStateStore stateStore
+    ) {
         this.hasher = hasher;
+        this.stateStore = stateStore;
     }
 
     @Override
     public TransactionDetailEvidence resolveTransaction(ExternalExecutionResult result) {
-        DigitalAssetDescriptor asset = result.executedAssetKind() == null ? null : new DigitalAssetDescriptor(
-            result.executedChainId(), result.executedAssetKind(), result.executedAssetSymbol(),
-            result.executedAssetContractAddress(), result.operation(), result.tokenId()
-        );
+        var value = observation(result);
         return new TransactionDetailEvidence(
-            result.transactionHash(), asset, result.executedRecipientAddress(), result.nativeValue(), result.executedAt(),
-            digest("transaction", result.transactionHash(), result.executedChainId(), result.executedRecipientAddress(),
-                result.executedAssetKind(), result.executedAssetSymbol(), result.executedAssetContractAddress(),
-                result.nativeValue(), result.operation(), result.tokenId(), result.executedAt())
+            value.transactionHash(), value.asset(), value.recipientAddress(), value.nativeValue(), value.executedAt(),
+            digest("transaction", value.transactionHash(), value.asset(), value.recipientAddress(),
+                value.nativeValue(), value.executedAt())
         );
     }
 
     @Override
     public ReceiptFinalityEvidence resolveReceiptFinality(ExternalExecutionResult result) {
+        var value = observation(result);
         return new ReceiptFinalityEvidence(
-            result.receiptStatus(), result.finalityStatus(), result.finalizedAt(),
-            digest("receipt-finality", result.transactionHash(), result.receiptStatus(), result.finalityStatus(),
-                result.finalizedAt())
+            value.receiptStatus(), value.finalityStatus(), value.finalizedAt(),
+            digest("receipt-finality", value.transactionHash(), value.receiptStatus(), value.finalityStatus(),
+                value.finalizedAt())
         );
     }
 
     @Override
     public TransferExecutionEvidence resolveTokenTransfer(ExternalExecutionResult result) {
-        boolean required = result.executedAssetKind() != null && result.executedAssetKind() != DigitalAssetKind.NATIVE;
-        boolean present = !required || result.tokenTransferEvidenceRef() != null;
+        var value = observation(result);
+        boolean required = value.asset().assetKind() != DigitalAssetKind.NATIVE;
+        boolean present = !required || value.transferReference() != null;
         return new TransferExecutionEvidence(
-            required, present, required ? result.executedAmount() : null,
-            digest("transfer", required, present, result.tokenTransferEvidenceRef(), result.executedAmount())
+            required, present, required ? value.transferredAmount() : null,
+            digest("transfer", value.transactionHash(), required, present, value.transferReference(),
+                value.transferredAmount())
         );
     }
 
     @Override
     public Optional<String> resolveEvidenceDigest(ExternalExecutionResult result) {
-        return Optional.ofNullable(result.internalTraceEvidenceRef())
-            .map(reference -> digest("internal-trace", reference));
-    }
-
-    @Override
-    public DigitalAssetEvidenceSourceType sourceType() {
-        return DigitalAssetEvidenceSourceType.PROVIDER_RESPONSE;
+        var value = observation(result);
+        return Optional.ofNullable(value.internalTraceReference())
+            .map(reference -> digest("internal-trace", value.transactionHash(), reference));
     }
 
     @Override
@@ -80,12 +79,20 @@ public class ProviderResponsePostExecutionResolver implements TransactionDetailR
         TransactionDetailEvidence transaction,
         TransferExecutionEvidence transfer
     ) {
-        boolean nativeAsset = result.executedAssetKind() == DigitalAssetKind.NATIVE;
+        boolean nativeAsset = transaction.asset().assetKind() == DigitalAssetKind.NATIVE;
         var amount = nativeAsset ? transaction.nativeValue() : transfer.amount();
         String source = nativeAsset ? "TRANSACTION_VALUE" : "TOKEN_TRANSFER";
-        return new ExactExecutionAmountEvidence(
-            amount, source, digest("exact-amount", source, amount)
-        );
+        return new ExactExecutionAmountEvidence(amount, source, digest("exact-amount", source, amount));
+    }
+
+    @Override
+    public DigitalAssetEvidenceSourceType sourceType() {
+        return DigitalAssetEvidenceSourceType.INDEPENDENT_EXTERNAL;
+    }
+
+    private FakeDigitalAssetExecutionObservation observation(ExternalExecutionResult result) {
+        return stateStore.findExecution(result.externalReference())
+            .orElseThrow(() -> new IllegalStateException("Independent digital asset evidence is unavailable"));
     }
 
     private String digest(Object... values) {

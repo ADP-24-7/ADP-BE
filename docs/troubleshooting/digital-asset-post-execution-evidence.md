@@ -7,7 +7,13 @@ response 객체에 집중되어 있었다. Provider가 `SETTLED`와 transaction 
 Token Transfer가 독립적으로 확인됐다고 간주하면 외부 응답을 그대로 신뢰하는 구조가 된다.
 
 P0-8에서는 Transaction Detail, Receipt/Finality, Token Transfer, Internal Trace, Exact Amount를 별도 Port로 분리했다.
-각 Resolver의 결과 digest를 저장하고 모든 terminal evidence가 충족된 경우에만 `VERIFIED -> COMPLETED`를 허용한다.
+그러나 Port 분리만으로 Evidence source가 독립되지는 않는다. 모든 Port가 같은 Provider response를 읽으면 Provider가 만든
+오류나 허위 상태를 다시 포장할 뿐이다.
+
+Resolver에 source provenance를 추가하고 `INDEPENDENT_EXTERNAL`인 경우에만 `VERIFIED -> COMPLETED`를 허용했다. 기본
+Provider-response Adapter는 provisional evidence만 만들며 항상 fail-closed한다. 로컬 Fake 환경도 Connector response와
+별도 Platform State Store를 사용하고, reconciliation actual projection은 이 독립 관측값으로 재구성한다. DB constraint도
+`PROVIDER_RESPONSE + VERIFIED` 조합과 mismatch가 남은 VERIFIED row를 거부한다.
 
 ## Token 전송에서 transaction value 0은 실행 금액 0이 아니다
 

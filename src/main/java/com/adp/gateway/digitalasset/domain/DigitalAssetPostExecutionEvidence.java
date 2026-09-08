@@ -6,6 +6,7 @@ import java.util.List;
 public record DigitalAssetPostExecutionEvidence(
     String executionId,
     DigitalAssetPostExecutionStatus status,
+    DigitalAssetEvidenceSourceType evidenceSourceType,
     DigitalAssetExternalStatus externalStatus,
     DigitalAssetProviderStatus providerStatus,
     DigitalAssetReceiptStatus receiptStatus,
