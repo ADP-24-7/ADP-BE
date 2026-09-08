@@ -762,6 +762,25 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v30MigrationCreatesDigitalAssetPreExecutionEvidence() {
+        Integer tableCount = jdbcClient.sql("""
+            select count(*) from information_schema.tables
+            where table_schema = 'runtime' and table_name = 'digital_asset_pre_execution_guard'
+            """).query(Integer.class).single();
+        Integer columnCount = jdbcClient.sql("""
+            select count(*) from information_schema.columns
+            where table_schema = 'runtime' and table_name = 'digital_asset_pre_execution_guard'
+              and column_name in (
+                'execution_id', 'snapshot_id', 'status', 'control_results', 'reason_codes',
+                'outbound_payload_digest', 'provider_payload_digest', 'evaluated_at'
+              )
+            """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(columnCount).isEqualTo(8);
+    }
+
+    @Test
     void v28MigrationKeepsLegacyCandidateNonExecutableUntilRevalidated() throws Exception {
         String databaseName = "adp_v28_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

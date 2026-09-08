@@ -86,6 +86,25 @@ class DigitalAssetRuntimeSnapshotServiceTests {
         verify(persistence, never()).save(any());
     }
 
+    @Test
+    void detectsActiveArtifactReplacementDuringPreExecutionRevalidation() {
+        var service = new DigitalAssetRuntimeSnapshotService(persistence, new DigitalAssetCanonicalJson());
+        DigitalAssetActiveArtifact replacement = new DigitalAssetActiveArtifact(
+            "institution-local", "workload", "PURPOSE", "artifact", "2.0.0", "d".repeat(64),
+            "destination", "2.0.0", "sha256:" + "e".repeat(64), "2.0.0",
+            "sha256:" + "f".repeat(64), "checker", NOW.plusMinutes(1)
+        );
+        when(persistence.loadActive("institution-local", "workload"))
+            .thenReturn(Optional.of(active()), Optional.of(replacement));
+
+        var pinned = service.pinIfRequired(
+            "exec-1", "institution-local", "workload", "PURPOSE", destination(),
+            policy(PolicyLifecycleStage.ACTIVE), NOW
+        );
+
+        assertThat(service.isPinnedCurrent(pinned, destination(), policy(PolicyLifecycleStage.ACTIVE))).isFalse();
+    }
+
     private DigitalAssetActiveArtifact active() {
         return new DigitalAssetActiveArtifact(
             "institution-local", "workload", "PURPOSE", "artifact", "1.0.0", "a".repeat(64),

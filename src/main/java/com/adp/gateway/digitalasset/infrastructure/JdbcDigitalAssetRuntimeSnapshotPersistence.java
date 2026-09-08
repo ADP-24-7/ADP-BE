@@ -1,12 +1,20 @@
 package com.adp.gateway.digitalasset.infrastructure;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotException;
 import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotPersistence;
 import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.adp.gateway.digitalasset.domain.DigitalAssetArtifactControl;
+import com.adp.gateway.common.error.ReasonCode;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -14,9 +22,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetRuntimeSnapshotPersistence {
     private final JdbcClient jdbcClient;
+    private final ObjectMapper objectMapper;
 
-    public JdbcDigitalAssetRuntimeSnapshotPersistence(JdbcClient jdbcClient) {
+    public JdbcDigitalAssetRuntimeSnapshotPersistence(JdbcClient jdbcClient, ObjectMapper objectMapper) {
         this.jdbcClient = jdbcClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -162,5 +172,62 @@ public class JdbcDigitalAssetRuntimeSnapshotPersistence implements DigitalAssetR
                 rs.getString("crosswalk_version"), rs.getString("crosswalk_digest"),
                 rs.getObject("selected_at", OffsetDateTime.class)
             )).optional();
+    }
+
+    @Override
+    public void savePreExecutionGuard(DigitalAssetPreExecutionGuardResult value) {
+        jdbcClient.sql("""
+                insert into runtime.digital_asset_pre_execution_guard (
+                    execution_id, snapshot_id, status, control_results, reason_codes,
+                    outbound_payload_digest, provider_payload_digest, evaluated_at
+                ) values (
+                    :executionId, :snapshotId, :status, cast(:controlResults as jsonb),
+                    cast(:reasonCodes as jsonb), :outboundDigest, :providerDigest, :evaluatedAt
+                )
+                """)
+            .param("executionId", value.executionId())
+            .param("snapshotId", value.snapshotId())
+            .param("status", value.status())
+            .param("controlResults", toJson(value.controlResults()))
+            .param("reasonCodes", toJson(value.reasonCodes()))
+            .param("outboundDigest", value.outboundPayloadDigest())
+            .param("providerDigest", value.providerPayloadDigest())
+            .param("evaluatedAt", value.evaluatedAt())
+            .update();
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Digital Asset pre-execution evidence could not be serialized", exception);
+        }
+    }
+
+    @Override
+    public Optional<DigitalAssetPreExecutionGuardResult> findPreExecutionGuard(String executionId) {
+        return jdbcClient.sql("""
+                select execution_id, snapshot_id, status, control_results::text as control_results,
+                       reason_codes::text as reason_codes, outbound_payload_digest,
+                       provider_payload_digest, evaluated_at
+                from runtime.digital_asset_pre_execution_guard
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query((rs, rowNum) -> new DigitalAssetPreExecutionGuardResult(
+                rs.getString("execution_id"), rs.getString("snapshot_id"), rs.getString("status"),
+                fromJson(rs.getString("control_results"), new TypeReference<Map<DigitalAssetArtifactControl, String>>() {}),
+                fromJson(rs.getString("reason_codes"), new TypeReference<List<ReasonCode>>() {}),
+                rs.getString("outbound_payload_digest"), rs.getString("provider_payload_digest"),
+                rs.getObject("evaluated_at", OffsetDateTime.class)
+            )).optional();
+    }
+
+    private <T> T fromJson(String value, TypeReference<T> type) {
+        try {
+            return objectMapper.readValue(value, type);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Digital Asset pre-execution evidence could not be read", exception);
+        }
     }
 }

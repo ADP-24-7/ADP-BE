@@ -96,7 +96,9 @@ public class RuntimeExecutionController {
         var trace = runtimeExecutionService.load(executionId);
         authorizeRead(authentication, trace.workloadId(), trace.institutionId());
         return ResponseEntity.ok(RuntimeExecutionTraceResponse.from(
-            trace, runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null)
+            trace,
+            runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null),
+            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null)
         ));
     }
 
@@ -108,7 +110,9 @@ public class RuntimeExecutionController {
         var trace = runtimeExecutionService.load(executionId);
         authorizeRead(authentication, trace.workloadId(), trace.institutionId());
         return ResponseEntity.ok(RuntimeExecutionTraceEventsResponse.from(
-            trace, runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null)
+            trace,
+            runtimeExecutionService.loadDigitalAssetSnapshot(executionId).orElse(null),
+            runtimeExecutionService.loadDigitalAssetPreExecutionGuard(executionId).orElse(null)
         ));
     }
 

@@ -30,6 +30,7 @@ import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotException;
 import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotService;
+import com.adp.gateway.digitalasset.application.DigitalAssetPreExecutionGuard;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
 import com.adp.gateway.decision.application.RuntimeDecisionService;
 import com.adp.gateway.decision.application.ExecutionPackPolicyGateResolver;
@@ -44,6 +45,7 @@ import com.adp.gateway.egress.application.OutboundGuardChain;
 import com.adp.gateway.egress.application.OutboundGuardException;
 import com.adp.gateway.egress.application.ResponseGuardResolver;
 import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.egress.domain.ResponseGuardResult;
 import com.adp.gateway.observability.GatewayObservability;
@@ -107,6 +109,7 @@ public class RuntimeExecutionService {
     private final AiEvaluationRunCatalog evaluationRuns;
     private final AiEvaluationEvidenceRecorder evaluationEvidenceRecorder;
     private final DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService;
+    private final DigitalAssetPreExecutionGuard digitalAssetPreExecutionGuard;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -138,7 +141,8 @@ public class RuntimeExecutionService {
         GatewayObservability observability,
         AiEvaluationRunCatalog evaluationRuns,
         AiEvaluationEvidenceRecorder evaluationEvidenceRecorder,
-        DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService
+        DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService,
+        DigitalAssetPreExecutionGuard digitalAssetPreExecutionGuard
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -170,6 +174,7 @@ public class RuntimeExecutionService {
         this.evaluationRuns = evaluationRuns;
         this.evaluationEvidenceRecorder = evaluationEvidenceRecorder;
         this.digitalAssetRuntimeSnapshotService = digitalAssetRuntimeSnapshotService;
+        this.digitalAssetPreExecutionGuard = digitalAssetPreExecutionGuard;
     }
 
     public RuntimeExecutionResult execute(
@@ -272,18 +277,19 @@ public class RuntimeExecutionService {
                 subject
             ));
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
+            ExecutionPackRequestScope packRequestScope = new ExecutionPackRequestScope(
+                institutionId,
+                requestContext.workloadId(),
+                requestContext.purpose(),
+                subjectRefDigest,
+                destinationProfileId,
+                requestContext.idempotencyKey(),
+                now
+            );
             canonicalContext = packContextBuilder.merge(
                 canonicalContext,
                 input,
-                new ExecutionPackRequestScope(
-                    institutionId,
-                    requestContext.workloadId(),
-                    requestContext.purpose(),
-                    subjectRefDigest,
-                    destinationProfileId,
-                    requestContext.idempotencyKey(),
-                    now
-                )
+                packRequestScope
             );
             persistence.recordRetrieved(executionId, canonicalContext);
             updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
@@ -469,9 +475,6 @@ public class RuntimeExecutionService {
                 );
             }
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
-            digitalAssetRuntimeSnapshotService.verifyPinned(
-                digitalAssetSnapshot, destinationProfile, snapshot
-            );
             var providerRequest = externalSchemaMapper.map(
                 executionId,
                 resolvedEvaluation == null ? null : new AiEvaluationReference(
@@ -486,6 +489,38 @@ public class RuntimeExecutionService {
                 outboundPayload
             );
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
+            if (destinationProfile.packType() == ExecutionPackType.DIGITAL_ASSET) {
+                OffsetDateTime guardEvaluatedAt = OffsetDateTime.now(clock);
+                DestinationProfile currentDestination = destinationProfilePort.load(
+                    destinationProfileId, guardEvaluatedAt
+                );
+                PolicySnapshot currentPolicy = policySnapshotPort.load(new PolicySelectionContext(
+                    runtimePolicyContext.workloadId(),
+                    runtimePolicyContext.purpose(),
+                    runtimePolicyContext.provider(),
+                    runtimePolicyContext.processingContexts(),
+                    runtimePolicyContext.runtimeDataClasses()
+                ));
+                var preExecutionGuard = digitalAssetPreExecutionGuard.evaluate(
+                    executionId, institutionId, subjectRefDigest, packRequestScope, input, canonicalContext,
+                    destinationProfile, currentDestination, snapshot, currentPolicy, transformResult, outboundPayload,
+                    providerRequest, digitalAssetSnapshot, guardEvaluatedAt
+                ).orElseThrow(() -> new IllegalStateException("Digital Asset pre-execution guard is required"));
+                if (!preExecutionGuard.permitsEgress()) {
+                    RuntimeExecutionStatus guardStatus = "REVIEW_REQUIRED".equals(preExecutionGuard.status())
+                        ? RuntimeExecutionStatus.REVIEW_REQUIRED : RuntimeExecutionStatus.BLOCKED;
+                    updateStatus(executionId, guardStatus);
+                    ConnectorResult connectorResult = ConnectorResult.notExecuted("runtime-connector-boundary");
+                    AuditContext auditContext = auditRecorder.record(
+                        executionId, requestContext, decision, connectorResult
+                    );
+                    return new RuntimeExecutionResult(
+                        executionId, guardStatus, decision, transformResult, preExecutionGuard.status(),
+                        connectorResult, "NOT_EVALUATED", ControlledDeliveryResult.withheld(null, "NOT_REACHED"),
+                        auditContext
+                    );
+                }
+            }
             updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
             ConnectorResult connectorResult = runtimeConnector.execute(
                 requestContext,
@@ -600,6 +635,11 @@ public class RuntimeExecutionService {
 
     public Optional<DigitalAssetRuntimeSnapshot> loadDigitalAssetSnapshot(String executionId) {
         return digitalAssetRuntimeSnapshotService.find(executionId);
+    }
+
+    public Optional<com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult>
+        loadDigitalAssetPreExecutionGuard(String executionId) {
+        return digitalAssetRuntimeSnapshotService.findPreExecutionGuard(executionId);
     }
 
     private RuntimeExecutionStatus finalStatus(FinalAction finalAction, TransformResult transformResult) {

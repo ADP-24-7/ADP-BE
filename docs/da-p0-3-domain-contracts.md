@@ -107,8 +107,8 @@ Local V6 migration은 P0-3 이전 request field(`walletAddress`, `assetId`, `amo
 ## 후속 범위
 
 P0-4에서 enum/identifier의 외부 canonical value, versioned JSON Schema, canonical serialization과 DA consumer
-contract를 freeze한다. `regulatoryOutboundData`의 non-empty allowlist는 검증된 Artifact와 Destination Control을
-연결하는 P0-7에서 활성화한다. 운영 승인 원장과 실제 Provider adapter, PRE_EXECUTION 재검증은 각각 후속 P0 단계의
+contract를 freeze한다. `regulatoryOutboundData`의 non-empty allowlist는 authoritative source와 provider mapping이
+별도로 고정될 때 활성화한다. 운영 승인 원장과 실제 Provider adapter, PRE_EXECUTION 재검증은 각각 후속 P0 단계의
 책임이다.
 
 Provider가 typed `externalStatus=SENT_UNKNOWN`을 반환하는 경우의 recovery scheduling은 실제 Provider adapter와

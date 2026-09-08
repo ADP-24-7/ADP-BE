@@ -102,8 +102,8 @@ Swagger의 인증 및 공통 Runtime request contract도 함께 적용한다.
 
 DA 후보의 `originator_identity`, `beneficiary_identity`, `counterparty_vasp` 등은 규제 및 Provider별 Source와
 의미가 아직 확정되지 않았다. 따라서 `regulatoryOutboundData`는 v1에서 empty object만 허용한다. 후보 필드명을
-BE가 추정하여 allowlist로 승격하지 않는다. P0-5에서 검증된 Artifact를 수신한 뒤 P0-7에서 목적지별 required/exact
-control과 함께 활성화한다.
+BE가 추정하여 allowlist로 승격하지 않는다. P0-7은 목적지별 required/exact control을 적용하지만,
+`regulatoryOutboundData`는 authoritative source와 provider mapping이 별도로 고정될 때까지 empty-only를 유지한다.
 
 P0-4는 DB 상태를 추가하지 않으므로 Flyway migration이 없다. Artifact ingest/persistence와 Runtime Snapshot은
 각각 P0-5와 P0-6의 책임이다.

@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import com.adp.gateway.digitalasset.domain.DigitalAssetActiveArtifact;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeSnapshot;
+import com.adp.gateway.digitalasset.domain.DigitalAssetPreExecutionGuardResult;
 import com.adp.gateway.egress.domain.DestinationProfile;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
@@ -91,7 +92,10 @@ public class DigitalAssetRuntimeSnapshotService {
         }
         DigitalAssetRuntimeSnapshot snapshot = pinned
             .orElseThrow(() -> rejected("DIGITAL_ASSET_RUNTIME_SNAPSHOT_INVALID"));
-        if (!snapshot.destinationProfileId().equals(destination.destinationProfileId())
+        DigitalAssetActiveArtifact active = persistence.loadActive(snapshot.institutionId(), snapshot.workloadId())
+            .orElseThrow(() -> rejected("DIGITAL_ASSET_ACTIVE_ARTIFACT_NOT_FOUND"));
+        if (!matches(snapshot, active)
+            || !snapshot.destinationProfileId().equals(destination.destinationProfileId())
             || !snapshot.destinationProfileVersion().equals(destination.profileVersion())
             || !snapshot.destinationProfileDigest().equals(destination.profileDigest())
             || !snapshot.approvedPolicyVersion().equals(policy.policyVersion())
@@ -100,8 +104,34 @@ public class DigitalAssetRuntimeSnapshotService {
         }
     }
 
+    public boolean isPinnedCurrent(
+        Optional<DigitalAssetRuntimeSnapshot> pinned,
+        DestinationProfile destination,
+        PolicySnapshot policy
+    ) {
+        if (destination.packType() != ExecutionPackType.DIGITAL_ASSET) {
+            return true;
+        }
+        if (pinned.isEmpty()) {
+            return false;
+        }
+        DigitalAssetRuntimeSnapshot snapshot = pinned.get();
+        return persistence.loadActive(snapshot.institutionId(), snapshot.workloadId())
+            .filter(active -> matches(snapshot, active))
+            .isPresent()
+            && snapshot.destinationProfileId().equals(destination.destinationProfileId())
+            && snapshot.destinationProfileVersion().equals(destination.profileVersion())
+            && snapshot.destinationProfileDigest().equals(destination.profileDigest())
+            && snapshot.approvedPolicyVersion().equals(policy.policyVersion())
+            && snapshot.approvedPolicyDigest().equals(policy.snapshotDigest());
+    }
+
     public Optional<DigitalAssetRuntimeSnapshot> find(String executionId) {
         return persistence.findByExecutionId(executionId);
+    }
+
+    public Optional<DigitalAssetPreExecutionGuardResult> findPreExecutionGuard(String executionId) {
+        return persistence.findPreExecutionGuard(executionId);
     }
 
     private void validate(
@@ -125,6 +155,20 @@ public class DigitalAssetRuntimeSnapshotService {
 
     private boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean matches(DigitalAssetRuntimeSnapshot snapshot, DigitalAssetActiveArtifact active) {
+        return snapshot.institutionId().equals(active.institutionId())
+            && snapshot.workloadId().equals(active.workloadId())
+            && snapshot.purposeCode().equals(active.purposeCode())
+            && snapshot.artifactId().equals(active.artifactId())
+            && snapshot.artifactVersion().equals(active.artifactVersion())
+            && snapshot.artifactDigest().equals(active.artifactDigest())
+            && snapshot.destinationProfileId().equals(active.destinationProfileId())
+            && snapshot.runtimeControlVersion().equals(active.runtimeControlVersion())
+            && snapshot.runtimeControlDigest().equals(active.runtimeControlDigest())
+            && snapshot.crosswalkVersion().equals(active.crosswalkVersion())
+            && snapshot.crosswalkDigest().equals(active.crosswalkDigest());
     }
 
     private DigitalAssetRuntimeSnapshotException rejected(String reasonCode) {

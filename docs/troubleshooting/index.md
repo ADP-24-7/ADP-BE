@@ -11,6 +11,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [Digital Asset Canonical Contract 트러블슈팅](digital-asset-contract-freeze.md)
 - [Digital Asset Artifact Loader 트러블슈팅](digital-asset-artifact-loader.md)
 - [Digital Asset Runtime Snapshot 트러블슈팅](digital-asset-runtime-snapshot.md)
+- [Digital Asset PRE_EXECUTION Guard 트러블슈팅](digital-asset-pre-execution-guard.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)
 
 ## 기준 커밋
