@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.AnalysisStatus;
@@ -26,8 +27,8 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     private static final String FIXTURE_WORKLOAD_ID = "customer_summary";
     private static final String FIXTURE_PURPOSE = "CUSTOMER_SUPPORT";
     private static final String FIXTURE_PROVIDER = "internal-provider";
-    private static final String ASSET_WORKLOAD_ID = "tokenized_asset_purchase";
-    private static final String ASSET_PURPOSE = "DIGITAL_ASSET_PURCHASE";
+    private static final String ASSET_WORKLOAD_ID = DigitalAssetCanonicalContract.BASELINE_WORKLOAD_ID;
+    private static final String ASSET_PURPOSE = DigitalAssetCanonicalContract.BASELINE_PURPOSE_CODE;
     private static final String ASSET_PROVIDER = "mock-asset-platform";
     private static final String LEGACY_FIXTURE_WORKLOAD_ID = "workload_be0";
     private static final String LEGACY_FIXTURE_PURPOSE = "BE-0 local E2E";

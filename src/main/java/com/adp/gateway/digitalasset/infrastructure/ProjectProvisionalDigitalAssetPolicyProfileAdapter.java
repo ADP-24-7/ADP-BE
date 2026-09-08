@@ -6,6 +6,7 @@ import java.util.Set;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.digitalasset.application.DigitalAssetPolicyProfilePort;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.digitalasset.domain.DigitalAssetPolicyProfile;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -17,7 +18,8 @@ public class ProjectProvisionalDigitalAssetPolicyProfileAdapter implements Digit
     public static final String PROFILE_ID = "digital-asset-policy/local/1";
     public static final String PROFILE_VERSION = "1.0.0";
     public static final BigDecimal AMOUNT_LIMIT = new BigDecimal("10000000");
-    public static final String DESTINATION_PROFILE_ID = "dest_mock_asset_platform_v1";
+    public static final String DESTINATION_PROFILE_ID =
+        DigitalAssetCanonicalContract.BASELINE_DESTINATION_PROFILE_ID;
     public static final String COMPLIANCE_SOURCE_SYSTEM = "BANK_COMPLIANCE_FIXTURE";
     public static final String COMPLIANCE_ASSERTION_VERSION = "1.0.0";
 

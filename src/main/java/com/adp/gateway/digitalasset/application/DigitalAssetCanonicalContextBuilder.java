@@ -14,6 +14,7 @@ import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.auth.domain.SubjectRef;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
+import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.digitalasset.domain.DigitalAssetRuntimeInput;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.retrieval.domain.DataClass;
@@ -22,8 +23,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContextBuilder {
 
-    public static final String WORKLOAD_ID = "tokenized_asset_purchase";
-    public static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
+    public static final String WORKLOAD_ID = DigitalAssetCanonicalContract.BASELINE_WORKLOAD_ID;
+    public static final String PURPOSE = DigitalAssetCanonicalContract.BASELINE_PURPOSE_CODE;
     private final CanonicalValueHasher hasher;
     private final SubjectRefHasher subjectRefHasher;
     private final ApprovedTransactionResolver approvedTransactionResolver;

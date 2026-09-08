@@ -8,6 +8,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [BE-5 Deep Dives](be-5-deep-dives.md)
 - [BE-6 이후 플랫폼 트러블슈팅](be-6-and-platform-evolution.md)
 - [AI Evaluation 트러블슈팅](ai-evaluation.md)
+- [Digital Asset Canonical Contract 트러블슈팅](digital-asset-contract-freeze.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)
 
 ## 기준 커밋
@@ -40,3 +41,5 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - `96ea184` AI-EVAL-1 run contract
 - `f565503` AI-EVAL-2 runtime evidence
 - `dc8338d` AI-EVAL-3 evaluation bundle initial export
+- `02168c2` DA-P0-3 Digital Asset domain contracts
+- `feature/da-p0-4-canonical-contract` DA-P0-4 canonical contract freeze

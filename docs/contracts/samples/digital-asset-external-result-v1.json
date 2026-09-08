@@ -1,0 +1,22 @@
+{
+  "externalRequestId": "asset_req_sample_001",
+  "externalReference": "asset_ext_sample_001",
+  "transactionHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "externalStatus": "SETTLED",
+  "providerStatus": "COMPLETED",
+  "receiptStatus": "SUCCESS",
+  "finalityStatus": "FINALIZED",
+  "executedChainId": "eip155:1",
+  "executedRecipientAddress": "wallet-test-001",
+  "executedAssetKind": "FUNGIBLE_TOKEN",
+  "executedAssetSymbol": "asset-krw-token-001",
+  "executedAssetContractAddress": "0x0000000000000000000000000000000000000001",
+  "executedAmount": "10000",
+  "nativeValue": "0",
+  "operation": "TRANSFER",
+  "tokenId": null,
+  "tokenTransferEvidenceRef": "token-transfer-evidence-sample-001",
+  "internalTraceEvidenceRef": null,
+  "executedAt": "2026-09-08T00:00:01Z",
+  "finalizedAt": "2026-09-08T00:00:10Z"
+}

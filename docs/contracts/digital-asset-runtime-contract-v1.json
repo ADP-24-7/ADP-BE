@@ -1,0 +1,98 @@
+{
+  "schema_version": "adp-digital-asset-runtime-contract/v1",
+  "artifact_id": "ADP-DIGITAL-ASSET-RUNTIME-CONTRACT",
+  "artifact_version": "1.0.0",
+  "canonicalization_version": "adp-canonical-json/v1",
+  "content_digest": "sha256:7a385271fd5729c26f40f7ba482ffb5881c6dff30c4ff3f18d147ced115c00ca",
+  "contract": {
+    "identifiers": {
+      "execution_pack": "DIGITAL_ASSET",
+      "workload_id": "tokenized_asset_purchase",
+      "purpose_code": "DIGITAL_ASSET_PURCHASE",
+      "destination_profile_id": "dest_mock_asset_platform_v1",
+      "destination_profile_version": "1.0.0",
+      "destination_contract_version": "digital-asset-egress-contract/v1",
+      "provider_request_schema_version": "digital-asset-request/v1",
+      "external_result_schema_version": "digital-asset-external-result/v1"
+    },
+    "enum_sets": {
+      "runtime_data_classes": [
+        "CUSTOMER_IDENTIFIER",
+        "ACCOUNT_IDENTIFIER",
+        "TRANSACTION_IDENTIFIER",
+        "FINANCIAL_AMOUNT",
+        "FINANCIAL_METADATA",
+        "BUSINESS_METADATA",
+        "UNKNOWN"
+      ],
+      "canonical_fields": [
+        "chainId",
+        "recipientAddress",
+        "assetKind",
+        "assetSymbol",
+        "assetContractAddress",
+        "amount",
+        "operation",
+        "tokenId"
+      ],
+      "decisions": ["PASS", "BLOCK", "REVIEW"],
+      "transform_strategies": [
+        "MASK",
+        "HMAC_PSEUDO",
+        "VAULT_TOKEN",
+        "REMOVE",
+        "KEEP",
+        "GENERALIZE",
+        "FIELD_SEPARATION"
+      ],
+      "asset_kinds": ["NATIVE", "FUNGIBLE_TOKEN", "NON_FUNGIBLE_TOKEN"],
+      "operations": ["TRANSFER", "CONTRACT_CALL"],
+      "external_statuses": [
+        "SUBMITTED",
+        "SETTLING",
+        "SETTLED",
+        "FAILED",
+        "SENT_UNKNOWN",
+        "RECONCILIATION_REQUIRED"
+      ],
+      "provider_statuses": ["ACKNOWLEDGED", "COMPLETED", "FAILED"],
+      "receipt_statuses": ["NOT_AVAILABLE", "PENDING", "SUCCESS", "FAILED"],
+      "finality_statuses": ["UNCONFIRMED", "CONFIRMED", "FINALIZED", "FAILED"],
+      "reconciliation_results": ["MATCH", "WAIT", "RECOVERED", "MISMATCH", "CRITICAL_MISMATCH"],
+      "reason_codes": [
+        "DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND",
+        "DIGITAL_ASSET_APPROVED_ASSET_MISMATCH",
+        "DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED",
+        "DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH",
+        "DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH",
+        "DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH",
+        "DIGITAL_ASSET_APPROVED_PERIOD_VIOLATION",
+        "DIGITAL_ASSET_REQUIRED_OUTBOUND_FIELD_MISSING",
+        "DIGITAL_ASSET_REQUIRED_EXACT_VIOLATION",
+        "DIGITAL_ASSET_TRANSFORM_NOT_ALLOWED",
+        "DIGITAL_ASSET_DESTINATION_MAPPING_UNRESOLVED",
+        "DIGITAL_ASSET_TRACE_BINDING_INVALID",
+        "DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID",
+        "DIGITAL_ASSET_RUNTIME_DATA_CLASS_UNMAPPED",
+        "DIGITAL_ASSET_CONTRACT_GAP"
+      ]
+    },
+    "files": [
+      {
+        "path": "docs/contracts/digital-asset-runtime-contract-v1.schema.json",
+        "role": "JSON_SCHEMA",
+        "digest": "sha256:0842abf6c43abcd6ffe0049c4517380254e518c5ba2e7193b1a38bd3792b33d1"
+      },
+      {
+        "path": "docs/contracts/samples/digital-asset-runtime-request-v1.json",
+        "role": "RUNTIME_REQUEST_SAMPLE",
+        "digest": "sha256:1c8e6378d7b3ac0d7c9a5d0f37a51d1b9019e0bf009e72ac2c2dc0c1dd58bfe3"
+      },
+      {
+        "path": "docs/contracts/samples/digital-asset-external-result-v1.json",
+        "role": "EXTERNAL_RESULT_SAMPLE",
+        "digest": "sha256:a33a70d8fa9591969a67ca8a859685f35a6d64a7cdbe437760ca9768ec9cd3a7"
+      }
+    ]
+  }
+}
