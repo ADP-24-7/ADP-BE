@@ -15,9 +15,17 @@ public record DigitalAssetDescriptorContract(
     @NotBlank @Size(max = 64)
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "asset-krw-token-001") String assetSymbol,
     @Size(max = 240)
-    @Schema(nullable = true, example = "0x0000000000000000000000000000000000000001") String assetContractAddress,
+    @Schema(
+        nullable = true,
+        description = "FUNGIBLE_TOKEN and NON_FUNGIBLE_TOKEN require this field; NATIVE must omit it",
+        example = "0x0000000000000000000000000000000000000001"
+    ) String assetContractAddress,
     @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) DigitalAssetOperation operation,
     @Size(max = 160)
-    @Schema(nullable = true, example = "42") String tokenId
+    @Schema(
+        nullable = true,
+        description = "NON_FUNGIBLE_TOKEN requires this field; NATIVE and FUNGIBLE_TOKEN must omit it",
+        example = "42"
+    ) String tokenId
 ) {
 }

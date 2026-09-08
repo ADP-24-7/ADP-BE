@@ -79,7 +79,6 @@ class DigitalAssetRuntimeInputTests {
         asset.put("assetSymbol", "ASSET");
         asset.put("assetContractAddress", "0x0000000000000000000000000000000000000001");
         asset.put("operation", "TRANSFER");
-        asset.put("tokenId", null);
         Map<String, Object> outbound = new HashMap<>();
         outbound.put("requestedAsset", asset);
         outbound.put("requestedAmount", "10000");

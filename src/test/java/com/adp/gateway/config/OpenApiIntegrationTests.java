@@ -5,7 +5,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,17 @@ class OpenApiIntegrationTests {
                 "requestedAsset", "requestedAmount", "requestedDestination",
                 "requestedBeneficiaryReference", "regulatoryOutboundData"
             )))
+            .andExpect(jsonPath("$.components.schemas.DigitalAssetDescriptor.required", hasItems(
+                "chainId", "assetKind", "assetSymbol", "operation"
+            )))
+            .andExpect(jsonPath(
+                "$.components.schemas.DigitalAssetDescriptor.required",
+                not(hasItem("assetContractAddress"))
+            ))
+            .andExpect(jsonPath(
+                "$.components.schemas.DigitalAssetDescriptor.required",
+                not(hasItem("tokenId"))
+            ))
             .andExpect(jsonPath(
                 "$.components.schemas.DigitalAssetOutboundRequest.properties.requestedAmount.pattern"
             ).value("(?!0+$)[0-9]{1,78}"))

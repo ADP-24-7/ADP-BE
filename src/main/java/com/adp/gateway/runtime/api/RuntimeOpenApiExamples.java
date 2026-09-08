@@ -21,8 +21,7 @@ final class RuntimeOpenApiExamples {
                 "assetKind": "FUNGIBLE_TOKEN",
                 "assetSymbol": "asset-krw-token-001",
                 "assetContractAddress": "0x0000000000000000000000000000000000000001",
-                "operation": "TRANSFER",
-                "tokenId": null
+                "operation": "TRANSFER"
               },
               "requestedAmount": "10000",
               "requestedDestination": "wallet-test-001",

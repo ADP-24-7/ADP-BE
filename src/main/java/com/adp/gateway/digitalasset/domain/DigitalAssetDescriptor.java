@@ -11,7 +11,10 @@ public record DigitalAssetDescriptor(
     DigitalAssetOperation operation,
     String tokenId
 ) {
-    private static final Set<String> KEYS = Set.of(
+    private static final Set<String> REQUIRED_KEYS = Set.of(
+        "chainId", "assetKind", "assetSymbol", "operation"
+    );
+    private static final Set<String> ALLOWED_KEYS = Set.of(
         "chainId", "assetKind", "assetSymbol", "assetContractAddress", "operation", "tokenId"
     );
 
@@ -37,7 +40,11 @@ public record DigitalAssetDescriptor(
     }
 
     public static DigitalAssetDescriptor from(Object value) {
-        if (!(value instanceof Map<?, ?> source) || !stringKeys(source).equals(KEYS)) {
+        if (!(value instanceof Map<?, ?> source)) {
+            throw new IllegalArgumentException("DIGITAL_ASSET_ASSET_SCHEMA_MISMATCH");
+        }
+        Set<String> keys = stringKeys(source);
+        if (!keys.containsAll(REQUIRED_KEYS) || !ALLOWED_KEYS.containsAll(keys)) {
             throw new IllegalArgumentException("DIGITAL_ASSET_ASSET_SCHEMA_MISMATCH");
         }
         return new DigitalAssetDescriptor(

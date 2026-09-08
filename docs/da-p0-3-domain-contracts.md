@@ -31,6 +31,17 @@ caller 입력과 server-owned request scope를 결합한 실행 요청이다.
 asset 객체의 누락 또는 미지 field는 fail closed한다. `regulatoryOutboundData`는 P0-4 allowlist가 확정되기
 전까지 필수 empty object이며 값이 있으면 HTTP 422로 차단한다.
 
+Asset descriptor의 `chainId`, `assetKind`, `assetSymbol`, `operation`은 필수다. `assetContractAddress`와
+`tokenId`는 key 생략이 가능한 conditional field이며 자산 종류별 규칙은 다음과 같다.
+
+| assetKind | assetContractAddress | tokenId |
+| --- | --- | --- |
+| `NATIVE` | 금지 | 금지 |
+| `FUNGIBLE_TOKEN` | 필수 | 금지 |
+| `NON_FUNGIBLE_TOKEN` | 필수 | 필수 |
+
+조건부 field를 명시적인 `null`로 전달하는 것은 생략과 동일하게 처리하지만, 미지 field는 항상 거부한다.
+
 ### ExternalExecutionResult
 
 Provider 응답을 Runtime outcome으로 사용하기 전에 파싱하는 typed result다.
