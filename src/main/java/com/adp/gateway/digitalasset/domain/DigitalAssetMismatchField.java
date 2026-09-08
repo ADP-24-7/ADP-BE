@@ -9,6 +9,13 @@ public enum DigitalAssetMismatchField {
     KYC_STATUS("kycStatus", false),
     AML_STATUS("amlStatus", false),
     WALLET_VERIFIED("walletVerified", false),
+    CHAIN_ID("chainId", true),
+    RECIPIENT_ADDRESS("recipientAddress", true),
+    ASSET_KIND("assetKind", true),
+    ASSET_SYMBOL("assetSymbol", true),
+    ASSET_CONTRACT_ADDRESS("assetContractAddress", true),
+    OPERATION("operation", true),
+    TOKEN_ID("tokenId", true),
     EXTERNAL_REQUEST_ID("externalRequestId", true),
     UNEXPECTED_FIELD(null, true);
 

@@ -2,7 +2,7 @@ package com.adp.gateway.digitalasset.application;
 
 import java.util.List;
 
-import com.adp.gateway.digitalasset.domain.ApprovedTransactionSnapshot;
+import com.adp.gateway.digitalasset.domain.ApprovedTransaction;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,7 +16,7 @@ public class ApprovedTransactionResolver {
         }
     }
 
-    public ApprovedTransactionSnapshot resolve(ApprovedTransactionLookup lookup) {
+    public ApprovedTransaction resolve(ApprovedTransactionLookup lookup) {
         return ports.stream()
             .map(port -> port.find(lookup))
             .flatMap(java.util.Optional::stream)
@@ -25,7 +25,7 @@ public class ApprovedTransactionResolver {
             .orElseThrow(ApprovedTransactionUnavailableException::new);
     }
 
-    private boolean matchesScope(ApprovedTransactionSnapshot snapshot, ApprovedTransactionLookup lookup) {
+    private boolean matchesScope(ApprovedTransaction snapshot, ApprovedTransactionLookup lookup) {
         return snapshot.approvedTransactionId().equals(lookup.reference().value())
             && snapshot.institutionId().equals(lookup.institutionId())
             && snapshot.subjectRefDigest().equals(lookup.subjectRefDigest())

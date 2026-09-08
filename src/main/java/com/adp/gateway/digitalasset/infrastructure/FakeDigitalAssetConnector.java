@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
 import com.adp.gateway.connector.application.RuntimeConnectorPort;
@@ -44,42 +45,56 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
     @Override
     public ConnectorResult execute(RuntimeRequestContext context, RuntimeDecision decision,
                                    OutboundCandidatePayload outbound, ProviderRequestPayload request) {
-        String externalTransactionId = "asset_tx_" + UUID.randomUUID();
-        String settlementId = "settlement_" + UUID.randomUUID();
+        String externalReference = "asset_tx_" + UUID.randomUUID();
+        String transactionHash = "0x" + UUID.randomUUID().toString().replace("-", "");
         Map<String, Object> expected = transaction(request.payload());
-        String assetId = String.valueOf(expected.get("assetId"));
-        if ("asset-sent-unknown".equals(assetId)) {
+        String assetSymbol = String.valueOf(expected.get("assetSymbol"));
+        if ("asset-sent-unknown".equals(assetSymbol)) {
             stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
             return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
                 ConnectorStatus.SENT_UNKNOWN, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
                 null, null, null);
         }
         stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
-        String settlementStatus = "asset-settling".equals(assetId) ? "SETTLING" : "SETTLED";
+        String externalStatus = "asset-settling".equals(assetSymbol) ? "SETTLING" : "SETTLED";
         Map<String, Object> actual = new TreeMap<>(expected);
-        if ("asset-critical-mismatch".equals(assetId)) {
+        if ("asset-critical-mismatch".equals(assetSymbol)) {
             actual.put("amount", "999999");
         }
-        if ("asset-mismatch".equals(assetId)) {
-            actual.put("walletAddress", "wallet-provider-mismatch");
-        }
-        if ("asset-unexpected-field".equals(assetId)) {
-            actual.put("customer-100-sensitive-value", "unexpected");
+        if ("asset-mismatch".equals(assetSymbol)) {
+            actual.put("recipientAddress", "wallet-provider-mismatch");
         }
         Map<String, Object> response = new HashMap<>();
-        response.put("externalRequestId", "asset-correlation-mismatch".equals(assetId)
+        response.put("externalRequestId", "asset-correlation-mismatch".equals(assetSymbol)
             ? "asset_req_wrong_" + UUID.randomUUID()
             : request.providerCorrelationKey());
-        response.put("externalTransactionId", externalTransactionId);
-        response.put("settlementStatus", settlementStatus);
-        response.put("settledTransaction", actual);
-        if ("SETTLED".equals(settlementStatus)) {
-            response.put("settlementId", settlementId);
+        response.put("externalReference", externalReference);
+        response.put("transactionHash", transactionHash);
+        response.put("externalStatus", externalStatus);
+        response.put("providerStatus", "ACKNOWLEDGED");
+        response.put("receiptStatus", "SETTLED".equals(externalStatus) ? "SUCCESS" : "PENDING");
+        response.put("finalityStatus", "SETTLED".equals(externalStatus) ? "FINALIZED" : "UNCONFIRMED");
+        response.put("executedChainId", actual.get("chainId"));
+        response.put("executedRecipientAddress", actual.get("recipientAddress"));
+        response.put("executedAssetKind", actual.get("assetKind"));
+        response.put("executedAssetSymbol", actual.get("assetSymbol"));
+        response.put("executedAssetContractAddress", actual.get("assetContractAddress"));
+        response.put("executedAmount", actual.get("amount"));
+        response.put("nativeValue", "0");
+        response.put("operation", actual.get("operation"));
+        response.put("tokenId", actual.get("tokenId"));
+        response.put("tokenTransferEvidenceRef", "token-transfer:" + externalReference);
+        response.put("internalTraceEvidenceRef", null);
+        OffsetDateTime executedAt = OffsetDateTime.parse("2026-09-08T00:00:00Z");
+        response.put("executedAt", executedAt.toString());
+        response.put("finalizedAt", "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1).toString() : null);
+        if ("asset-unexpected-field".equals(assetSymbol)) {
+            response.put("customer-100-sensitive-value", "unexpected");
         }
         String responseDigest = hasher.hash(json(response));
         return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
             ConnectorStatus.ACKNOWLEDGED, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
-            responseDigest, "digital-asset-settlement/v1", response);
+            responseDigest, "digital-asset-external-execution-result/v1", response);
     }
 
     private Map<String, Object> transaction(Map<String, Object> payload) {

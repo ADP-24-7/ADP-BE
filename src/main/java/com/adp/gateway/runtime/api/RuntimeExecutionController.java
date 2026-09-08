@@ -9,6 +9,9 @@ import com.adp.gateway.common.trace.RuntimeContextFactory;
 import com.adp.gateway.runtime.application.RuntimeExecutionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -35,6 +38,16 @@ public class RuntimeExecutionController {
     }
 
     @PostMapping
+    @Operation(
+        summary = "Execute an approved runtime request",
+        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(examples = @ExampleObject(
+                name = "digitalAsset",
+                summary = "DA-P0-3 Digital Asset execution",
+                value = RuntimeOpenApiExamples.DIGITAL_ASSET_EXECUTION
+            ))
+        )
+    )
     public ResponseEntity<RuntimeExecutionResponse> execute(
         @Valid @RequestBody RuntimeExecutionRequest request,
         HttpServletRequest httpRequest,

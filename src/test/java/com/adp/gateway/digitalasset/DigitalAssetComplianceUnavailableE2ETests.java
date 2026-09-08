@@ -44,9 +44,13 @@ class DigitalAssetComplianceUnavailableE2ETests {
                      "subjectScope":"customer:customer-100","destinationProfileId":"dest_mock_asset_platform_v1",
                      "idempotencyKey":"%s","processingContexts":["DIGITAL_ASSET"],
                      "input":{"approvedTransactionReference":"approved-tx-local-001",
-                     "customerId":"customer-100","accountId":"acct-100-1",
-                     "walletAddress":"wallet-test-001","assetId":"asset-krw-token-001","amount":10000,
-                     "beneficiaryReference":"beneficiary-local-001"}}
+                     "customerId":"customer-100","accountId":"acct-100-1","outboundRequest":{
+                     "requestedAsset":{"chainId":"eip155:1","assetKind":"FUNGIBLE_TOKEN",
+                     "assetSymbol":"asset-krw-token-001",
+                     "assetContractAddress":"0x0000000000000000000000000000000000000001",
+                     "operation":"TRANSFER","tokenId":null},"requestedAmount":"10000",
+                     "requestedDestination":"wallet-test-001",
+                     "requestedBeneficiaryReference":"beneficiary-local-001","regulatoryOutboundData":{}}}}
                     """.formatted(idempotencyKey)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("COMPLETED"))

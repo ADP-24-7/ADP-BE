@@ -80,18 +80,23 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
         )) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_PROFILE_MISMATCH);
         }
-        if (!text(context, "assetId").equals(metadata(context, "approvedAssetId"))) {
+        if (!requestAsset(context).equals(metadata(context, "approvedAsset"))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_ASSET_MISMATCH);
         }
-        if (new BigDecimal(text(context, "amount")).compareTo(
-            new BigDecimal(metadata(context, "approvedMaxAmount"))
-        ) > 0) {
+        BigDecimal requestedAmount = new BigDecimal(text(context, "outboundRequest.requestedAmount"));
+        String approvedAmount = context.trustedMetadata().get("approvedAmount");
+        String approvedAmountLimit = context.trustedMetadata().get("approvedAmountLimit");
+        if ((approvedAmount != null && requestedAmount.compareTo(new BigDecimal(approvedAmount)) != 0)
+            || (approvedAmount == null && (approvedAmountLimit == null
+                || requestedAmount.compareTo(new BigDecimal(approvedAmountLimit)) > 0))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED);
         }
-        if (!text(context, "walletAddress").equals(metadata(context, "approvedDestination"))) {
+        if (!text(context, "outboundRequest.requestedDestination").equals(metadata(context, "approvedDestination"))) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_DESTINATION_MISMATCH);
         }
-        if (!text(context, "beneficiaryReference").equals(metadata(context, "approvedBeneficiaryReference"))) {
+        if (!text(context, "outboundRequest.requestedBeneficiaryReference").equals(
+            metadata(context, "approvedBeneficiaryReference")
+        )) {
             reasons.add(ReasonCode.DIGITAL_ASSET_APPROVED_BENEFICIARY_MISMATCH);
         }
         OffsetDateTime approvedFrom = OffsetDateTime.parse(metadata(context, "approvedFrom"));
@@ -104,6 +109,25 @@ public class DigitalAssetPolicyGate implements ExecutionPackPolicyGate {
 
     private String text(CanonicalContext context, String fieldName) {
         return String.valueOf(value(context, fieldName));
+    }
+
+    private String requestAsset(CanonicalContext context) {
+        return String.join("|",
+            text(context, "outboundRequest.requestedAsset.chainId"),
+            text(context, "outboundRequest.requestedAsset.assetKind"),
+            text(context, "outboundRequest.requestedAsset.assetSymbol"),
+            optionalText(context, "outboundRequest.requestedAsset.assetContractAddress"),
+            text(context, "outboundRequest.requestedAsset.operation"),
+            optionalText(context, "outboundRequest.requestedAsset.tokenId")
+        );
+    }
+
+    private String optionalText(CanonicalContext context, String fieldName) {
+        return context.fields().stream()
+            .filter(field -> field.path().equals("$.input." + fieldName))
+            .findFirst()
+            .map(field -> String.valueOf(field.value()))
+            .orElse("<none>");
     }
 
     private Object value(CanonicalContext context, String fieldName) {

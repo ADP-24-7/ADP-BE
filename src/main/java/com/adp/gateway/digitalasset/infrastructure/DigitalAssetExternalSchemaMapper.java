@@ -62,9 +62,14 @@ public class DigitalAssetExternalSchemaMapper implements ExternalSchemaMapper {
         return switch (path) {
             case "$.input.customerId" -> "customerToken";
             case "$.input.accountId" -> "accountToken";
-            case "$.input.walletAddress" -> "walletAddress";
-            case "$.input.assetId" -> "assetId";
-            case "$.input.amount" -> "amount";
+            case "$.input.outboundRequest.requestedAsset.chainId" -> "chainId";
+            case "$.input.outboundRequest.requestedAsset.assetKind" -> "assetKind";
+            case "$.input.outboundRequest.requestedAsset.assetSymbol" -> "assetSymbol";
+            case "$.input.outboundRequest.requestedAsset.assetContractAddress" -> "assetContractAddress";
+            case "$.input.outboundRequest.requestedAsset.operation" -> "operation";
+            case "$.input.outboundRequest.requestedAsset.tokenId" -> "tokenId";
+            case "$.input.outboundRequest.requestedAmount" -> "amount";
+            case "$.input.outboundRequest.requestedDestination" -> "recipientAddress";
             default -> throw new IllegalArgumentException("Unsupported Digital Asset provider field");
         };
     }

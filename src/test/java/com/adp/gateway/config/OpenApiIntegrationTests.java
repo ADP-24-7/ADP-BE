@@ -4,6 +4,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,11 @@ class OpenApiIntegrationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.info.title").value("ADP Gateway Runtime API"))
             .andExpect(jsonPath("$.paths['/v1/runtime/executions']").exists())
+            .andExpect(jsonPath("$.components.schemas.DigitalAssetRuntimeInput").exists())
+            .andExpect(jsonPath("$.components.schemas.DigitalAssetOutboundRequest").exists())
+            .andExpect(content().string(containsString("digitalAsset")))
+            .andExpect(content().string(containsString("requestedBeneficiaryReference")))
+            .andExpect(content().string(containsString("FUNGIBLE_TOKEN")))
             .andExpect(jsonPath("$.components.securitySchemes.adpApiKey.name").value("X-ADP-API-Key"));
     }
 
