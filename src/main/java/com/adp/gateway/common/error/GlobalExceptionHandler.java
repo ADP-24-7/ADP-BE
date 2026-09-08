@@ -9,6 +9,7 @@ import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
 import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
+import com.adp.gateway.digitalasset.application.ApprovedTransactionUnavailableException;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
@@ -230,6 +231,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED,
             "Digital asset compliance context is not configured",
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            request
+        );
+    }
+
+    @ExceptionHandler(ApprovedTransactionUnavailableException.class)
+    ResponseEntity<ErrorResponse> handleApprovedTransactionUnavailable(
+        ApprovedTransactionUnavailableException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.DIGITAL_ASSET_APPROVED_TRANSACTION_NOT_FOUND,
+            "Approved transaction was not found in the authorized runtime scope",
             HttpStatus.UNPROCESSABLE_ENTITY,
             request
         );

@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.application.ExecutionPackContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
+import com.adp.gateway.context.application.ExecutionPackRequestScope;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.auth.domain.SubjectRef;
@@ -25,16 +26,16 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     public static final String PURPOSE = "DIGITAL_ASSET_PURCHASE";
     private final CanonicalValueHasher hasher;
     private final SubjectRefHasher subjectRefHasher;
-    private final DigitalAssetComplianceContextResolver complianceContextResolver;
+    private final ApprovedTransactionResolver approvedTransactionResolver;
 
     public DigitalAssetCanonicalContextBuilder(
         CanonicalValueHasher hasher,
         SubjectRefHasher subjectRefHasher,
-        DigitalAssetComplianceContextResolver complianceContextResolver
+        ApprovedTransactionResolver approvedTransactionResolver
     ) {
         this.hasher = hasher;
         this.subjectRefHasher = subjectRefHasher;
-        this.complianceContextResolver = complianceContextResolver;
+        this.approvedTransactionResolver = approvedTransactionResolver;
     }
 
     @Override
@@ -43,43 +44,59 @@ public class DigitalAssetCanonicalContextBuilder implements ExecutionPackContext
     }
 
     @Override
-    public CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input) {
+    public CanonicalContext merge(
+        CanonicalContext retrievalContext,
+        Map<String, Object> input,
+        ExecutionPackRequestScope requestScope
+    ) {
         validate(input);
         DigitalAssetPurchaseInput purchase = parse(input);
-        var compliance = complianceContextResolver.load(
-            purchase.customerId(), purchase.accountId(), purchase.walletAddress()
-        );
         String inputSubjectDigest = subjectRefHasher.hash(new SubjectRef("customer", purchase.customerId()));
         if (!inputSubjectDigest.equals(retrievalContext.subjectRefDigest())) {
             throw new ExecutionPackInputRejectedException(
                 ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_SUBJECT_MISMATCH"
             );
         }
+        if (!inputSubjectDigest.equals(requestScope.subjectRefDigest())
+            || !retrievalContext.workloadId().equals(requestScope.workloadId())
+            || !retrievalContext.purpose().equals(requestScope.purpose())) {
+            throw new ExecutionPackInputRejectedException(
+                ExecutionPackType.DIGITAL_ASSET, "DIGITAL_ASSET_RUNTIME_SCOPE_MISMATCH"
+            );
+        }
+        var approved = approvedTransactionResolver.resolve(new ApprovedTransactionLookup(
+            purchase.approvedTransactionReference(), requestScope.institutionId(), inputSubjectDigest,
+            requestScope.workloadId(), requestScope.purpose()
+        ));
         List<CanonicalContextField> fields = new ArrayList<>(retrievalContext.fields());
         add(fields, "customerId", purchase.customerId(), DataClass.CUSTOMER_IDENTIFIER);
         add(fields, "accountId", purchase.accountId(), DataClass.ACCOUNT_IDENTIFIER);
         add(fields, "walletAddress", purchase.walletAddress(), DataClass.TRANSACTION_IDENTIFIER);
         add(fields, "assetId", purchase.assetId(), DataClass.BUSINESS_METADATA);
         add(fields, "amount", purchase.amount().toPlainString(), DataClass.FINANCIAL_AMOUNT);
-        add(fields, "kycStatus", compliance.kycStatus(), DataClass.FINANCIAL_METADATA);
-        add(fields, "amlStatus", compliance.amlStatus(), DataClass.FINANCIAL_METADATA);
-        add(fields, "walletVerified", compliance.walletVerified(), DataClass.FINANCIAL_METADATA);
         fields.sort(Comparator.comparing(CanonicalContextField::path));
-        var trustedMetadata = java.util.Map.of(
-            "complianceAssertionSource", compliance.sourceSystem(),
-            "complianceAssertionVersion", compliance.assertionVersion(),
-            "complianceAssertionDigest", compliance.evidenceDigest()
-        );
+        var trustedMetadata = new java.util.HashMap<String, String>();
+        trustedMetadata.put("approvedTransactionId", approved.approvedTransactionId());
+        trustedMetadata.put("approvedTransactionVersion", approved.version());
+        trustedMetadata.put("approvedTransactionDigest", approved.digest());
+        trustedMetadata.put("approvedAssetId", approved.approvedAssetId());
+        trustedMetadata.put("approvedMaxAmount", approved.approvedMaxAmount().toPlainString());
+        trustedMetadata.put("approvedDestinationProfileId", approved.approvedDestinationProfileId());
+        trustedMetadata.put("approvedDestination", approved.approvedDestination());
+        trustedMetadata.put("approvedBeneficiaryReference", approved.approvedBeneficiaryReference());
+        trustedMetadata.put("requestedBeneficiaryReference", purchase.beneficiaryReference());
+        trustedMetadata.put("approvedFrom", approved.approvedFrom().toString());
+        trustedMetadata.put("approvedUntil", approved.approvedUntil().toString());
         String digest = hasher.hash(
             fields.stream()
                 .map(field -> field.path() + ":" + field.dataClass() + ":" + field.valueDigest())
                 .collect(Collectors.joining("|"))
-                + "|compliance:" + compliance.evidenceDigest()
+                + "|approved-transaction:" + approved.digest()
         );
         return new CanonicalContext(
             retrievalContext.schemaVersion(), retrievalContext.contextId(), retrievalContext.dataAccessId(),
             retrievalContext.workloadId(), retrievalContext.purpose(), retrievalContext.subjectType(),
-            retrievalContext.subjectRefDigest(), List.copyOf(fields), trustedMetadata, digest
+            retrievalContext.subjectRefDigest(), List.copyOf(fields), Map.copyOf(trustedMetadata), digest
         );
     }
 

@@ -23,6 +23,7 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackContextBuilderResolver;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
+import com.adp.gateway.context.application.ExecutionPackRequestScope;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.dataaccess.application.DataAccessRequest;
 import com.adp.gateway.dataaccess.application.SubjectRefHasher;
@@ -264,7 +265,18 @@ public class RuntimeExecutionService {
                 subject
             ));
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
-            canonicalContext = packContextBuilder.merge(canonicalContext, input);
+            canonicalContext = packContextBuilder.merge(
+                canonicalContext,
+                input,
+                new ExecutionPackRequestScope(
+                    institutionId,
+                    requestContext.workloadId(),
+                    requestContext.purpose(),
+                    subjectRefDigest,
+                    destinationProfileId,
+                    now
+                )
+            );
             persistence.recordRetrieved(executionId, canonicalContext);
             updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
 

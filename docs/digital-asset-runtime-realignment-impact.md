@@ -246,3 +246,17 @@ P0-2에서는 `ApprovedTransaction`/`OutboundRequest` 최종 DTO를 확정하지
 - [x] Compliance assertion metadata의 Active Decision 의존 제거 조건 확정
 - [x] Legacy Digital Asset Policy Profile의 Active lookup 제거 조건 확정
 - [x] Common Runtime/Egress/Recovery/Lifecycle 비수정 경계 확정
+
+## P0-2 구현 결과
+
+- [x] scope-aware `ApprovedTransactionResolver/Port`와 server-owned snapshot 설치
+- [x] institution/subject/workload/purpose 범위 조회 및 승인 snapshot digest pinning
+- [x] asset/amount/destination profile/wallet/beneficiary/period 조건 결속
+- [x] 승인 미존재 또는 조건 불일치 시 fail closed 및 Connector 0회
+- [x] Compliance Resolver와 Digital Asset Policy Profile의 Active lookup 제거
+- [x] Provider payload, destination contract, approval scope에서 legacy eligibility field 제거
+- [x] 기존 Compliance/Policy/Reason Code/V16~V20은 Legacy Evidence 해석용으로 보존
+- [x] Compliance fixture 미구성 허용, scope isolation, 만료 및 조건 불일치 회귀 테스트
+
+세부 Active 계약은 [DA-P0-2 Approved Transaction Trust Boundary](da-p0-2-approved-transaction-boundary.md)를
+따른다.

@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.context.application.ExecutionPackContextBuilder;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
+import com.adp.gateway.context.application.ExecutionPackRequestScope;
 import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.detection.application.SensitiveDataDetector;
@@ -38,7 +39,11 @@ public class AiCanonicalContextBuilder implements ExecutionPackContextBuilder {
     }
 
     @Override
-    public CanonicalContext merge(CanonicalContext retrievalContext, Map<String, Object> input) {
+    public CanonicalContext merge(
+        CanonicalContext retrievalContext,
+        Map<String, Object> input,
+        ExecutionPackRequestScope requestScope
+    ) {
         validate(input);
         String prompt = (String) input.get("prompt");
         CanonicalContext withPrompt = withPrompt(retrievalContext, prompt, DataClass.BUSINESS_METADATA);

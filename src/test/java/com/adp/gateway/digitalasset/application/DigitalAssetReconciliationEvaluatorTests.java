@@ -16,8 +16,8 @@ class DigitalAssetReconciliationEvaluatorTests {
     @Test
     void classifiesCriticalFieldMismatch() {
         var assessment = evaluator.evaluate(
-            request(transaction("wallet-1", "asset-1", "100", "PASSED")),
-            response(transaction("wallet-1", "asset-1", "101", "PASSED")),
+            request(transaction("wallet-1", "asset-1", "100")),
+            response(transaction("wallet-1", "asset-1", "101")),
             "SETTLED"
         );
 
@@ -26,22 +26,24 @@ class DigitalAssetReconciliationEvaluatorTests {
     }
 
     @Test
-    void classifiesNonCriticalFieldMismatch() {
+    void treatsLegacyEligibilityFieldsFromProviderAsUnexpected() {
+        var actual = new java.util.HashMap<String, Object>(transaction("wallet-1", "asset-1", "100"));
+        actual.put("kycStatus", "REVIEW");
         var assessment = evaluator.evaluate(
-            request(transaction("wallet-1", "asset-1", "100", "PASSED")),
-            response(transaction("wallet-1", "asset-1", "100", "REVIEW")),
+            request(transaction("wallet-1", "asset-1", "100")),
+            response(actual),
             "SETTLED"
         );
 
-        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.MISMATCH);
-        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.KYC_STATUS);
+        assertThat(assessment.result()).isEqualTo(DigitalAssetReconciliationResult.CRITICAL_MISMATCH);
+        assertThat(assessment.mismatchedFields()).containsExactly(DigitalAssetMismatchField.UNEXPECTED_FIELD);
     }
 
     @Test
     void keepsNonFinalSettlementWaitingEvenWhenPayloadDiffers() {
         var assessment = evaluator.evaluate(
-            request(transaction("wallet-1", "asset-1", "100", "PASSED")),
-            response(transaction("wallet-2", "asset-1", "100", "PASSED")),
+            request(transaction("wallet-1", "asset-1", "100")),
+            response(transaction("wallet-2", "asset-1", "100")),
             "SETTLING"
         );
 
@@ -62,7 +64,7 @@ class DigitalAssetReconciliationEvaluatorTests {
 
     @Test
     void normalizesUntrustedProviderKeyToServerOwnedLabel() {
-        var expected = transaction("wallet-1", "asset-1", "100", "PASSED");
+        var expected = transaction("wallet-1", "asset-1", "100");
         var actual = new java.util.HashMap<String, Object>(expected);
         actual.put("customer-100-sensitive-value", "unexpected");
 
@@ -81,7 +83,7 @@ class DigitalAssetReconciliationEvaluatorTests {
         return Map.of("settledTransaction", transaction);
     }
 
-    private Map<String, Object> transaction(String wallet, String asset, String amount, String kyc) {
-        return Map.of("walletAddress", wallet, "assetId", asset, "amount", amount, "kycStatus", kyc);
+    private Map<String, Object> transaction(String wallet, String asset, String amount) {
+        return Map.of("walletAddress", wallet, "assetId", asset, "amount", amount);
     }
 }
