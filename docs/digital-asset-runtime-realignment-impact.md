@@ -15,6 +15,11 @@ fail closed하고 Connector를 호출하지 않는다. 기존 `ApprovalScope`는
 field/destination을 제한하는 authorization scope일 뿐, 거래의 asset/amount/destination/beneficiary/period를 승인하는
 `ApprovedTransaction`이 아니다.
 
+승인의 존재만으로 외부 호출을 허용하지 않는다. P0-2부터 resolved approval의 institution/subject를 현재 Runtime과
+결속하고, 승인된 asset/amount 또는 amount limit/destination/beneficiary/period를 실제 Outbound Request와 최소 비교한다.
+하나라도 불일치하면 fail closed하고 Connector invocation은 0이다. P0-3/P0-4는 이 보안 경계를 새로 만드는 단계가
+아니라 이미 강제된 최소 projection의 정식 타입, identifier, enum과 schema를 고정하는 단계다.
+
 ## 현재 Active Path
 
 ```text
@@ -57,10 +62,10 @@ KYC/AML/Wallet 값을 외부전달 규제정보로 사용해야 하는 경우에
 | `ExecutionPackPolicyGateResolver` | Digital Asset Gate 필수, 미구성 시 BLOCK | Digital Asset Controls 필수, 미구성 시 BLOCK | `REUSE` | 없음 | fail-closed 테스트 유지 |
 | `DigitalAssetPurchaseInput` | 고객/계좌/지갑/자산/금액 단일 입력 | `ApprovedTransaction`과 `OutboundRequest` 분리 | `DEPRECATED` | P0-3에서 신규 계약 추가 | 기존 request JSON 교체 |
 | `DigitalAssetCanonicalContextBuilder` | Purchase Input과 Compliance assertion 병합 | 승인된 거래와 요청값을 별도 namespace로 병합 | `MEANING_CHANGE` | 신규 Evidence ref 필요 | subject/approval/request binding 테스트 추가 |
-| `ApprovedTransactionResolver/Port` | 없음 | server-owned 승인 원장에서 caller가 변경할 수 없는 거래 승인 조회 | `NEW`, `P0-2 선행` | P0-3 최종 계약 전 최소 reference/lookup boundary 설치 | missing/invalid/expired 승인에서 Connector 0, caller 자기신고 차단 |
+| `ApprovedTransactionResolver/Port` | 없음 | server-owned 승인 원장에서 scope-aware 조회 후 요청 조건과 결속 | `NEW`, `P0-2 선행` | P0-3 최종 계약 전 최소 approval projection/reference/lookup boundary 설치 | missing/invalid/expired, cross-tenant/subject, terms mismatch에서 Connector 0 |
 | `DigitalAssetComplianceContextPort/Resolver/UnavailableException` | KYC/AML/Wallet authoritative eligibility 조회 및 미구성 fail closed | Active Decision 책임 없음 | `REMOVE_FROM_ACTIVE`, 이후 `LEGACY_ONLY` | 기존 저장 데이터 없음 | Port 미구성 시 Runtime 오류/기존 reason 발생 없음 검증 |
 | `DigitalAssetComplianceContext` / `ProjectProvisionalDigitalAssetComplianceContextAdapter` | eligibility 값과 digest | 역사적 fixture 또는 Upstream metadata | `LEGACY_ONLY` | 없음 | Active Decision 불변성 테스트로 교체 |
-| `DigitalAssetPolicyGate` | KYC/AML/Wallet/Amount Limit으로 REVIEW | approved-vs-requested 및 outbound control orchestration | `REWRITE` | V19 history 보존 | 6 Controls 전 단계별 negative test로 교체 |
+| `DigitalAssetPolicyGate` | Policy Profile을 조회하고 KYC/AML/Wallet/Amount Limit으로 REVIEW | 최소 approval binding 이후 approved-vs-requested 및 outbound control orchestration | `REWRITE` | V19 history 보존 | Legacy Profile lookup 0 및 6 Controls 전 단계별 negative test로 교체 |
 | `DigitalAssetPolicyProfile/Port` / `ProjectProvisionalDigitalAssetPolicyProfileAdapter` | 허용 KYC/AML 상태와 risk amount limit을 가진 eligibility profile v1 | 역사적 Policy Evidence 해석 전용 | `LEGACY_ONLY` | V19 profile identity 보존 | 기존 history 해석 테스트 유지 |
 | `DigitalAssetRuntimeControlProfile/ArtifactBinding` | 없음 | Versioned Runtime Control/Requirement profile | `NEW`, `P0-4` | 새 schema/version 필요 | binding/digest/effective time 및 control test 추가 |
 | `InputOnlyDigitalAssetRetrievalAdapter` | request dataset만 허용 | request-only 최소조회 유지 | `REUSE` | 없음 | 임의 DB 조회 0 및 allowlist 테스트 유지 |
@@ -136,9 +141,11 @@ merge하거나 배포하지 않는다.
 ```text
 P0-2A 최소 Approved Transaction Trust Boundary
 -> ApprovedTransactionReference
--> ApprovedTransactionResolver/Port
--> server-owned lookup
--> missing / invalid / expired approval이면 fail closed, Connector invocation 0
+-> institution / subject / workload / purpose를 입력으로 받는 scope-aware ApprovedTransactionResolver/Port
+-> server-owned lookup 및 최소 ApprovedTransactionSnapshot 반환
+-> institution / subject binding
+-> approved asset / amount 또는 limit / destination / beneficiary / period와 Outbound Request 비교
+-> missing / invalid / expired / scope mismatch / terms mismatch이면 fail closed, Connector invocation 0
 
 P0-2B Legacy Eligibility Gate 분리
 -> KYC / AML / Wallet / Amount Risk 판정 제거
@@ -150,11 +157,30 @@ P0-2A의 최소 계약은 P0-3 최종 DTO freeze를 대신하지 않는다. 그�
 우회하지 못하도록 reference와 server-owned lookup 경계를 먼저 강제한다. `ProjectProvisionalApprovalScopeAdapter`를
 `ApprovedTransactionResolver`로 재사용하지 않는다.
 
+P0-2의 최소 `ApprovedTransactionSnapshot` projection은 다음 정보를 포함한다.
+
+- approved transaction identifier
+- institution identifier
+- subject reference digest
+- approved asset
+- approved amount 또는 amount limit
+- approved destination
+- approved beneficiary reference
+- approved from / approved until
+
+Resolver는 caller가 제공한 reference만으로 전역 조회하지 않는다. institution/subject/workload/purpose scope 안에서 조회하고,
+다른 institution 또는 subject의 정상 approval reference도 NOT_FOUND 또는 BLOCK으로 처리한다. 최종 DTO 이름과 세부
+nullability는 P0-3에서 고정하되 위 조건의 검증은 P0-2 완료 전에 반드시 실행된다.
+
 Compliance Context를 Active Path에서 분리할 때 `complianceAssertionSource`, `complianceAssertionVersion`,
 `complianceAssertionDigest`도 `DigitalAssetPolicyGate`의 필수 Decision precondition에서 함께 제거한다. 해당 metadata가
 존재하면 audit/provenance로만 보존할 수 있으며, 미존재 자체가 `DIGITAL_ASSET_POLICY_PROFILE_INVALID`,
 `DIGITAL_ASSET_COMPLIANCE_CONTEXT_NOT_CONFIGURED` 또는 `IllegalStateException`을 만들면 안 된다. V19 assertion 컬럼은
 nullable이므로 이 분리만을 위한 DB migration은 필요하지 않다.
+
+기존 `DigitalAssetPolicyProfile`, `DigitalAssetPolicyProfilePort`,
+`ProjectProvisionalDigitalAssetPolicyProfileAdapter`는 P0-2 Active Decision Path에서 조회하지 않는다. 이들은 V19의 기존
+Policy Evidence를 해석하는 Legacy v1 경계로만 남긴다.
 
 ## Test Impact
 
@@ -182,25 +208,29 @@ nullable이므로 이 분리만을 위한 DB migration은 필요하지 않다.
 - KYC/AML/Wallet metadata 값 변경이 Digital Asset Decision에 직접 영향을 주지 않음
 - Approved Transaction을 caller가 자기신고로 주입할 수 없음
 - Approved Transaction 없음/무효/만료 시 fail closed 및 Connector invocation 0
+- 다른 institution/subject의 정상 Approved Transaction reference 재사용 시 NOT_FOUND 또는 BLOCK 및 Connector invocation 0
+- 유효한 승인이라도 asset/amount/destination/beneficiary/time 조건이 요청과 다르면 Connector invocation 0
 - Compliance Port 미구성 및 assertion metadata 미존재 시 기존 compliance reason/Runtime 예외가 발생하지 않음
 - Approved Transaction과 Outbound Request의 asset/amount/destination/beneficiary/time binding
+- Active Decision에서 `DigitalAssetPolicyProfilePort.load()` 호출 0
 - BLOCK/REVIEW에서 Connector invocation 0
 - 기존 V16~V20 row가 V26 이후에도 조회 및 migration 가능
 
 ## P0-2 작업 대상
 
-1. 최소 `ApprovedTransactionReference`와 server-owned `ApprovedTransactionResolver/Port`를 먼저 설치한다.
-2. 승인 없음/무효/만료 시 fail closed하고 Connector를 호출하지 않는 E2E Gate를 추가한다.
-3. `DigitalAssetCanonicalContextBuilder`에서 Compliance Resolver의 Active 호출과 eligibility field 병합을 분리한다.
-4. `DigitalAssetPolicyGate`에서 KYC/AML/Wallet/Amount Risk 판정과 compliance assertion 필수 검사를 함께 제거한다.
-5. Local retrieval profile, destination mapping과 provider payload에서 eligibility field를 제거한다.
-6. `DigitalAssetComplianceContext*`와 기존 Policy Profile v1은 삭제하지 않고 legacy/provenance 경계로 격리한다.
-7. KYC/AML/Wallet 값 변경 불변성, Compliance Port 미구성 허용 및 Connector 호출 조건 테스트를 추가한다.
-8. 기존 Reason Code와 V19/V20 data는 보존하고 신규 실행에서 deprecated Reason을 생성하지 않는다.
+1. 최소 `ApprovedTransactionReference`, `ApprovedTransactionSnapshot`과 scope-aware server-owned `ApprovedTransactionResolver/Port`를 먼저 설치한다.
+2. approval의 institution/subject를 Runtime과 결속하고 asset/amount/destination/beneficiary/time 조건을 요청과 비교한다.
+3. 승인 없음/무효/만료, scope mismatch 또는 terms mismatch 시 fail closed하고 Connector를 호출하지 않는 E2E Gate를 추가한다.
+4. `DigitalAssetCanonicalContextBuilder`에서 Compliance Resolver의 Active 호출과 eligibility field 병합을 분리한다.
+5. `DigitalAssetPolicyGate`에서 `DigitalAssetPolicyProfilePort` Active lookup, KYC/AML/Wallet/Amount Risk 판정과 compliance assertion 필수 검사를 함께 제거한다.
+6. Local retrieval profile, destination mapping과 provider payload에서 eligibility field를 제거한다.
+7. `DigitalAssetComplianceContext*`와 기존 Policy Profile v1은 삭제하지 않고 legacy/provenance 경계로 격리한다.
+8. KYC/AML/Wallet 값 변경 불변성, Compliance Port 미구성 허용 및 Connector 호출 조건 테스트를 추가한다.
+9. 기존 Reason Code와 V19/V20 data는 보존하고 신규 실행에서 deprecated Reason을 생성하지 않는다.
 
 P0-2에서는 `ApprovedTransaction`/`OutboundRequest` 최종 DTO를 확정하지 않지만, eligibility 판정을 제거하기 전에 최소
-승인 reference와 server-owned lookup을 반드시 강제한다. 3 Domain Contract와 신규 Runtime Control Profile은 P0-3/P0-4에서
-versioned 계약으로 고정한다.
+승인 reference, server-owned lookup, institution/subject scope와 요청 조건 binding을 반드시 강제한다. 3 Domain Contract와
+신규 Runtime Control Profile은 P0-3/P0-4에서 versioned 계약으로 고정한다.
 
 ## Completion Gate
 
@@ -212,5 +242,7 @@ versioned 계약으로 고정한다.
 - [x] P0-2 대상 클래스와 교체/유지 테스트 범위 확정
 - [x] Eligibility 제거 전 server-owned Approved Transaction 선행 Gate 확정
 - [x] Approval Scope와 Approved Transaction Resolver 책임 분리
+- [x] Approved Transaction의 institution/subject 및 최소 승인 조건 binding Gate 확정
 - [x] Compliance assertion metadata의 Active Decision 의존 제거 조건 확정
+- [x] Legacy Digital Asset Policy Profile의 Active lookup 제거 조건 확정
 - [x] Common Runtime/Egress/Recovery/Lifecycle 비수정 경계 확정
