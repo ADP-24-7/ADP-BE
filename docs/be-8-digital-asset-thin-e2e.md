@@ -1,5 +1,8 @@
 # BE-8 Digital Asset Thin E2E
 
+> Historical baseline: 최신 Active Runtime 책임경계와 후속 변경 기준은
+> [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를 따른다.
+
 BE-8은 은행 내부 Tokenized Asset 구매 요청을 기존 단일 Runtime API와 공통 Policy, Transform, Egress, Recovery 경계에 연결한다. FPG는 Asset 발행, 원장, Private Key, 서명 또는 Custody를 수행하지 않는다.
 
 ## Runtime Contract

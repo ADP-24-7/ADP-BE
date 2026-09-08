@@ -1,5 +1,8 @@
 # BE-8 Digital Asset Recovery
 
+> Historical baseline: Recovery 구조는 재사용하되 용어와 입력 계약 변경은
+> [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를 따른다.
+
 이 Slice는 BE-8 Thin E2E에서 `SENT_UNKNOWN`으로 보존한 외부 전송을 공통 BE-9B Recovery Core에 연결한다.
 
 ## Contract

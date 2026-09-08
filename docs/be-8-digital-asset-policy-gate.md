@@ -1,5 +1,8 @@
 # BE-8 Digital Asset Policy Gate
 
+> Historical baseline: 최신 Active Runtime 책임경계와 후속 변경 기준은
+> [DA-P0-1 Runtime Realignment Impact](digital-asset-runtime-realignment-impact.md)를 따른다.
+
 이 Slice는 Digital Asset 구매 요청의 KYC, AML, Wallet Verification, Amount Limit을 외부 Connector 실행 전에 평가한다.
 
 ## Runtime Order
