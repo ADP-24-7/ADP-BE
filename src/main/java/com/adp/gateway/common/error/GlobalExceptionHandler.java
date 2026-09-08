@@ -288,8 +288,10 @@ public class GlobalExceptionHandler {
         ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
         HttpStatus status = switch (reasonCode) {
             case DIGITAL_ASSET_ARTIFACT_INGEST_FORBIDDEN -> HttpStatus.FORBIDDEN;
-            case DIGITAL_ASSET_ARTIFACT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case DIGITAL_ASSET_ARTIFACT_NOT_FOUND,
+                 DIGITAL_ASSET_ARTIFACT_OBJECT_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case DIGITAL_ASSET_ARTIFACT_CONFLICT -> HttpStatus.CONFLICT;
+            case DIGITAL_ASSET_ARTIFACT_SIZE_LIMIT_EXCEEDED -> HttpStatus.PAYLOAD_TOO_LARGE;
             case DIGITAL_ASSET_ARTIFACT_STORE_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };

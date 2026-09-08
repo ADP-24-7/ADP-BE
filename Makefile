@@ -34,7 +34,7 @@ DOCKER_RUN_GRADLE_DEV := docker run --rm --network adp-local \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/dev-run-project-cache
 
-.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e
+.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e ncp-artifact-ingest-e2e
 
 help:
 	@printf "%s\n" \
@@ -53,6 +53,7 @@ help:
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
 		"  make ai-eval-e2e Run the explicitly confirmed real three-model Evaluation and export the DA Bundle" \
+		"  make ncp-artifact-ingest-e2e Read the DA Bundle from NCP and ingest it through the BE API" \
 		"  make docker-down Stop full dev stack"
 
 setup: env docker-network
@@ -101,3 +102,6 @@ docker-ps:
 
 ai-eval-e2e:
 	./scripts/run-ai-evaluation-e2e.sh
+
+ncp-artifact-ingest-e2e: docker-network
+	./scripts/run-ncp-artifact-ingest-e2e.sh

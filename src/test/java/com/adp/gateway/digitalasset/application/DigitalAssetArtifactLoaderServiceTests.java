@@ -60,6 +60,26 @@ class DigitalAssetArtifactLoaderServiceTests {
     }
 
     @Test
+    void storageFailureCannotCreatePartialLifecycleState() {
+        AuthPrincipal operator = principal(
+            "institution-local", Set.of("tokenized_asset_purchase"), AdpRole.OPERATOR
+        );
+        when(validator.validate(any(), any(), any())).thenThrow(
+            new DigitalAssetArtifactIngestionException("DIGITAL_ASSET_ARTIFACT_STORE_UNAVAILABLE")
+        );
+
+        assertThatThrownBy(() -> service.ingest(
+            operator, "handoff/validated/artifact/1.0.0/" + "a".repeat(64) + ".json",
+            "sha256:" + "b".repeat(64)
+        ))
+            .isInstanceOf(DigitalAssetArtifactIngestionException.class)
+            .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
+            .isEqualTo("DIGITAL_ASSET_ARTIFACT_STORE_UNAVAILABLE");
+
+        verifyNoInteractions(persistence, lifecycleService);
+    }
+
+    @Test
     void rejectsCrossInstitutionAndCrossWorkloadBindingBeforeLifecycleCreation() {
         AuthPrincipal operator = principal("institution-local", Set.of("tokenized_asset_purchase"), AdpRole.OPERATOR);
         when(validator.validate(any(), any(), any())).thenReturn(bundle("other-institution", "other-workload", "a".repeat(64)));
