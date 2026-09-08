@@ -19,6 +19,7 @@ Schema/Digest/Semantic 검증을 그대로 통과시켜 Lifecycle `CANDIDATE`로
 - Endpoint: `https://kr.object.ncloudstorage.com`
 - Bucket: `adp-qa-data-artifacts`
 - 허용 key: `handoff/validated/{artifact}/{version}/{lowercase-sha256}.json`
+- 다운로드 raw bytes의 SHA-256과 object key 파일명의 digest가 다르면 P0-5 JSON 검증 전에 차단한다.
 - URL, 절대경로, 역슬래시, traversal, 비허용 prefix와 non-content-addressed key는 요청 전에 차단한다.
 - Manifest는 1 MiB, 개별 Artifact는 4 MiB까지만 읽는다.
 - Object 조회는 `maxBytes + 1` 범위 요청으로 제한하고 초과 응답은 `413`으로 정규화한다.
@@ -59,5 +60,8 @@ make ncp-artifact-ingest-e2e
 
 기본 `make test`는 외부 NCP에 접근하지 않으며 실제 E2E는 확인 변수와 Credential이 모두 있을 때만 실행된다.
 성공 시 `build/ncp-artifact-ingest-e2e/evidence.json`에 Credential 값이 없는 실행 증적을 생성한다.
+Evidence는 reference producer SHA, 현재 DA HEAD, DA worktree 상태, committed reference 여부와
+storage manifest digest/key 결속 결과를 구분해서 기록한다. Squash merge로 producer SHA와 현재 DA HEAD가
+다를 수 있으므로 두 값을 동일하다고 추정하지 않는다.
 
 2026-09-08 기준 DA `main`의 실제 NCP reference를 사용한 격리 DB E2E가 통과했다.

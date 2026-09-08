@@ -4,6 +4,9 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.regex.Pattern;
 
 import com.adp.gateway.digitalasset.application.DigitalAssetArtifactContentStore;
@@ -50,6 +53,7 @@ public final class NcpDigitalAssetArtifactContentStore
             if (bytes.length > maxBytes) {
                 throw rejected("DIGITAL_ASSET_ARTIFACT_SIZE_LIMIT_EXCEEDED");
             }
+            verifyContentAddress(reference, bytes);
             return decodeUtf8(bytes);
         } catch (DigitalAssetArtifactIngestionException exception) {
             throw exception;
@@ -76,6 +80,24 @@ public final class NcpDigitalAssetArtifactContentStore
         if (reference == null || reference.length() > 512
             || !CONTENT_ADDRESSED_REFERENCE.matcher(reference).matches()) {
             throw rejected("DIGITAL_ASSET_ARTIFACT_REFERENCE_INVALID");
+        }
+    }
+
+    private static void verifyContentAddress(String reference, byte[] bytes) {
+        int filenameStart = reference.lastIndexOf('/') + 1;
+        String expectedDigest = reference.substring(filenameStart, reference.length() - ".json".length());
+        try {
+            String actualDigest = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(bytes)
+            );
+            if (!MessageDigest.isEqual(
+                expectedDigest.getBytes(StandardCharsets.US_ASCII),
+                actualDigest.getBytes(StandardCharsets.US_ASCII)
+            )) {
+                throw rejected("DIGITAL_ASSET_ARTIFACT_DIGEST_MISMATCH");
+            }
+        } catch (NoSuchAlgorithmException exception) {
+            throw rejected("DIGITAL_ASSET_ARTIFACT_STORE_UNAVAILABLE", exception);
         }
     }
 

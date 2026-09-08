@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import com.adp.gateway.digitalasset.application.DigitalAssetArtifactIngestionException;
 import org.junit.jupiter.api.Test;
@@ -21,13 +24,14 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 class NcpDigitalAssetArtifactContentStoreTests {
-    private static final String REFERENCE = "handoff/validated/DA-ARTIFACT/1.0.0/"
-        + "a".repeat(64) + ".json";
+    private static final byte[] VALID_CONTENT = "{\"status\":\"PASS\"}"
+        .getBytes(StandardCharsets.UTF_8);
+    private static final String REFERENCE = referenceFor("DA-ARTIFACT", VALID_CONTENT);
 
     @Test
     void loadsOnlyBoundedContentAddressedJsonFromFixedBucket() {
         S3Client client = mock(S3Client.class);
-        byte[] content = "{\"status\":\"PASS\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] content = VALID_CONTENT;
         when(client.getObjectAsBytes(any(GetObjectRequest.class))).thenReturn(
             ResponseBytes.fromByteArray(
                 GetObjectResponse.builder().contentLength((long) content.length).build(), content
@@ -74,7 +78,7 @@ class NcpDigitalAssetArtifactContentStoreTests {
             oversizedClient, "adp-qa-data-artifacts"
         );
         assertReason(
-            () -> oversized.load(REFERENCE, 4),
+            () -> oversized.load(referenceFor("OVERSIZED", new byte[5]), 4),
             "DIGITAL_ASSET_ARTIFACT_SIZE_LIMIT_EXCEEDED"
         );
 
@@ -89,9 +93,21 @@ class NcpDigitalAssetArtifactContentStoreTests {
             malformedClient, "adp-qa-data-artifacts"
         );
         assertReason(
-            () -> malformed.load(REFERENCE, 1024),
+            () -> malformed.load(
+                referenceFor("MALFORMED", new byte[] {(byte) 0xc3, (byte) 0x28}), 1024
+            ),
             "DIGITAL_ASSET_ARTIFACT_SCHEMA_INVALID"
         );
+    }
+
+    @Test
+    void rejectsManifestWhenFilenameDigestDoesNotMatchDownloadedBytes() {
+        assertPhysicalDigestMismatch("MANIFEST", "{\"manifest\":true}");
+    }
+
+    @Test
+    void rejectsArtifactWhenFilenameDigestDoesNotMatchDownloadedBytes() {
+        assertPhysicalDigestMismatch("ARTIFACT", "{\"artifact\":true}");
     }
 
     @Test
@@ -148,5 +164,34 @@ class NcpDigitalAssetArtifactContentStoreTests {
             .isInstanceOf(DigitalAssetArtifactIngestionException.class)
             .extracting(exception -> ((DigitalAssetArtifactIngestionException) exception).reasonCode())
             .isEqualTo(reasonCode);
+    }
+
+    private void assertPhysicalDigestMismatch(String artifactId, String content) {
+        S3Client client = mock(S3Client.class);
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        when(client.getObjectAsBytes(any(GetObjectRequest.class))).thenReturn(
+            ResponseBytes.fromByteArray(
+                GetObjectResponse.builder().contentLength((long) bytes.length).build(), bytes
+            )
+        );
+        String wrongReference = "handoff/validated/%s/1.0.0/%s.json"
+            .formatted(artifactId, "0".repeat(64));
+
+        assertReason(
+            () -> new NcpDigitalAssetArtifactContentStore(client, "adp-qa-data-artifacts")
+                .load(wrongReference, 1024),
+            "DIGITAL_ASSET_ARTIFACT_DIGEST_MISMATCH"
+        );
+    }
+
+    private static String referenceFor(String artifactId, byte[] content) {
+        try {
+            String digest = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(content)
+            );
+            return "handoff/validated/%s/1.0.0/%s.json".formatted(artifactId, digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }
