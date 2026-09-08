@@ -1,0 +1,10 @@
+package com.adp.gateway.digitalasset.domain;
+
+public enum DigitalAssetArtifactControl {
+    APPROVED_VS_REQUESTED_MATCH,
+    REQUIRED_OUTBOUND_FIELD_PRESENCE,
+    REQUIRED_EXACT_PRESERVATION,
+    TRANSFORM_FIELD_SEPARATION,
+    DESTINATION_SPECIFIC_PAYLOAD,
+    TRACE_BINDING
+}

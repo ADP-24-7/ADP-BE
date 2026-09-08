@@ -703,6 +703,36 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v27MigrationCreatesDigitalAssetArtifactIngestionMetadata() {
+        Integer tableCount = jdbcClient.sql("""
+            select count(*) from information_schema.tables
+            where table_schema = 'policy' and table_name = 'digital_asset_artifact_ingestion'
+            """).query(Integer.class).single();
+        Integer columnCount = jdbcClient.sql("""
+            select count(*) from information_schema.columns
+            where table_schema = 'policy' and table_name = 'digital_asset_artifact_ingestion'
+              and column_name in (
+                'institution_id', 'artifact_id', 'artifact_version', 'artifact_digest',
+                'manifest_schema_version', 'manifest_reference', 'canonical_contract_version',
+                'canonical_contract_digest', 'workload_id', 'purpose_code',
+                'destination_profile_id', 'file_count', 'lifecycle_stage', 'ingested_by', 'ingested_at'
+              )
+            """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+            select count(*) from information_schema.table_constraints
+            where table_schema = 'policy' and table_name = 'digital_asset_artifact_ingestion'
+              and constraint_name in (
+                'chk_da_artifact_digest', 'chk_da_artifact_contract_digest',
+                'chk_da_artifact_file_count', 'chk_da_artifact_lifecycle'
+              )
+            """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(columnCount).isEqualTo(15);
+        assertThat(constraintCount).isEqualTo(4);
+    }
+
+    @Test
     void v22MigrationCreatesAiModelExecutionEvidence() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*) from information_schema.tables

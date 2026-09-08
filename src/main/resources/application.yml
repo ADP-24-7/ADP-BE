@@ -15,6 +15,10 @@ spring:
       add-mappings: false
 
 adp:
+  digital-asset:
+    artifact-store:
+      type: ${ADP_DIGITAL_ASSET_ARTIFACT_STORE_TYPE:disabled}
+      local-root: ${ADP_DIGITAL_ASSET_ARTIFACT_STORE_LOCAL_ROOT:.}
   observability:
     prometheus-public: ${ADP_PROMETHEUS_PUBLIC:false}
   local-user-auth:

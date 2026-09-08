@@ -8,6 +8,8 @@ public final class DigitalAssetCanonicalContract {
     public static final String SCHEMA_VERSION = "adp-digital-asset-runtime-contract/v1";
     public static final String ARTIFACT_ID = "ADP-DIGITAL-ASSET-RUNTIME-CONTRACT";
     public static final String ARTIFACT_VERSION = "1.0.0";
+    public static final String ARTIFACT_CONTENT_DIGEST =
+        "sha256:886842702fad124a95e73f0f714ffacef56d5cbd5a4c0f222440279d106b3504";
     public static final String CANONICALIZATION_VERSION = "adp-canonical-json/v1";
 
     public static final String EXECUTION_PACK = "DIGITAL_ASSET";

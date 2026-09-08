@@ -10,6 +10,7 @@ import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
 import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUnavailableException;
 import com.adp.gateway.digitalasset.application.ApprovedTransactionUnavailableException;
+import com.adp.gateway.digitalasset.application.DigitalAssetArtifactIngestionException;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
@@ -276,6 +277,22 @@ public class GlobalExceptionHandler {
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };
         return errorResponse(reasonCode, "Policy lifecycle operation rejected", status, request);
+    }
+
+    @ExceptionHandler(DigitalAssetArtifactIngestionException.class)
+    ResponseEntity<ErrorResponse> handleDigitalAssetArtifactIngestion(
+        DigitalAssetArtifactIngestionException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case DIGITAL_ASSET_ARTIFACT_INGEST_FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case DIGITAL_ASSET_ARTIFACT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case DIGITAL_ASSET_ARTIFACT_CONFLICT -> HttpStatus.CONFLICT;
+            case DIGITAL_ASSET_ARTIFACT_STORE_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            default -> HttpStatus.UNPROCESSABLE_ENTITY;
+        };
+        return errorResponse(reasonCode, "Digital Asset artifact ingestion rejected", status, request);
     }
 
     @ExceptionHandler(OutboundGuardException.class)

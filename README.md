@@ -107,6 +107,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [DA-P0-2 Approved Transaction Trust Boundary](docs/da-p0-2-approved-transaction-boundary.md)
 - [DA-P0-3 Digital Asset Domain Contracts](docs/da-p0-3-domain-contracts.md)
 - [DA-P0-4 Canonical Contract Freeze](docs/da-p0-4-canonical-contract.md)
+- [DA-P0-5 Artifact Loader](docs/da-p0-5-artifact-loader.md)
 - [Pack Runtime Resolver](docs/pack-runtime-resolvers.md)
 - [BE-9A Idempotency Core](docs/be-9a-idempotency-core.md)
 - [BE-9B External Interaction Recovery Core](docs/be-9b-external-interaction-recovery.md)
