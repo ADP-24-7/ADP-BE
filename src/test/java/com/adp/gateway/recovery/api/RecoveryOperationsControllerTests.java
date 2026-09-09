@@ -127,6 +127,53 @@ class RecoveryOperationsControllerTests {
     }
 
     @Test
+    void markReviewDoesNotConsumeAttemptAndCanLaterBeReconciled() throws Exception {
+        Seed seed = seedRecovery("review-attempt");
+        jdbcClient.sql("""
+                update runtime.external_interaction_recovery
+                set attempt_count = 4, max_attempts = 5
+                where recovery_id = :recoveryId
+                """)
+            .param("recoveryId", seed.recoveryId())
+            .update();
+
+        mockMvc.perform(post("/api/admin/recovery/incidents/{recoveryId}/review", seed.recoveryId())
+                .header("X-ADP-User-Id", "privileged-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"operationId\":\"op_review_" + seed.suffix() + "\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.recoveryStatus").value("MANUAL_REVIEW"));
+
+        RecoveryAttempt reviewed = recoveryAttempt(seed.recoveryId());
+        assertThat(reviewed.recoveryStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(reviewed.attemptCount()).isEqualTo(4);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        var claimed = recoveryPersistence.claimById(
+            seed.recoveryId(), "worker-after-review", "institution_local", Set.of("customer_summary"),
+            now, java.time.Duration.ofSeconds(30)
+        ).orElseThrow();
+        assertThat(claimed.attemptCount()).isEqualTo(5);
+        assertThat(recoveryPersistence.reconcile(
+            seed.recoveryId(), "worker-after-review",
+            new com.adp.gateway.recovery.domain.ExternalStatusQueryResult(
+                ConnectorStatus.ACKNOWLEDGED, "a".repeat(64)
+            ),
+            now.plusSeconds(1)
+        )).isTrue();
+
+        assertThat(recoveryAttempt(seed.recoveryId()).recoveryStatus()).isEqualTo("RECONCILED");
+        String runtimeStatus = jdbcClient.sql("""
+                select status from runtime.runtime_execution where execution_id = :executionId
+                """)
+            .param("executionId", seed.executionId())
+            .query(String.class)
+            .single();
+        assertThat(runtimeStatus).isEqualTo("EXTERNALLY_RECONCILED");
+    }
+
+    @Test
     void operatorCannotIssueRecoveryCommand() throws Exception {
         Seed seed = seedRecovery("forbidden");
 
@@ -176,7 +223,8 @@ class RecoveryOperationsControllerTests {
             .single();
         jdbcClient.sql("""
                 update runtime.runtime_execution
-                set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN'
+                set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN',
+                    idempotency_expires_at = null
                 where execution_id = :executionId
                 """)
             .param("executionId", executionId)
@@ -199,6 +247,17 @@ class RecoveryOperationsControllerTests {
             .query(String.class)
             .single();
         return new Seed(recoveryId, executionId, connector.providerRequestId(), suffix);
+    }
+
+    private RecoveryAttempt recoveryAttempt(String recoveryId) {
+        return jdbcClient.sql("""
+                select recovery_status, attempt_count
+                from runtime.external_interaction_recovery
+                where recovery_id = :recoveryId
+                """)
+            .param("recoveryId", recoveryId)
+            .query(RecoveryAttempt.class)
+            .single();
     }
 
     private String request(String idempotencyKey) {
@@ -227,5 +286,8 @@ class RecoveryOperationsControllerTests {
     }
 
     private record Seed(String recoveryId, String executionId, String providerRequestId, String suffix) {
+    }
+
+    private record RecoveryAttempt(String recoveryStatus, int attemptCount) {
     }
 }

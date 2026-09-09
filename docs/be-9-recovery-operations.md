@@ -15,6 +15,7 @@ claim + lease
 ```
 
 - 자동 scheduler와 수동 명령은 동일한 PostgreSQL claim/lease 경계를 사용한다.
+- Reconcile/Retry claim만 외부 처리 attempt를 소비하며 `MARK_REVIEW`는 별도 claim으로 attempt를 증가시키지 않는다.
 - worker는 지수 backoff와 최대 시도 횟수를 적용하며 batch 크기를 제한한다.
 - `NOT_SENT`는 Status Query Adapter가 확인한 경우에만 Retry Port 호출을 허용한다.
 - Status/Retry Adapter가 없거나 둘 이상 매칭되면 외부 호출 없이 fail-closed한다.
@@ -55,6 +56,9 @@ V37은 append-only `runtime.recovery_operation_event`와 incident 조회 인덱�
 
 `FAILED`, `REVIEW_REQUIRED`, 진행 중 Recovery가 있는 실행은 자동 archive하지 않는다. V38 이전 실행은 당시 Provider와
 reconciliation 보존 계약을 알 수 없으므로 `LEGACY_INDEFINITE`로 유지한다.
+
+Recovery가 `EXTERNALLY_RECONCILED`로 수렴할 때도 동일 트랜잭션에서 실행에 pinning된 retention seconds로 만료시간을
+설정한다. 현재 애플리케이션 설정을 다시 읽지 않으므로 실행 이후 설정 변경이 기존 reservation의 수명을 바꾸지 않는다.
 
 ## Deferred Production Gates
 

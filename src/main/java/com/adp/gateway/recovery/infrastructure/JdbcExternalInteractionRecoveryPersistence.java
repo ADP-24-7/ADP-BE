@@ -173,6 +173,43 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
 
     @Override
     @Transactional
+    public Optional<ExternalInteractionRecovery> claimForManualReview(
+        String recoveryId,
+        String workerId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        OffsetDateTime now,
+        Duration leaseDuration
+    ) {
+        String workloadScope = allowedWorkloads.contains("*")
+            ? ""
+            : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and re.workload_id in (:allowedWorkloads)";
+        JdbcClient.StatementSpec statement = jdbcClient.sql("""
+                update runtime.external_interaction_recovery r
+                set recovery_status = 'CLAIMED',
+                    lease_owner = :workerId,
+                    lease_until = :leaseUntil,
+                    updated_at = :now
+                from runtime.runtime_execution re
+                where r.recovery_id = :recoveryId
+                  and re.execution_id = r.execution_id
+                  and re.institution_id = :institutionId
+                  and r.recovery_status in ('PENDING', 'RETRY_SCHEDULED', 'MANUAL_REVIEW', 'EXHAUSTED')
+                  and (r.lease_until is null or r.lease_until <= :now)
+                """ + workloadScope + " returning r.*")
+            .param("recoveryId", recoveryId)
+            .param("workerId", workerId)
+            .param("institutionId", institutionId)
+            .param("leaseUntil", now.plus(leaseDuration))
+            .param("now", now);
+        if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
+            statement = statement.param("allowedWorkloads", allowedWorkloads);
+        }
+        return statement.query(RECOVERY_ROW_MAPPER).optional();
+    }
+
+    @Override
+    @Transactional
     public RecoveryTransitionResult reschedule(
         String recoveryId,
         String workerId,
@@ -310,6 +347,16 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
                 update runtime.runtime_execution re
                 set connector_status = :externalStatus,
                     status = 'EXTERNALLY_RECONCILED',
+                    idempotency_expires_at = case
+                        when idempotency_retention_policy = 'TERMINAL_TTL_V1'
+                        then coalesce(
+                            idempotency_expires_at,
+                            :queriedAt + make_interval(
+                                secs => idempotency_retention_seconds::double precision
+                            )
+                        )
+                        else idempotency_expires_at
+                    end,
                     updated_at = :queriedAt
                 from runtime.external_interaction_recovery r
                 where r.recovery_id = :recoveryId

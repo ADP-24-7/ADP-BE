@@ -56,3 +56,21 @@ Connector, Recovery와 Audit row는 그대로 남아 사후 추적이 가능하�
 
 과거 실행은 당시 Provider idempotency 보존기간과 reconciliation window를 알 수 없다. 임의 backfill로 namespace를 풀지 않고
 `LEGACY_INDEFINITE`로 유지한다. 신규 실행만 생성 시점의 retention seconds를 pinning해 이후 설정 변경과 분리한다.
+
+## Recovery Reconcile이 Terminal TTL 설정을 우회한 문제
+
+일반 Runtime 상태 갱신은 `EXTERNALLY_RECONCILED`의 만료시간을 설정하지만 Recovery persistence는 상태를 직접 갱신했다.
+그 결과 정상 수렴한 reservation의 `idempotency_expires_at`이 비어 namespace를 영구 점유할 수 있었다. Recovery,
+Connector, Runtime을 수렴시키는 동일 트랜잭션에서 실행에 pinning된 retention seconds로 만료시간도 함께 설정했다.
+
+## MARK_REVIEW가 외부 처리 Attempt를 소비한 문제
+
+모든 수동 명령이 같은 claim SQL을 사용해 `MARK_REVIEW`도 attempt count를 증가시켰다. 마지막 budget 직전에 Review로
+전환하면 이후 Provider 상태가 확인되어도 Reconcile할 수 없는 dead-end가 생겼다. 외부 상태 조회와 재전송 claim은 attempt를
+소비하고, 운영자의 Review 전환은 별도 claim을 사용해 lease만 획득하도록 분리했다.
+
+## Worker Crash 후 IN_PROGRESS Operation Evidence
+
+operation 예약 직후 프로세스가 종료되면 event가 `IN_PROGRESS`로 남을 수 있다. 다른 operation ID와 만료된 incident lease로
+복구할 수 있어 현재 Recovery 자체를 막지는 않는다. BE-11 운영 보강에서 stale operation age metric과
+`STALE`/`ABANDONED` 전이 정책을 함께 정의한다.

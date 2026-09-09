@@ -56,7 +56,8 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
             .single();
         jdbcClient.sql("""
                 update runtime.runtime_execution
-                set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN'
+                set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN',
+                    idempotency_expires_at = null
                 where execution_id = :executionId
                 """)
             .param("executionId", executionId)
@@ -85,7 +86,11 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
         ConvergedState state = jdbcClient.sql("""
                 select re.status as runtime_status, re.connector_status,
                        ce.status as connector_execution_status, rr.recovery_status,
-                       rr.last_observed_external_status, rr.status_query_evidence_digest
+                       rr.last_observed_external_status, rr.status_query_evidence_digest,
+                       re.idempotency_expires_at, re.idempotency_retention_seconds,
+                       extract(epoch from (
+                           re.idempotency_expires_at - rr.last_status_queried_at
+                       ))::bigint as idempotency_retention_delay_seconds
                 from runtime.runtime_execution re
                 join runtime.connector_execution ce on ce.connector_execution_id = re.connector_execution_id
                 join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
@@ -100,6 +105,9 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
         assertThat(state.recoveryStatus()).isEqualTo("RECONCILED");
         assertThat(state.lastObservedExternalStatus()).isEqualTo("ACKNOWLEDGED");
         assertThat(state.statusQueryEvidenceDigest()).hasSize(64);
+        assertThat(state.idempotencyExpiresAt()).isNotNull();
+        assertThat(state.idempotencyRetentionDelaySeconds())
+            .isEqualTo(state.idempotencyRetentionSeconds());
 
         mockMvc.perform(post("/v1/runtime/executions")
                 .header("X-Request-Id", "req_replay_" + suffix)
@@ -192,7 +200,9 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
             .query(RecoverySeed.class)
             .single();
         jdbcClient.sql("""
-                update runtime.runtime_execution set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN'
+                update runtime.runtime_execution
+                set status = 'EGRESSING', connector_status = 'SENT_UNKNOWN',
+                    idempotency_expires_at = null
                 where execution_id = :executionId
                 """)
             .param("executionId", executionId)
@@ -291,7 +301,10 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
         String connectorExecutionStatus,
         String recoveryStatus,
         String lastObservedExternalStatus,
-        String statusQueryEvidenceDigest
+        String statusQueryEvidenceDigest,
+        OffsetDateTime idempotencyExpiresAt,
+        long idempotencyRetentionSeconds,
+        long idempotencyRetentionDelaySeconds
     ) {
     }
 

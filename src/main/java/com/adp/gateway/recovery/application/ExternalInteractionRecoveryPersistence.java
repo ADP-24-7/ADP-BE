@@ -24,6 +24,15 @@ public interface ExternalInteractionRecoveryPersistence {
         Duration leaseDuration
     );
 
+    Optional<ExternalInteractionRecovery> claimForManualReview(
+        String recoveryId,
+        String workerId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        OffsetDateTime now,
+        Duration leaseDuration
+    );
+
     record RecoveryClaimResult(Optional<ExternalInteractionRecovery> claimed, int exhaustedCount) {
 
         public RecoveryClaimResult {

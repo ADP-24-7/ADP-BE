@@ -85,9 +85,13 @@ public class RecoveryOperationsService {
 
         String workerId = "manual:" + principal.principalId() + ":" + operationId;
         try {
-            var recovery = recoveryPersistence.claimById(
-                recoveryId, workerId, principal.institutionId(), principal.workloadIds(), now, leaseDuration
-            ).orElseThrow(() -> new RecoveryOperationException("RECOVERY_COMMAND_NOT_ALLOWED"));
+            var recovery = (type == RecoveryOperationType.MARK_REVIEW
+                ? recoveryPersistence.claimForManualReview(
+                    recoveryId, workerId, principal.institutionId(), principal.workloadIds(), now, leaseDuration
+                )
+                : recoveryPersistence.claimById(
+                    recoveryId, workerId, principal.institutionId(), principal.workloadIds(), now, leaseDuration
+                )).orElseThrow(() -> new RecoveryOperationException("RECOVERY_COMMAND_NOT_ALLOWED"));
             RecoveryProcessingResult processed = switch (type) {
                 case RECONCILE -> recoveryService.processClaimed(recovery, workerId, false);
                 case RETRY -> recoveryService.processClaimed(recovery, workerId, true);
