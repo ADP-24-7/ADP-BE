@@ -39,3 +39,20 @@ Recovery table에는 요청 payload를 저장하지 않는다. 따라서 공통 
 Recovery worker는 전역 due queue에서 `SKIP LOCKED`로 하나를 선택하므로 다른 테스트가 남긴 PENDING row를 정상적으로
 claim할 수 있다. 신규 API 테스트가 생성한 operation/recovery row를 매 테스트 후 제거해 대상 선택의 재현성을 보장했다.
 운영 동작의 결함이 아니라 공유 DB fixture 격리 문제였지만, queue 테스트에서는 데이터 생명주기를 명시해야 한다.
+
+## 멱등성 TTL을 요청 생성 시점부터 계산한 위험
+
+장시간 실행이나 `SENT_UNKNOWN` 복구 중 key가 먼저 만료되면 동일 외부 요청이 다시 전송될 수 있다. TTL은 요청 생성 시점이
+아니라 `COMPLETED`, `BLOCKED`, `EXTERNALLY_RECONCILED`처럼 안전하게 종료된 시점부터 계산한다. `FAILED`,
+`REVIEW_REQUIRED`와 진행 중 Recovery는 자동으로 namespace를 해제하지 않는다.
+
+## Key 재사용을 위해 Runtime Row를 삭제한 증적 훼손 위험
+
+멱등성 namespace와 Audit evidence의 생명주기를 같은 것으로 취급하면 key 재사용 과정에서 실행 이력이 삭제될 수 있다.
+V38은 만료된 row에 `idempotency_archived_at`만 기록하고 partial unique index의 활성 namespace에서 제외한다. Runtime,
+Connector, Recovery와 Audit row는 그대로 남아 사후 추적이 가능하다.
+
+## 기존 실행에 신규 TTL을 일괄 적용한 복구 계약 변경 위험
+
+과거 실행은 당시 Provider idempotency 보존기간과 reconciliation window를 알 수 없다. 임의 backfill로 namespace를 풀지 않고
+`LEGACY_INDEFINITE`로 유지한다. 신규 실행만 생성 시점의 retention seconds를 pinning해 이후 설정 변경과 분리한다.

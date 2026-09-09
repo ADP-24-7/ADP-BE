@@ -45,18 +45,24 @@ reason code와 digest만 저장하며 provider correlation key와 요청/응답 
 | `adp.recovery.scheduler.enabled` | `false` | scheduler opt-in |
 | `adp.recovery.scheduler.fixed-delay` | `30s` | polling 간격 |
 | `adp.recovery.scheduler.batch-size` | `20` | 1회 처리 상한, 최대 100 |
+| `adp.idempotency.retention` | `72h` | 안전한 terminal 실행의 key namespace 보존기간 |
 
 ## Persistence
 
-V37은 append-only `runtime.recovery_operation_event`와 incident 조회 인덱스를 추가한다. Recovery/Connector/Runtime의
-상태 수렴은 기존 transaction 경계를 유지하고 stale lease update는 거부한다.
+V37은 append-only `runtime.recovery_operation_event`와 incident 조회 인덱스를 추가한다. V38은 신규 실행에
+`TERMINAL_TTL_V1` 정책을 pinning하고 `COMPLETED`, `BLOCKED`, `EXTERNALLY_RECONCILED`에 도달한 시점부터 만료를 계산한다.
+동일 namespace가 다시 요청될 때 만료된 예약만 lazy archive하며 Runtime과 Audit evidence row는 삭제하지 않는다.
+
+`FAILED`, `REVIEW_REQUIRED`, 진행 중 Recovery가 있는 실행은 자동 archive하지 않는다. V38 이전 실행은 당시 Provider와
+reconciliation 보존 계약을 알 수 없으므로 `LEGACY_INDEFINITE`로 유지한다.
 
 ## Deferred Production Gates
 
 - 실제 AI/Digital Asset Provider별 Status Query와 Safe Retry Adapter
 - Destination/Provider별 versioned backoff/max-attempt 정책
 - queue depth/oldest age alert와 management network isolation
-- 법적 Audit 보존기간과 FK 관계를 확정한 뒤 적용할 idempotency retention/archive
+- 운영 Provider별 reconciliation window보다 짧지 않도록 retention 값을 검증하는 배포 Gate
+- 법적 Audit 보존기간에 따른 evidence archive store와 물리 cleanup 정책
 
-Runtime row를 임의 삭제해 key를 재사용하게 만드는 방식은 Audit evidence를 훼손할 수 있으므로 retention 정책으로 간주하지
-않는다. 보존기간과 archive store가 확정되기 전에는 기존 namespace를 유지한다.
+Runtime row를 임의 삭제해 key를 재사용하게 만드는 방식은 Audit evidence를 훼손하므로 사용하지 않는다. V38의 archive는
+멱등성 unique namespace에서만 제외하는 논리적 archive이며 영속 evidence는 그대로 보존한다.

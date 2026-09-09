@@ -1,6 +1,7 @@
 package com.adp.gateway.runtime.infrastructure;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ import com.adp.gateway.policyharness.domain.PolicyHarnessBinding;
 import com.adp.gateway.policyharness.domain.PolicyLayerReference;
 import com.adp.gateway.transform.domain.TransformFieldResult;
 import com.adp.gateway.transform.domain.TransformResult;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -40,28 +42,40 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     private final JdbcClient jdbcClient;
     private final Clock clock;
     private final ExternalInteractionRecoveryPersistence recoveryPersistence;
+    private final Duration idempotencyRetention;
 
     public JdbcRuntimeExecutionPersistence(
         JdbcClient jdbcClient,
         Clock clock,
-        ExternalInteractionRecoveryPersistence recoveryPersistence
+        ExternalInteractionRecoveryPersistence recoveryPersistence,
+        @Value("${adp.idempotency.retention:72h}") Duration idempotencyRetention
     ) {
+        if (idempotencyRetention.isNegative() || idempotencyRetention.isZero()) {
+            throw new IllegalArgumentException("Idempotency retention must be positive");
+        }
         this.jdbcClient = jdbcClient;
         this.clock = clock;
         this.recoveryPersistence = recoveryPersistence;
+        this.idempotencyRetention = idempotencyRetention;
     }
 
     @Override
+    @Transactional
     public void recordReceived(
         RuntimeExecutionTrace trace,
         String idempotencyInstitutionId,
         String requestHash
     ) {
         try {
+            OffsetDateTime now = OffsetDateTime.now(clock);
+            archiveExpiredReservation(
+                idempotencyInstitutionId, trace.workloadId(), trace.idempotencyKey(), now
+            );
             jdbcClient.sql("""
                 insert into runtime.runtime_execution (
                     execution_id, request_id, trace_id, idempotency_key, workload_id,
                     idempotency_institution_id, request_hash,
+                    idempotency_retention_policy, idempotency_retention_seconds,
                     purpose_code, subject_ref_digest, provider_profile_id,
                     destination_profile_id, destination_profile_version, destination_profile_digest,
                     institution_id, approval_reference,
@@ -71,6 +85,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 values (
                     :executionId, :requestId, :traceId, :idempotencyKey, :workloadId,
                     :idempotencyInstitutionId, :requestHash,
+                    'TERMINAL_TTL_V1', :idempotencyRetentionSeconds,
                     :purposeCode, :subjectRefDigest, :providerProfileId,
                     :destinationProfileId, :destinationProfileVersion, :destinationProfileDigest,
                     :institutionId, :approvalReference,
@@ -85,6 +100,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 .param("workloadId", trace.workloadId())
                 .param("idempotencyInstitutionId", idempotencyInstitutionId)
                 .param("requestHash", requestHash)
+                .param("idempotencyRetentionSeconds", idempotencyRetention.toSeconds())
                 .param("purposeCode", trace.purposeCode())
                 .param("subjectRefDigest", trace.subjectRefDigest())
                 .param("providerProfileId", trace.providerProfileId())
@@ -146,6 +162,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             where re.idempotency_institution_id = :institutionId
               and re.workload_id = :workloadId
               and re.idempotency_key = :idempotencyKey
+              and re.idempotency_archived_at is null
             """)
             .param("institutionId", institutionId)
             .param("workloadId", workloadId)
@@ -797,6 +814,11 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
 
     @Override
     public void updateStatus(String executionId, RuntimeExecutionStatus status) {
+        OffsetDateTime updatedAt = OffsetDateTime.now(clock);
+        if (isRetentionEligible(status)) {
+            updateTerminalStatus(executionId, status, updatedAt);
+            return;
+        }
         jdbcClient.sql("""
             update runtime.runtime_execution
             set status = :status,
@@ -805,8 +827,67 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             """)
             .param("executionId", executionId)
             .param("status", status.name())
-            .param("updatedAt", OffsetDateTime.now(clock))
+            .param("updatedAt", updatedAt)
             .update();
+    }
+
+    private void updateTerminalStatus(
+        String executionId,
+        RuntimeExecutionStatus status,
+        OffsetDateTime updatedAt
+    ) {
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set status = :status,
+                updated_at = :updatedAt,
+                idempotency_expires_at = case
+                    when idempotency_retention_policy = 'TERMINAL_TTL_V1'
+                    then coalesce(idempotency_expires_at, :expiresAt)
+                    else idempotency_expires_at
+                end
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("status", status.name())
+            .param("updatedAt", updatedAt)
+            .param("expiresAt", updatedAt.plus(idempotencyRetention))
+            .update();
+    }
+
+    private void archiveExpiredReservation(
+        String institutionId,
+        String workloadId,
+        String idempotencyKey,
+        OffsetDateTime now
+    ) {
+        jdbcClient.sql("""
+            update runtime.runtime_execution re
+            set idempotency_archived_at = :now
+            where re.idempotency_institution_id = :institutionId
+              and re.workload_id = :workloadId
+              and re.idempotency_key = :idempotencyKey
+              and re.idempotency_retention_policy = 'TERMINAL_TTL_V1'
+              and re.idempotency_archived_at is null
+              and re.idempotency_expires_at <= :now
+              and re.status in ('COMPLETED', 'BLOCKED', 'EXTERNALLY_RECONCILED')
+              and not exists (
+                  select 1
+                  from runtime.external_interaction_recovery recovery
+                  where recovery.execution_id = re.execution_id
+                    and recovery.recovery_status in ('PENDING', 'CLAIMED', 'RETRY_SCHEDULED')
+              )
+            """)
+            .param("institutionId", institutionId)
+            .param("workloadId", workloadId)
+            .param("idempotencyKey", idempotencyKey)
+            .param("now", now)
+            .update();
+    }
+
+    private boolean isRetentionEligible(RuntimeExecutionStatus status) {
+        return status == RuntimeExecutionStatus.COMPLETED
+            || status == RuntimeExecutionStatus.BLOCKED
+            || status == RuntimeExecutionStatus.EXTERNALLY_RECONCILED;
     }
 
     @Override

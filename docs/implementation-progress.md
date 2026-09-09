@@ -178,7 +178,7 @@ BE-9A 상세 계약과 후속 범위는 [BE-9A Idempotency Core](be-9a-idempoten
 - [x] Canonical request hash와 동일 요청 replay
 - [x] 다른 request hash conflict 및 동시 실행 방지
 - [x] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation core 상태 계약
-- [ ] Idempotency key retention, expiry, archive/cleanup 정책
+- [x] Terminal 기준 Idempotency key retention, expiry, lazy namespace archive
 - [ ] BE-11 Denied Attempt Evidence persistence
 - [ ] Controlled delivery 결과 재조회 또는 단기 암호화 보관 계약
 
@@ -204,7 +204,7 @@ BE-9B 상세 계약은 [BE-9B External Interaction Recovery Core](be-9b-external
 - [x] Privileged Reconcile/Retry/Review API와 operation idempotency evidence
 - [x] 수동 명령과 scheduler의 공통 claim/lease/stale worker 경계
 - [ ] 실제 Provider별 Status/Retry Adapter와 versioned Recovery Policy
-- [ ] Audit 보존기간과 결합된 Idempotency retention/archive 정책
+- [x] Evidence 삭제 없는 Idempotency retention과 lazy namespace archive
 
 ## BE-0 Completion Criteria
 
