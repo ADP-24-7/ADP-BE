@@ -51,6 +51,21 @@ class FakeDigitalAssetStatusQueryAdapterTests {
             .hasMessageContaining("not found");
     }
 
+    @Test
+    void retriesOnlyProviderStateConfirmedAsNotSent() {
+        stateStore.record("provider-request-not-sent", ConnectorStatus.NOT_SENT);
+        stateStore.record("provider-request-unknown", ConnectorStatus.SENT_UNKNOWN);
+
+        var retried = adapter.retry(recovery("provider-request-not-sent"));
+        var unchanged = adapter.retry(recovery("provider-request-unknown"));
+
+        assertThat(retried.status()).isEqualTo(ConnectorStatus.ACKNOWLEDGED);
+        assertThat(retried.evidenceDigest()).matches("[0-9a-f]{64}");
+        assertThat(unchanged.status()).isEqualTo(ConnectorStatus.SENT_UNKNOWN);
+        assertThat(stateStore.find("provider-request-unknown"))
+            .contains(ConnectorStatus.SENT_UNKNOWN);
+    }
+
     private ExternalInteractionRecovery recovery(String correlationKey) {
         OffsetDateTime now = OffsetDateTime.parse("2026-09-01T00:00:00Z");
         return new ExternalInteractionRecovery(

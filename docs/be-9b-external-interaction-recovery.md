@@ -43,6 +43,8 @@ Status Query Adapter가 같은 Connector에 둘 이상 매칭되거나 fallback�
 
 - AI/Digital Asset Provider별 status query adapter
 - Pack별 external status mapping과 mismatch recovery
-- `NOT_SENT` 안전 재전송 executor와 retry policy artifact binding
-- 운영 scheduler, alert, manual recovery API
+- Provider별 retry policy artifact binding
 - Destination/Provider별 versioned Recovery Policy와 lease/retry/backoff/max-attempt 설정
+
+공통 `NOT_SENT` 안전 재전송 경계, scheduler와 수동 운영 API는
+[BE-9 Recovery Operations](be-9-recovery-operations.md)에서 후속 구현했다.

@@ -77,6 +77,12 @@ Container Scan이 최신 Spring Boot BOM 아래에서도 수정 가능한 Tomcat
 HTTP client, base image 취약점을 검출했다. 실제 사용 dependency만 패키징하고 수정 버전과 minimal runtime image digest를
 고정했으며, Gate 실패 시에도 원인 분석용 SBOM이 남도록 pipeline 순서를 조정했다.
 
+## 16. 수동 Retry가 중복 외부 실행을 만들 수 있었던 문제
+
+운영 API가 Recovery row만 보고 즉시 재전송하면 실제 외부 처리 여부가 불명확한 요청을 중복 실행할 수 있다. 수동 명령과
+scheduler가 같은 claim/lease를 사용하게 하고, Provider 상태 조회에서 `NOT_SENT`가 확인된 경우에만 Connector별 retry
+Port를 호출하도록 고정했다. operation ID별 append-only evidence로 같은 운영 명령의 중복 실행도 차단했다.
+
 ## 발표 시 강조할 공통 원칙
 
 - Fail closed는 예외를 던지는 것뿐 아니라 부수효과 순서, DB scope, 복구 상태까지 포함한다.

@@ -56,9 +56,13 @@ Replay 응답은 기존 `executionId`와 privacy-safe policy/transform/egress me
 
 - Denied Attempt Evidence: BE-11 전후에 idempotency reservation과 독립된 `request_attempt` 증적을 추가한다.
 - Retry/Recovery: BE-9B에서 deterministic terminal replay, transient `NOT_SENT` retry, `SENT_UNKNOWN` reconciliation, acknowledged execution 재전송 금지를 구분한다.
-- Retention: 운영 SLA와 reconciliation window를 반영한 idempotency retention, `expires_at`, archive/cleanup 정책을 정의한다.
+- Physical Cleanup: 법적 Audit 보존기간과 archive store가 확정된 뒤 evidence의 물리 cleanup 정책을 정의한다.
 - Replay Delivery: Provider response 원문은 영속하거나 replay하지 않는다. 네트워크 단절 후 결과 재전달이 필요하면 short-lived encrypted output 또는 `controlled_delivery_reference`를 별도 설계한다.
 
 ## Migration
 
 V12는 기존 `(workload_id, idempotency_key)` index를 새 namespace index로 교체한다. V1~V11 실행은 `LEGACY_UNSCOPED` Institution과 실행별 legacy hash로 backfill하여 기존 이력을 변경하거나 충돌시키지 않는다.
+
+V38은 신규 reservation에 `TERMINAL_TTL_V1`과 설정된 retention을 pinning한다. 안전한 terminal 상태부터 만료를 계산하고,
+동일 namespace 재요청 시 만료된 reservation을 논리적으로 archive한다. 기존 실행은 `LEGACY_INDEFINITE`로 보존하며,
+미해결 상태나 진행 중 Recovery는 namespace를 해제하지 않는다.

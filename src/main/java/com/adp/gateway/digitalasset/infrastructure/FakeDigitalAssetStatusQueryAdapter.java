@@ -4,14 +4,16 @@ import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.recovery.application.ExternalStatusQueryPermanentException;
 import com.adp.gateway.recovery.application.ExternalStatusQueryPort;
+import com.adp.gateway.recovery.application.ExternalRetryPort;
 import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
+import com.adp.gateway.recovery.domain.ExternalRetryResult;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
-public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPort {
+public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPort, ExternalRetryPort {
 
     static final String CONNECTOR_ID = "fake-digital-asset-platform";
 
@@ -32,6 +34,11 @@ public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPo
     }
 
     @Override
+    public boolean fallback() {
+        return false;
+    }
+
+    @Override
     public ExternalStatusQueryResult query(ExternalInteractionRecovery recovery) {
         if (!supports(recovery.connectorId())) {
             throw new ExternalStatusQueryPermanentException("Unsupported digital asset connector");
@@ -47,5 +54,23 @@ public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPo
             "digital-asset-status/v1", recovery.providerCorrelationKey(), status.name()
         ));
         return new ExternalStatusQueryResult(status, evidenceDigest);
+    }
+
+    @Override
+    public ExternalRetryResult retry(ExternalInteractionRecovery recovery) {
+        if (!supports(recovery.connectorId()) || recovery.providerCorrelationKey() == null
+            || recovery.providerCorrelationKey().isBlank()) {
+            throw new ExternalStatusQueryPermanentException("Digital asset retry identity is invalid");
+        }
+        ConnectorStatus status;
+        try {
+            status = stateStore.retryIfNotSent(recovery.providerCorrelationKey());
+        } catch (IllegalStateException exception) {
+            throw new ExternalStatusQueryPermanentException("Digital asset provider request was not found");
+        }
+        String evidenceDigest = hasher.hash(String.join("|",
+            "digital-asset-retry/v1", recovery.providerCorrelationKey(), status.name()
+        ));
+        return new ExternalRetryResult(status, evidenceDigest);
     }
 }

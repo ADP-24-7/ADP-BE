@@ -303,6 +303,97 @@ class RuntimeExecutionControllerTests {
     }
 
     @Test
+    void expiredCompletedReservationReleasesNamespaceWithoutDeletingEvidence() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_expired_" + suffix;
+        String first = postRuntimeExecution(
+            "req_expired_a_" + suffix,
+            "trace_expired_a_" + suffix,
+            idempotencyKey,
+            "ticket-100"
+        );
+        String firstExecutionId = first.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        jdbcClient.sql("""
+                update runtime.runtime_execution
+                set idempotency_expires_at = now() - interval '1 second'
+                where execution_id = :executionId
+                """)
+            .param("executionId", firstExecutionId)
+            .update();
+
+        String second = postRuntimeExecution(
+            "req_expired_b_" + suffix,
+            "trace_expired_b_" + suffix,
+            idempotencyKey,
+            "ticket-999"
+        );
+        String secondExecutionId = second.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        assertThat(secondExecutionId).isNotEqualTo(firstExecutionId);
+        Integer preservedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where idempotency_institution_id = 'institution_local'
+                  and workload_id = 'customer_summary'
+                  and idempotency_key = :idempotencyKey
+                """)
+            .param("idempotencyKey", idempotencyKey)
+            .query(Integer.class)
+            .single();
+        Integer archivedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where execution_id = :executionId
+                  and idempotency_archived_at is not null
+                """)
+            .param("executionId", firstExecutionId)
+            .query(Integer.class)
+            .single();
+        assertThat(preservedCount).isEqualTo(2);
+        assertThat(archivedCount).isEqualTo(1);
+    }
+
+    @Test
+    void unresolvedReservationDoesNotReleaseNamespaceAfterConfiguredTime() throws Exception {
+        String suffix = token();
+        String idempotencyKey = "idem_unresolved_" + suffix;
+        String first = postRuntimeExecution(
+            "req_unresolved_a_" + suffix,
+            "trace_unresolved_a_" + suffix,
+            idempotencyKey,
+            "Call 010-1234-5678"
+        );
+        String firstExecutionId = first.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        jdbcClient.sql("""
+                update runtime.runtime_execution
+                set idempotency_expires_at = now() - interval '1 second'
+                where execution_id = :executionId
+                """)
+            .param("executionId", firstExecutionId)
+            .update();
+
+        mockMvc.perform(post("/v1/runtime/executions")
+                .header("X-Request-Id", "req_unresolved_b_" + suffix)
+                .header("X-Trace-Id", "trace_unresolved_b_" + suffix)
+                .header("X-ADP-API-Key", "local-dev-api-key")
+                .contentType("application/json")
+                .content(runtimeRequest(idempotencyKey, "ticket-999")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.reasonCode").value("IDEMPOTENCY_KEY_CONFLICT"));
+
+        Integer archivedCount = jdbcClient.sql("""
+                select count(*)
+                from runtime.runtime_execution
+                where execution_id = :executionId
+                  and idempotency_archived_at is not null
+                """)
+            .param("executionId", firstExecutionId)
+            .query(Integer.class)
+            .single();
+        assertThat(archivedCount).isZero();
+    }
+
+    @Test
     void concurrentIdenticalRequestsCreateOneExecutionAndOneConnectorCall() throws Exception {
         String suffix = token();
         String idempotencyKey = "idem_concurrent_" + suffix;

@@ -24,6 +24,27 @@ class FlywayMigrationTests {
     private Environment environment;
 
     @Test
+    void v37MigrationCreatesRecoveryOperationEvidence() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime' and table_name = 'recovery_operation_event'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and table_name = 'recovery_operation_event'
+                  and constraint_type in ('UNIQUE', 'CHECK')
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(constraintCount).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
     void baselineMigrationCreatesAuditEventTable() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)
@@ -405,7 +426,7 @@ class FlywayMigrationTests {
                 from pg_indexes
                 where schemaname = 'runtime'
                   and tablename = 'runtime_execution'
-                  and indexname = 'uq_runtime_execution_idempotency_scope'
+                  and indexname = 'uq_runtime_execution_active_idempotency_scope'
                 """)
             .query(Integer.class)
             .single();
@@ -448,6 +469,84 @@ class FlywayMigrationTests {
             .param("inputA", "c".repeat(64))
             .param("inputB", "d".repeat(64))
             .update()).doesNotThrowAnyException();
+    }
+
+    @Test
+    void migrationCreatesIdempotencyRetentionLifecycle() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name in (
+                    'idempotency_retention_policy',
+                    'idempotency_retention_seconds',
+                    'idempotency_expires_at',
+                    'idempotency_archived_at'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+        assertThat(columnCount).isEqualTo(4);
+
+        String indexDefinition = jdbcClient.sql("""
+                select indexdef
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'uq_runtime_execution_active_idempotency_scope'
+                """)
+            .query(String.class)
+            .single();
+        assertThat(indexDefinition).contains("WHERE (idempotency_archived_at IS NULL)");
+    }
+
+    @Test
+    void v38MigrationPreservesExistingIdempotencyReservationsIndefinitely() throws Exception {
+        String databaseName = "adp_v38_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("37").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        idempotency_institution_id, request_hash, purpose_code, input_digest,
+                        status, created_at, updated_at
+                    ) values (
+                        'exec_legacy_v37', 'req_legacy_v37', 'trace_legacy_v37', 'idem_legacy_v37',
+                        'customer_summary', 'institution_legacy', repeat('a', 64),
+                        'CUSTOMER_SUPPORT', repeat('b', 64), 'COMPLETED', now(), now()
+                    )
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select idempotency_retention_policy, idempotency_retention_seconds,
+                            idempotency_expires_at, idempotency_archived_at
+                     from runtime.runtime_execution
+                     where execution_id = 'exec_legacy_v37'
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("idempotency_retention_policy"))
+                    .isEqualTo("LEGACY_INDEFINITE");
+                assertThat(resultSet.getObject("idempotency_retention_seconds")).isNull();
+                assertThat(resultSet.getObject("idempotency_expires_at")).isNull();
+                assertThat(resultSet.getObject("idempotency_archived_at")).isNull();
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
     }
 
     @Test

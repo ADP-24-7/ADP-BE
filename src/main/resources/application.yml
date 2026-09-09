@@ -15,6 +15,14 @@ spring:
       add-mappings: false
 
 adp:
+  recovery:
+    lease-duration: ${ADP_RECOVERY_LEASE_DURATION:30s}
+    initial-backoff: ${ADP_RECOVERY_INITIAL_BACKOFF:1m}
+    max-backoff: ${ADP_RECOVERY_MAX_BACKOFF:15m}
+    scheduler:
+      enabled: ${ADP_RECOVERY_SCHEDULER_ENABLED:false}
+      fixed-delay: ${ADP_RECOVERY_SCHEDULER_FIXED_DELAY:30s}
+      batch-size: ${ADP_RECOVERY_SCHEDULER_BATCH_SIZE:20}
   security:
     trace:
       accept-caller-trace-id: ${ADP_ACCEPT_CALLER_TRACE_ID:false}
@@ -39,6 +47,8 @@ adp:
         read-timeout: ${ADP_NCP_OBJECT_STORAGE_READ_TIMEOUT:30s}
   observability:
     prometheus-public: ${ADP_PROMETHEUS_PUBLIC:false}
+  idempotency:
+    retention: ${ADP_IDEMPOTENCY_RETENTION:72h}
   local-user-auth:
     enabled: ${ADP_LOCAL_USER_AUTH_ENABLED:false}
   local-fixtures:

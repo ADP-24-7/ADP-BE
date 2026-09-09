@@ -3,6 +3,7 @@ package com.adp.gateway.recovery.application;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.Set;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
@@ -13,6 +14,24 @@ public interface ExternalInteractionRecoveryPersistence {
     void scheduleUnknown(String executionId, ConnectorResult connectorResult, OffsetDateTime now);
 
     RecoveryClaimResult claimNext(String workerId, OffsetDateTime now, Duration leaseDuration);
+
+    Optional<ExternalInteractionRecovery> claimById(
+        String recoveryId,
+        String workerId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        OffsetDateTime now,
+        Duration leaseDuration
+    );
+
+    Optional<ExternalInteractionRecovery> claimForManualReview(
+        String recoveryId,
+        String workerId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        OffsetDateTime now,
+        Duration leaseDuration
+    );
 
     record RecoveryClaimResult(Optional<ExternalInteractionRecovery> claimed, int exhaustedCount) {
 
@@ -27,6 +46,15 @@ public interface ExternalInteractionRecoveryPersistence {
     RecoveryTransitionResult reschedule(
         String recoveryId,
         String workerId,
+        OffsetDateTime nextAttemptAt,
+        String errorCode
+    );
+
+    RecoveryTransitionResult recordObservedAndReschedule(
+        String recoveryId,
+        String workerId,
+        com.adp.gateway.recovery.domain.ExternalStatusQueryResult result,
+        com.adp.gateway.recovery.domain.RetryDisposition retryDisposition,
         OffsetDateTime nextAttemptAt,
         String errorCode
     );

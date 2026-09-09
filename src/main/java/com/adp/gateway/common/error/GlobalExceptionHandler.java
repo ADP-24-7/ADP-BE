@@ -20,6 +20,7 @@ import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
 import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
+import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -171,6 +172,23 @@ public class GlobalExceptionHandler {
             HttpStatus.NOT_FOUND,
             request
         );
+    }
+
+    @ExceptionHandler(RecoveryOperationException.class)
+    ResponseEntity<ErrorResponse> handleRecoveryOperation(
+        RecoveryOperationException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case RECOVERY_INCIDENT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case RECOVERY_COMMAND_CONFLICT,
+                 RECOVERY_COMMAND_IN_PROGRESS,
+                 RECOVERY_COMMAND_NOT_ALLOWED,
+                 RECOVERY_STALE_LEASE -> HttpStatus.CONFLICT;
+            default -> HttpStatus.BAD_REQUEST;
+        };
+        return errorResponse(reasonCode, "Recovery operation rejected", status, request);
     }
 
     @ExceptionHandler(AiEvaluationBundleNotFoundException.class)
