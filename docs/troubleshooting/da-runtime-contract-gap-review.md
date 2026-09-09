@@ -22,3 +22,16 @@ Approved Transaction을 통해 resolve하고 Runtime Snapshot에 pinning해야 �
 
 BE-11 PR은 BE-9 커밋 위에 쌓여 있어 base 정리가 필요하다. Contract Gap Review는 두 기능의 구현에 의존하지 않으므로 최신
 `origin/main`에서 독립 브랜치를 생성했다. 이렇게 해야 Recovery/Observability 리뷰 경계와 이번 no-change 결정이 섞이지 않는다.
+
+## Commit만 기록하고 실제 DA Evidence 위치를 남기지 않는 문제
+
+DA commit만 기록하면 어떤 분석 결과가 Deposit Token, Stablecoin, RWA 검토를 촉발했는지 재현하기 어렵다. ADR Coverage
+Matrix에 DA commit과 파일, Markdown section 또는 Notebook source cell을 함께 기록했다. 다만 이 reference는 Runtime용
+Evidence ID/Digest가 아니므로 정책 변경 근거로 승격하지 않는다. 향후 변경 시 DA가 versioned Handoff에서 stable Evidence
+identity와 digest를 제공해야 한다.
+
+## v2 배포가 기존 v1 실행을 암묵적으로 재해석하는 문제
+
+Semantic Contract v2가 추가된다는 이유로 기존 v1 Approved Transaction이나 Recovery job을 최신 규칙으로 평가하면 이미
+승인·실행된 Snapshot의 의미와 digest가 달라진다. v2는 명시적으로 binding된 신규 실행부터 적용하고, 기존 실행의 Replay와
+Recovery는 원래 pinning된 contract version을 유지하도록 coexistence 규칙을 ADR에 고정했다.
