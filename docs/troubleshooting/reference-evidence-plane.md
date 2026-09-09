@@ -14,9 +14,9 @@ Notebook과 Markdown의 분석 결론을 Gateway Rule로 직접 읽으면 분석
 ## 보조 조회 기능에 Policy Mapping을 미리 포함하는 문제
 
 Policy Artifact mapping을 미리 포함하면 관리자가 단순 관련성을 Runtime 판단 근거로 오해하고 별도 Governance 제품으로 범위가
-확장된다. v1 DA Contract, V41 Registry 축소, DTO와 검색 API에서 Policy mapping을 제거하고 Workload 관련성만 유지했다.
-이미 적용된 V40 checksum은 바꾸지 않고 forward migration으로 정리했으며 Runtime은 계속 승인된 Policy Current Selection만
-사용한다.
+확장된다. v1 DA Contract, V40 최종 Registry, DTO와 검색 API에서 Policy mapping을 제거하고 Workload 관련성만 유지했다.
+V40은 아직 main에 배포되지 않은 PR 내부 Migration이므로 잘못된 중간 스키마와 이를 즉시 되돌리는 별도 Migration을 남기지
+않고 최종 구조로 정리했다. Runtime은 계속 승인된 Policy Current Selection만 사용한다.
 
 ## 공식 Source와 분석 파일 위치가 섞이는 문제
 

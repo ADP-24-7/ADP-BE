@@ -32,6 +32,8 @@ create table evidence.reference_evidence (
     claim_scope varchar(500) not null,
     claim_summary varchar(1000) not null,
     source_locator varchar(500) not null,
+    analysis_ref varchar(500) not null,
+    analysis_locator varchar(500) not null,
     analysis_version varchar(120) not null,
     status varchar(40) not null,
     content_digest varchar(71) not null,
@@ -40,7 +42,7 @@ create table evidence.reference_evidence (
     foreign key (institution_id, bundle_id, bundle_version)
         references evidence.reference_evidence_bundle (institution_id, bundle_id, bundle_version),
     check (evidence_type in ('REGULATION', 'REGULATORY_SANDBOX', 'POLICY_GUIDE', 'BANK_TREND', 'DIGITAL_ASSET_INFRA')),
-    check (status in ('VERIFIED', 'REFERENCE_ONLY', 'REVIEW_REQUIRED', 'SUPERSEDED')),
+    constraint chk_reference_evidence_reference_only check (status = 'REFERENCE_ONLY'),
     check (content_digest ~ '^sha256:[0-9a-f]{64}$'),
     check (effective_from is null or effective_to is null or effective_from <= effective_to)
 );
@@ -55,19 +57,7 @@ create table evidence.reference_evidence_workload (
         references evidence.reference_evidence (institution_id, evidence_id, evidence_version)
 );
 
-create table evidence.reference_evidence_policy_artifact (
-    institution_id varchar(120) not null,
-    evidence_id varchar(80) not null,
-    evidence_version varchar(40) not null,
-    policy_artifact_ref varchar(120) not null,
-    primary key (institution_id, evidence_id, evidence_version, policy_artifact_ref),
-    foreign key (institution_id, evidence_id, evidence_version)
-        references evidence.reference_evidence (institution_id, evidence_id, evidence_version)
-);
-
 create index idx_reference_evidence_search
-    on evidence.reference_evidence (institution_id, evidence_type, status, created_at desc);
+    on evidence.reference_evidence (institution_id, evidence_type, created_at desc);
 create index idx_reference_evidence_workload
     on evidence.reference_evidence_workload (institution_id, workload_id, evidence_id, evidence_version);
-create index idx_reference_evidence_policy
-    on evidence.reference_evidence_policy_artifact (institution_id, policy_artifact_ref, evidence_id, evidence_version);

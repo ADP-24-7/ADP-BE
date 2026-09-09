@@ -33,8 +33,8 @@ Principal의 Institution과 Workload scope를 SQL에서 강제하며 원문 문�
 
 ## Persistence
 
-V40은 초기 Registry를 추가하고 V41은 기존 데이터를 `REFERENCE_ONLY`로 보수적으로 backfill한 뒤 Policy Mapping을 제거하고
-공식 Source와 DA Analysis 위치를 분리한다. 최종 Read Model은 다음 테이블만 사용한다.
+V40은 아직 main에 배포되지 않은 신규 Migration이므로 최종 Admin Trace 구조를 처음부터 생성한다. 공식 Source와 DA Analysis
+위치를 분리하고 다음 세 테이블만 사용한다.
 
 - `evidence.reference_evidence_bundle`
 - `evidence.reference_evidence`

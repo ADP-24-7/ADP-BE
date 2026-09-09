@@ -499,7 +499,7 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 
 - [x] DA `adp-reference-evidence-bundle/v1` Schema/Handoff Freeze
 - [x] 개별 Evidence와 Bundle canonical SHA-256 재검증
-- [x] V40 Registry + V41 Admin Trace 축소 Migration과 Workload 관련성 persistence
+- [x] V40 최종 Admin Trace Registry와 Workload 관련성 persistence
 - [x] Privileged idempotent Bundle ingestion API
 - [x] Institution/Workload scoped 목록·검색·상세 API
 - [x] Policy Artifact mapping과 Evidence lifecycle을 v1 범위에서 제거
