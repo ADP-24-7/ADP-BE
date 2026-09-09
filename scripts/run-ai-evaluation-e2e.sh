@@ -5,8 +5,9 @@ BASE_URL="${ADP_BE_BASE_URL:-http://127.0.0.1:8080}"
 RUNTIME_API_KEY="${ADP_RUNTIME_API_KEY:-local-dev-api-key}"
 ADMIN_USER_ID="${ADP_ADMIN_USER_ID:-da-evaluation-reader}"
 REAL_PROVIDER_CONFIRMED="${ADP_AI_E2E_CONFIRM_REAL_PROVIDER:-}"
-RUN_ID="ai-eval-baseline-2026-09-07"
-CASE_ID="customer-summary-ko-001"
+RUN_ID="${ADP_AI_EVALUATION_RUN_ID:-ai-eval-da-provenance-2026-09-10-r2}"
+CASE_ID="${ADP_AI_EVALUATION_CASE_ID:-customer-summary-da-10832-001}"
+SUBJECT_SCOPE="${ADP_AI_EVALUATION_SUBJECT_SCOPE:-customer:da-customer-10832}"
 RUN_SUFFIX="${AI_EVAL_RUN_SUFFIX:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 OUTPUT_ROOT="${AI_EVAL_OUTPUT_DIR:-build/ai-evaluation-e2e}"
 OUTPUT_DIR="$OUTPUT_ROOT/$RUN_SUFFIX"
@@ -61,7 +62,7 @@ submit() {
           \"approvalReference\": \"approval_ai_eval_$profile_id\",
           \"workloadId\": \"customer_summary\",
           \"purposeCode\": \"CUSTOMER_SUPPORT\",
-          \"subjectScope\": \"customer:customer-100\",
+          \"subjectScope\": \"$SUBJECT_SCOPE\",
           \"destinationProfileId\": \"$destination_profile_id\",
           \"idempotencyKey\": \"idem-ai-eval-$request_suffix\",
           \"evaluationRunId\": \"$RUN_ID\",

@@ -1,0 +1,42 @@
+{
+  "dataset_version": "financial_synthetic_processed_v1",
+  "dataset_manifest_digest": "sha256:2e54e595ded98144cc9b57459497768318e9d5616ccd39e9a711e174d7faaee0",
+  "selection_rule": "first customers.csv row with at least one account and one linked transaction; accounts sorted by OpeningDate desc, AccountID desc limit 2; transactions sorted by TransactionDate desc, TransactionID desc limit 2",
+  "source_rows": [
+    {
+      "source_file": "customers.csv",
+      "source_row_key": "CustomerID=10832",
+      "source_row_digest": "sha256:02aa884d80aee2e8b576fb861f4b24e6ab71e80cc8e97c95602c8e1ef430b78b"
+    },
+    {
+      "source_file": "accounts.csv",
+      "source_row_key": "AccountID=200904",
+      "source_row_digest": "sha256:65c769bda448279fab29b3cb42c2436a7258c34f2a8c20141b1b45ea05906522"
+    },
+    {
+      "source_file": "accounts.csv",
+      "source_row_key": "AccountID=200833",
+      "source_row_digest": "sha256:18c4b711b1557750260bb4475bbcdcfa5656ef79420a07f6fb197323e651a0c0"
+    },
+    {
+      "source_file": "transactions.csv",
+      "source_row_key": "TransactionID=3007618",
+      "source_row_digest": "sha256:f88269ecfdf0c2b67af0858d2230c87a3e4277158ed4cb71cac3024fe09e5d42"
+    },
+    {
+      "source_file": "transactions.csv",
+      "source_row_key": "TransactionID=3024917",
+      "source_row_digest": "sha256:98271eabadfb38021cc33f184d403b91c4f37bb960e7f2ab1874bf549a55f9f7"
+    }
+  ],
+  "transformation_version": "be-ai-p0-da-financial-synthetic-to-customer-summary/v1",
+  "runtime_subject": {
+    "subject_type": "customer",
+    "subject_id": "da-customer-10832"
+  },
+  "evaluation_run_id": "ai-eval-da-provenance-2026-09-10-r2",
+  "evaluation_case_id": "customer-summary-da-10832-001",
+  "case_input_digest_source": "RuntimeInputHasher over {\"prompt\": AiEvaluationPrompt.TEXT}",
+  "case_input_digest": "sha256:8c5ae71134976c68797feab32b82153937c4ccc61594047cb36dde3291a34180",
+  "provenance_digest": "sha256:18f0831cf7e970ad9d8c376d3a3877c86612270dd259745b8a14225761de5dfe"
+}

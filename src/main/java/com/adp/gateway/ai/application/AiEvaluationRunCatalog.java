@@ -19,6 +19,11 @@ import org.springframework.stereotype.Component;
 public class AiEvaluationRunCatalog {
     public static final String BASELINE_RUN_ID = "ai-eval-baseline-2026-09-07";
     public static final String BASELINE_CASE_ID = "customer-summary-ko-001";
+    public static final String DA_PROVENANCE_RUN_ID = "ai-eval-da-provenance-2026-09-10-r2";
+    public static final String DA_PROVENANCE_CASE_ID = "customer-summary-da-10832-001";
+    public static final String DA_PROVENANCE_DATASET_ROW_REF =
+        "financial_synthetic_processed_v1:customers.csv#CustomerID=10832:"
+            + "sha256:18f0831cf7e970ad9d8c376d3a3877c86612270dd259745b8a14225761de5dfe";
 
     private final Map<String, AiEvaluationRunDefinition> runs;
 
@@ -63,7 +68,7 @@ public class AiEvaluationRunCatalog {
                 "modelBindings", profileBindings
             )
         );
-        var baseline = new AiEvaluationRunDefinition(
+        var baseline = runDefinition(
             BASELINE_RUN_ID,
             "1.0.0",
             "financial_synthetic",
@@ -71,10 +76,49 @@ public class AiEvaluationRunCatalog {
             "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
             modelProfiles.policySnapshotDigest(),
             contractDigest,
-            Map.of(BASELINE_CASE_ID, evaluationCase),
+            evaluationCase,
             modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet())
         );
-        this.runs = Map.of(baseline.evaluationRunId(), baseline);
+        var daCase = new AiEvaluationCaseDefinition(
+            DA_PROVENANCE_CASE_ID,
+            DA_PROVENANCE_DATASET_ROW_REF,
+            "ai-evaluation-input/v1",
+            expectedInputDigest
+        );
+        String daContractDigest = digest(
+            objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true),
+            hasher,
+            Map.of(
+                "runId", DA_PROVENANCE_RUN_ID,
+                "runVersion", "1.0.0",
+                "datasetId", "financial_synthetic",
+                "datasetVersion", "financial_synthetic_processed_v1",
+                "datasetDigest", "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+                "policySnapshotDigest", modelProfiles.policySnapshotDigest(),
+                "cases", List.of(Map.of(
+                    "caseId", daCase.caseId(),
+                    "datasetRowRef", daCase.datasetRowRef(),
+                    "inputSchemaVersion", daCase.inputSchemaVersion(),
+                    "expectedInputDigest", daCase.expectedInputDigest()
+                )),
+                "modelBindings", profileBindings
+            )
+        );
+        var daProvenance = runDefinition(
+            DA_PROVENANCE_RUN_ID,
+            "1.0.0",
+            "financial_synthetic",
+            "financial_synthetic_processed_v1",
+            "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+            modelProfiles.policySnapshotDigest(),
+            daContractDigest,
+            daCase,
+            modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet())
+        );
+        this.runs = Map.of(
+            baseline.evaluationRunId(), baseline,
+            daProvenance.evaluationRunId(), daProvenance
+        );
     }
 
     public Optional<AiEvaluationRunDefinition> find(String evaluationRunId) {
@@ -107,5 +151,12 @@ public class AiEvaluationRunCatalog {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Evaluation run contract could not be canonicalized", exception);
         }
+    }
+
+    private AiEvaluationRunDefinition runDefinition(String id, String version, String datasetId, String datasetVersion,
+        String datasetDigest, String policySnapshotDigest, String contractDigest, AiEvaluationCaseDefinition evaluationCase,
+        Set<String> modelProfileIds) {
+        return new AiEvaluationRunDefinition(id, version, datasetId, datasetVersion, datasetDigest,
+            policySnapshotDigest, contractDigest, Map.of(evaluationCase.caseId(), evaluationCase), modelProfileIds);
     }
 }

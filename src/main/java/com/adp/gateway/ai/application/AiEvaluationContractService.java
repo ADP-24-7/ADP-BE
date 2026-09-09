@@ -68,12 +68,12 @@ public class AiEvaluationContractService {
     public AiEvaluationContractSnapshot freeze(AuthPrincipal principal, String runId) {
         authorize(principal);
         var run = run(runId);
-        // The registered baseline currently contains one case. Never silently ignore new cases.
-        require(run.cases().keySet().equals(java.util.Set.of(AiEvaluationRunCatalog.BASELINE_CASE_ID)),
-            "AI_CASE_SET_NOT_SUPPORTED");
+        // The current freezer prepares one case per immutable run. Never silently ignore new cases.
+        require(run.cases().size() == 1, "AI_CASE_SET_NOT_SUPPORTED");
+        var evaluationCase = run.cases().values().iterator().next();
         var retrieved = retrieval.retrieve(new DataAccessRequest("evaluation-contract-freeze",
             "evaluation-contract-freeze", "customer_summary", "CUSTOMER_SUPPORT",
-            new SubjectRef("customer", "customer-100")));
+            new SubjectRef("customer", subjectId(evaluationCase.datasetRowRef()))));
         var context = prompts.merge(contexts.build(retrieved), Map.of("prompt", AiEvaluationPrompt.TEXT), null);
         AiEvaluationContractSnapshot candidate = null;
         for (var model : models.profiles()) {
@@ -159,7 +159,8 @@ public class AiEvaluationContractService {
         require(run.policySnapshotDigest().equals(policy.snapshotDigest()), "AI_POLICY_SNAPSHOT_MISMATCH");
         require(model.destinationProfileDigest().equals(destination.profileDigest()), "AI_DESTINATION_MISMATCH");
         require(context.workloadId().equals("customer_summary") && context.purpose().equals("CUSTOMER_SUPPORT")
-            && retrieved.subjectType().equals("customer") && retrieved.subjectId().equals("customer-100"),
+            && retrieved.subjectType().equals("customer")
+            && retrieved.subjectId().equals(subjectId(run.cases().values().iterator().next().datasetRowRef())),
             "AI_WORKLOAD_CASE_MISMATCH");
         var plans = context.fields().stream().map(field -> {
             var instruction = transforms.resolve(new TransformResolutionContext(context.workloadId(), context.purpose(),
@@ -213,6 +214,15 @@ public class AiEvaluationContractService {
             || !(principal.workloadIds().contains("*") || principal.workloadIds().contains("customer_summary"))) {
             throw new AccessDeniedException("Evaluation contract scope denied");
         }
+    }
+    private String subjectId(String datasetRowRef) {
+        if (AiEvaluationRunCatalog.DA_PROVENANCE_DATASET_ROW_REF.equals(datasetRowRef)) {
+            return "da-customer-10832";
+        }
+        if ("synthetic:customer-100".equals(datasetRowRef)) {
+            return "customer-100";
+        }
+        throw mismatch("AI_CASE_ROW_REF_NOT_SUPPORTED");
     }
     private static AiEvaluationRunMismatchException mismatch(String code) { return new AiEvaluationRunMismatchException(code); }
     private static void require(boolean value, String code) { if (!value) throw mismatch(code); }

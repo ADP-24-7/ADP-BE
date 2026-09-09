@@ -39,6 +39,22 @@ class AiEvaluationRunCatalogTests {
             ).isEqualTo("AI_EVALUATION_CASE_INPUT_MISMATCH"));
     }
 
+    @Test
+    void resolvesDaProvenanceCaseWithPinnedSourceDigest() {
+        var run = runs.find(AiEvaluationRunCatalog.DA_PROVENANCE_RUN_ID).orElseThrow();
+        var evaluationCase = run.cases().get(AiEvaluationRunCatalog.DA_PROVENANCE_CASE_ID);
+        var resolved = runs.resolve(new AiEvaluationReference(
+            run.evaluationRunId(), evaluationCase.caseId(), null, null, null, null
+        ), Map.of("prompt", AiEvaluationPrompt.TEXT));
+
+        assertThat(evaluationCase.datasetRowRef()).isEqualTo(AiEvaluationRunCatalog.DA_PROVENANCE_DATASET_ROW_REF);
+        assertThat(evaluationCase.datasetRowRef()).endsWith(
+            "sha256:18f0831cf7e970ad9d8c376d3a3877c86612270dd259745b8a14225761de5dfe"
+        );
+        assertThat(resolved.actualInputDigest()).isEqualTo(resolved.expectedInputDigest());
+        assertThat(run.modelProfileIds()).hasSize(3);
+    }
+
     private AiEvaluationReference reference() {
         return new AiEvaluationReference(
             AiEvaluationRunCatalog.BASELINE_RUN_ID,
