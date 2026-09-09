@@ -3,6 +3,7 @@ package com.adp.gateway.recovery.infrastructure;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.Set;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
@@ -11,11 +12,34 @@ import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
 import com.adp.gateway.recovery.domain.RecoveryStatus;
 import com.adp.gateway.recovery.domain.RetryDisposition;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class JdbcExternalInteractionRecoveryPersistence implements ExternalInteractionRecoveryPersistence {
+
+    private static final RowMapper<ExternalInteractionRecovery> RECOVERY_ROW_MAPPER = (rs, rowNum) ->
+        new ExternalInteractionRecovery(
+            rs.getString("recovery_id"),
+            rs.getString("execution_id"),
+            rs.getString("connector_execution_id"),
+            rs.getString("connector_id"),
+            rs.getString("provider_correlation_key"),
+            ConnectorStatus.valueOf(rs.getString("observed_status")),
+            rs.getString("last_observed_external_status") == null
+                ? null : ConnectorStatus.valueOf(rs.getString("last_observed_external_status")),
+            RecoveryStatus.valueOf(rs.getString("recovery_status")),
+            RetryDisposition.valueOf(rs.getString("retry_disposition")),
+            rs.getInt("attempt_count"),
+            rs.getInt("max_attempts"),
+            rs.getObject("next_attempt_at", OffsetDateTime.class),
+            rs.getString("lease_owner"),
+            rs.getObject("lease_until", OffsetDateTime.class),
+            rs.getString("last_error_code"),
+            rs.getObject("last_status_queried_at", OffsetDateTime.class),
+            rs.getString("status_query_evidence_digest")
+        );
 
     private final JdbcClient jdbcClient;
     private final java.time.Clock clock;
@@ -103,28 +127,48 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
             .param("workerId", workerId)
             .param("now", now)
             .param("leaseUntil", now.plus(leaseDuration))
-            .query((rs, rowNum) -> new ExternalInteractionRecovery(
-                rs.getString("recovery_id"),
-                rs.getString("execution_id"),
-                rs.getString("connector_execution_id"),
-                rs.getString("connector_id"),
-                rs.getString("provider_correlation_key"),
-                ConnectorStatus.valueOf(rs.getString("observed_status")),
-                rs.getString("last_observed_external_status") == null
-                    ? null : ConnectorStatus.valueOf(rs.getString("last_observed_external_status")),
-                RecoveryStatus.valueOf(rs.getString("recovery_status")),
-                RetryDisposition.valueOf(rs.getString("retry_disposition")),
-                rs.getInt("attempt_count"),
-                rs.getInt("max_attempts"),
-                rs.getObject("next_attempt_at", OffsetDateTime.class),
-                rs.getString("lease_owner"),
-                rs.getObject("lease_until", OffsetDateTime.class),
-                rs.getString("last_error_code"),
-                rs.getObject("last_status_queried_at", OffsetDateTime.class),
-                rs.getString("status_query_evidence_digest")
-            ))
+            .query(RECOVERY_ROW_MAPPER)
             .optional();
         return new RecoveryClaimResult(claimed, exhaustedCount);
+    }
+
+    @Override
+    @Transactional
+    public Optional<ExternalInteractionRecovery> claimById(
+        String recoveryId,
+        String workerId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        OffsetDateTime now,
+        Duration leaseDuration
+    ) {
+        String workloadScope = allowedWorkloads.contains("*")
+            ? ""
+            : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and re.workload_id in (:allowedWorkloads)";
+        JdbcClient.StatementSpec statement = jdbcClient.sql("""
+                update runtime.external_interaction_recovery r
+                set recovery_status = 'CLAIMED',
+                    lease_owner = :workerId,
+                    lease_until = :leaseUntil,
+                    attempt_count = attempt_count + 1,
+                    updated_at = :now
+                from runtime.runtime_execution re
+                where r.recovery_id = :recoveryId
+                  and re.execution_id = r.execution_id
+                  and re.institution_id = :institutionId
+                  and r.recovery_status in ('PENDING', 'RETRY_SCHEDULED', 'MANUAL_REVIEW', 'EXHAUSTED')
+                  and (r.lease_until is null or r.lease_until <= :now)
+                  and r.attempt_count < r.max_attempts
+                """ + workloadScope + " returning r.*")
+            .param("recoveryId", recoveryId)
+            .param("workerId", workerId)
+            .param("institutionId", institutionId)
+            .param("leaseUntil", now.plus(leaseDuration))
+            .param("now", now);
+        if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
+            statement = statement.param("allowedWorkloads", allowedWorkloads);
+        }
+        return statement.query(RECOVERY_ROW_MAPPER).optional();
     }
 
     @Override
@@ -138,7 +182,10 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
         OffsetDateTime now = OffsetDateTime.now(clock);
         Optional<RecoveryUpdate> update = jdbcClient.sql("""
                 update runtime.external_interaction_recovery
-                set recovery_status = case when attempt_count >= max_attempts then 'EXHAUSTED' else 'RETRY_SCHEDULED' end,
+                set recovery_status = case
+                        when attempt_count >= max_attempts then 'EXHAUSTED'
+                        else 'RETRY_SCHEDULED'
+                    end,
                     next_attempt_at = :nextAttemptAt,
                     lease_owner = null,
                     lease_until = null,
@@ -158,7 +205,59 @@ public class JdbcExternalInteractionRecoveryPersistence implements ExternalInter
             .param("updatedAt", now)
             .query(RecoveryUpdate.class)
             .optional();
-        update.filter(item -> "EXHAUSTED".equals(item.recoveryStatus()))
+        update.filter(item -> "EXHAUSTED".equals(item.recoveryStatus())
+                || "MANUAL_REVIEW".equals(item.recoveryStatus()))
+            .ifPresent(item -> markRuntimeReviewRequired(item.executionId(), now));
+        return update
+            .map(item -> new RecoveryTransitionResult(true, RecoveryStatus.valueOf(item.recoveryStatus())))
+            .orElseGet(RecoveryTransitionResult::staleLease);
+    }
+
+    @Override
+    @Transactional
+    public RecoveryTransitionResult recordObservedAndReschedule(
+        String recoveryId,
+        String workerId,
+        com.adp.gateway.recovery.domain.ExternalStatusQueryResult result,
+        RetryDisposition retryDisposition,
+        OffsetDateTime nextAttemptAt,
+        String errorCode
+    ) {
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        Optional<RecoveryUpdate> update = jdbcClient.sql("""
+                update runtime.external_interaction_recovery
+                set recovery_status = case
+                        when :retryDisposition = 'MANUAL_REVIEW' then 'MANUAL_REVIEW'
+                        when attempt_count >= max_attempts then 'EXHAUSTED'
+                        else 'RETRY_SCHEDULED'
+                    end,
+                    retry_disposition = :retryDisposition,
+                    last_observed_external_status = :externalStatus,
+                    last_status_queried_at = :queriedAt,
+                    status_query_evidence_digest = :evidenceDigest,
+                    next_attempt_at = :nextAttemptAt,
+                    lease_owner = null,
+                    lease_until = null,
+                    last_error_code = :errorCode,
+                    updated_at = :queriedAt
+                where recovery_id = :recoveryId
+                  and recovery_status = 'CLAIMED'
+                  and lease_owner = :workerId
+                  and lease_until > :queriedAt
+                returning execution_id, recovery_status
+                """)
+            .param("recoveryId", recoveryId)
+            .param("workerId", workerId)
+            .param("retryDisposition", retryDisposition.name())
+            .param("externalStatus", result.status().name())
+            .param("queriedAt", now)
+            .param("evidenceDigest", result.evidenceDigest())
+            .param("nextAttemptAt", nextAttemptAt)
+            .param("errorCode", errorCode)
+            .query(RecoveryUpdate.class)
+            .optional();
+        update.filter(item -> "EXHAUSTED".equals(item.recoveryStatus())
+                || "MANUAL_REVIEW".equals(item.recoveryStatus()))
             .ifPresent(item -> markRuntimeReviewRequired(item.executionId(), now));
         return update
             .map(item -> new RecoveryTransitionResult(true, RecoveryStatus.valueOf(item.recoveryStatus())))

@@ -12,6 +12,7 @@ import java.util.UUID;
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
+import com.adp.gateway.recovery.domain.RetryDisposition;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -152,6 +153,22 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
         assertThat(claimResult.claimed()).isEmpty();
         assertThat(claimResult.exhaustedCount()).isEqualTo(1);
         assertTerminalAndReplay(seeded, "EXHAUSTED");
+    }
+
+    @Test
+    void failedObservedStatusConvergesToManualReview() throws Exception {
+        ClaimedRecovery seeded = seedClaimedRecovery("observed-failed");
+
+        var transition = persistence.recordObservedAndReschedule(
+            seeded.recoveryId(), "worker-observed-failed",
+            new ExternalStatusQueryResult(ConnectorStatus.FAILED, "f".repeat(64)),
+            RetryDisposition.MANUAL_REVIEW, OffsetDateTime.now().plusMinutes(1),
+            "EXTERNAL_STATUS_FAILED"
+        );
+
+        assertThat(transition.resultingStatus())
+            .isEqualTo(com.adp.gateway.recovery.domain.RecoveryStatus.MANUAL_REVIEW);
+        assertTerminalAndReplay(seeded, "MANUAL_REVIEW");
     }
 
     private ClaimedRecovery seedClaimedRecovery(String label) throws Exception {

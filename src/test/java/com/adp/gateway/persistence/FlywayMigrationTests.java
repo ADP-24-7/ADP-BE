@@ -24,6 +24,27 @@ class FlywayMigrationTests {
     private Environment environment;
 
     @Test
+    void v37MigrationCreatesRecoveryOperationEvidence() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'runtime' and table_name = 'recovery_operation_event'
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and table_name = 'recovery_operation_event'
+                  and constraint_type in ('UNIQUE', 'CHECK')
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(tableCount).isEqualTo(1);
+        assertThat(constraintCount).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
     void baselineMigrationCreatesAuditEventTable() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)

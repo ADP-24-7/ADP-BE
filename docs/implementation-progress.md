@@ -15,6 +15,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-6 | Baseline Completed | Common Egress Boundary |
 | BE-7 | Completed | AI Full E2E & Policy Harness Binding |
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
+| BE-9 | Baseline Completed | Consistency, Recovery & Operations |
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
 
@@ -196,9 +197,14 @@ BE-9B 상세 계약은 [BE-9B External Interaction Recovery Core](be-9b-external
 - [x] Status Query Adapter ambiguity fail-closed
 - [x] `MANUAL_REVIEW`/`EXHAUSTED`와 Runtime `REVIEW_REQUIRED` 원자적 수렴
 - [x] Lease 만료 시 stale worker terminal update 차단
-- [ ] Pack별 status query adapter와 external status mapping
-- [ ] 안전한 `NOT_SENT` 재전송 executor
-- [ ] 운영 scheduler, alert, manual recovery API
+- [x] Connector별 status query/retry Port와 Local Digital Asset Adapter
+- [x] 상태 조회에서 `NOT_SENT`가 확인된 경우에만 실행되는 안전한 재전송 executor
+- [x] 지수 backoff, bounded batch, opt-in 운영 scheduler
+- [x] Institution/Workload scoped Incident List/Detail API
+- [x] Privileged Reconcile/Retry/Review API와 operation idempotency evidence
+- [x] 수동 명령과 scheduler의 공통 claim/lease/stale worker 경계
+- [ ] 실제 Provider별 Status/Retry Adapter와 versioned Recovery Policy
+- [ ] Audit 보존기간과 결합된 Idempotency retention/archive 정책
 
 ## BE-0 Completion Criteria
 
@@ -459,7 +465,7 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] 진행 중 동시 요청의 재실행 차단
 - [x] Replay 전 호출자 인가 재검증
 - [x] V12 legacy backfill과 upgrade test
-- [ ] BE-9B SENT_UNKNOWN Recovery Framework
+- [x] BE-9B SENT_UNKNOWN Recovery Framework
 
 ## SEC-1/2 Security Hardening Tracking
 

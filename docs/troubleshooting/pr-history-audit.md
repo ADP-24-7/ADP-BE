@@ -50,12 +50,13 @@ GitHub CLI는 인증되지 않은 환경에서도 재현할 수 있도록 감사
 | #34 | `80027c0` | Shadow 평가 중 Candidate/ACTIVE 변경에 대한 stale evidence 차단 | `policy-shadow-evidence.md` |
 | #35 | `b7b3a8e` | 범용 승인 우회 차단과 Shadow Evidence 기반 maker-checker 승인 | `policy-shadow-approval-gate.md` |
 | #36 | `b99752f` | 단일 Current Selection, 원자적 교체/롤백과 stale approval 차단 | `policy-current-selection-rollback.md` |
-| #37 | `5561577` | Request freshness, denied evidence, SSRF와 CI security gate | `security-hardening.md` |
+| #37 | `5561577` | Server-owned trace, denied-attempt evidence, SSRF/request freshness와 Security CI Gate | `security-hardening.md` |
+| #39 | `0699485` | Technical Kind와 Semantic Class 분리, caller self-asserted classification 차단 | `da-runtime-contract-gap-review.md` |
 
 ## 현재 브랜치
 
-`feature/da-runtime-contract-gap-review`는 DA 산업 분석과 현재 BE 계약을 비교한다. Runtime 의미 변경 근거가 없는 상태에서
-semantic asset enum을 추가하지 않고 versioned Handoff 진입 조건을 `da-runtime-contract-gap-review.md`에서 추적한다.
+`feature/be-9-recovery-operations`는 아직 `main`에 병합되지 않았다. 안전 재전송, 운영 scheduler와 수동 Recovery API는
+`recovery-operations.md`에서 추적한다.
 
 ## 확인 결과
 

@@ -26,6 +26,15 @@ public class FakeDigitalAssetPlatformStateStore {
         return Optional.ofNullable(states.get(providerCorrelationKey));
     }
 
+    public ConnectorStatus retryIfNotSent(String providerCorrelationKey) {
+        return states.compute(providerCorrelationKey, (key, status) -> {
+            if (status == null) {
+                throw new IllegalStateException("Provider request was not found");
+            }
+            return status == ConnectorStatus.NOT_SENT ? ConnectorStatus.ACKNOWLEDGED : status;
+        });
+    }
+
     public void recordExecution(String externalReference, FakeDigitalAssetExecutionObservation observation) {
         executions.put(externalReference, observation);
     }
