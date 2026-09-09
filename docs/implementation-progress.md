@@ -492,3 +492,16 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 ## Troubleshooting
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.
+
+## Policy · Regulation · Evidence Plane Tracking
+
+상세 계약은 [Policy · Regulation · Evidence Plane](policy-regulation-evidence-plane.md)에서 관리한다.
+
+- [x] DA `adp-reference-evidence-bundle/v1` Schema/Handoff Freeze
+- [x] 개별 Evidence와 Bundle canonical SHA-256 재검증
+- [x] V40 Reference Evidence Registry와 Workload/Policy mapping persistence
+- [x] Privileged idempotent Bundle ingestion API
+- [x] Institution/Workload scoped 목록·검색·상세 API
+- [x] `REFERENCE_ONLY` Evidence의 Runtime Policy 자동 binding 차단
+- [x] Digest tampering, replay, 권한, cross-tenant, Runtime no-change 통합 테스트
+- [ ] 승인된 Policy Artifact mapping command와 FE Policy & Evidence 연결

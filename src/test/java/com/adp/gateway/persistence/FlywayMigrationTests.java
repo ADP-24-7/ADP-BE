@@ -1330,6 +1330,30 @@ class FlywayMigrationTests {
         assertThat(columnCount).isEqualTo(12);
     }
 
+    @Test
+    void createsReferenceEvidenceRegistryWithScopedMappingIndexes() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.tables
+                where table_schema = 'evidence'
+                  and table_name in (
+                      'reference_evidence_bundle', 'reference_evidence',
+                      'reference_evidence_workload', 'reference_evidence_policy_artifact'
+                  )
+                """).query(Integer.class).single();
+        Integer indexCount = jdbcClient.sql("""
+                select count(*) from pg_indexes
+                where schemaname = 'evidence'
+                  and indexname in (
+                      'idx_reference_evidence_search', 'idx_reference_evidence_workload',
+                      'idx_reference_evidence_policy'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(4);
+        assertThat(indexCount).isEqualTo(3);
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);
