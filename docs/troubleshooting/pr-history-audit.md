@@ -7,7 +7,7 @@
 각 troubleshooting 문서에서 리뷰 보완 commit과 함께 설명한다.
 
 GitHub CLI는 인증되지 않은 환경에서도 재현할 수 있도록 감사의 Source of Truth로 사용하지 않았다. 검증 기준은
-로컬 Git object에 남은 PR #1~#31의 merge commit, feature branch commit, 변경 파일과 테스트다.
+로컬 Git object에 남은 PR #1~#37의 merge commit, feature branch commit, 변경 파일과 테스트다.
 
 ## PR별 Coverage
 
@@ -50,15 +50,16 @@ GitHub CLI는 인증되지 않은 환경에서도 재현할 수 있도록 감사
 | #34 | `80027c0` | Shadow 평가 중 Candidate/ACTIVE 변경에 대한 stale evidence 차단 | `policy-shadow-evidence.md` |
 | #35 | `b7b3a8e` | 범용 승인 우회 차단과 Shadow Evidence 기반 maker-checker 승인 | `policy-shadow-approval-gate.md` |
 | #36 | `b99752f` | 단일 Current Selection, 원자적 교체/롤백과 stale approval 차단 | `policy-current-selection-rollback.md` |
+| #37 | `5561577` | Request freshness, denied evidence, SSRF와 CI security gate | `security-hardening.md` |
 
 ## 현재 브랜치
 
-`feature/sec-1-2-security-hardening`은 아직 `main`에 병합되지 않았다. Caller trace 신뢰, denied-attempt evidence,
-request freshness, destination SSRF와 CI security gate는 `security-hardening.md`에서 추적한다.
+`feature/da-runtime-contract-gap-review`는 DA 산업 분석과 현재 BE 계약을 비교한다. Runtime 의미 변경 근거가 없는 상태에서
+semantic asset enum을 추가하지 않고 versioned Handoff 진입 조건을 `da-runtime-contract-gap-review.md`에서 추적한다.
 
 ## 확인 결과
 
-- PR #1~#36의 main merge commit을 모두 문서에 연결했다.
+- PR #1~#37의 main merge commit을 모두 문서에 연결했다.
 - feature branch commit hash와 main squash commit을 같은 identity로 취급하지 않는다.
 - 구현 설명만 있던 Approved Transaction, NCP ContentStore 이슈를 troubleshooting 문서로 승격했다.
 - AI real E2E의 fresh execution identity와 Lifecycle optimistic locking/transaction 문제를 기존 문서에 보강했다.
