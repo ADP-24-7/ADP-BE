@@ -74,6 +74,20 @@ class PolicyLifecycleControllerTests {
             .andExpect(jsonPath("$.artifactId").value(artifactId))
             .andExpect(jsonPath("$.artifactRevision").value(6));
 
+        transition(artifactId, "review-operator", "OPERATOR", "REVIEW")
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_LIFECYCLE_TRANSITION_INVALID"));
+
+        mockMvc.perform(get("/api/admin/policy-lifecycle/{id}/versions/1.0.0", artifactId)
+                .header("X-ADP-User-Id", "checker-1")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.lifecycleStage").value("ACTIVE"));
+        assertThat(service.loadCurrentSelection(
+            principal("checker-1", "institution_local", Set.of("customer_summary")),
+            ExecutionPackType.AI, "customer_summary", "CUSTOMER_SUPPORT"
+        ).artifactId()).isEqualTo(artifactId);
+
         mockMvc.perform(get("/api/admin/policy-lifecycle/{id}/versions/1.0.0", artifactId)
                 .header("X-ADP-User-Id", "auditor-1")
                 .header("X-ADP-User-Roles", "AUDITOR"))

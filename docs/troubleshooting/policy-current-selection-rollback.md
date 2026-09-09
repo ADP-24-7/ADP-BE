@@ -1,5 +1,16 @@
 # Policy Current Selection / Rollback 트러블슈팅
 
+## 범용 ACTIVE → REVIEW가 Current Selection을 stale하게 만들 수 있다
+
+Lifecycle Validator만 보면 `ACTIVE → REVIEW`가 유효했지만 범용 `/transitions`는 Current Selection pointer와 Selection
+Event를 갱신하지 않는다. 일반 OPERATOR가 선택된 ACTIVE를 REVIEW로 보내면 pointer는 그대로인데 Lifecycle만 바뀌어 신규
+Runtime이 `POLICY_CURRENT_SELECTION_STALE`로 중단되고, REVIEW에서는 전용 rollback 조건도 만족하지 못한다.
+
+`REVIEW`를 ACTIVE/SUPERSEDED/ROLLED_BACK과 같은 selection transition으로 분류해 범용 API에서 차단하고 privileged
+target에도 포함했다. Review가 필요해지면 Lifecycle, Current Selection, Selection Event, Runtime propagation을 한
+트랜잭션에서 처리하는 전용 governance command로 추가해야 한다. 회귀 테스트는 거부 후 Lifecycle과 Current Selection이 모두
+기존 ACTIVE를 유지하는지 확인한다.
+
 ## Artifact revision만으로는 동시 활성화를 막을 수 없다
 
 서로 다른 두 `APPROVED` Artifact는 각각 올바른 Artifact revision을 가진다. Scope lock만 사용하면 두 요청이 순차적으로 모두

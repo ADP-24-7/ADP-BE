@@ -22,6 +22,10 @@ Current Selection의 `ACTIVE`를 `SUPERSEDED`로 바꾼 뒤 새 버전을 `ACTIV
 롤백 대상은 `APPROVED`와 `ACTIVE` 전환 이력이 모두 존재하는 `SUPERSEDED` 버전으로 제한한다. 현재 `ACTIVE`는
 `ROLLED_BACK`, 복원 대상은 `ACTIVE`가 되며 선택 revision은 단조 증가한다.
 
+범용 `/transitions` API에서는 `ACTIVE`, `SUPERSEDED`, `REVIEW`, `ROLLED_BACK` 선택 상태 전환을 허용하지 않는다.
+특히 선택된 ACTIVE의 `REVIEW` 전환은 Current Selection 갱신과 Evidence를 함께 처리하는 전용 command가 추가되기 전까지
+fail-closed한다.
+
 Current Selection scope advisory lock은 Policy Layer를 제외한 실제 PK와 동일한
 `Institution + Pack + Workload + Purpose`를 사용한다. 서로 다른 Layer 후보도 같은 Current Selection을 놓고 경쟁하므로
 동일 lock과 fencing revision으로 직렬화한다.

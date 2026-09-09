@@ -23,7 +23,8 @@ public class PolicyLifecycleService {
     );
     private static final Set<PolicyLifecycleStage> PRIVILEGED_TARGETS = Set.of(
         PolicyLifecycleStage.APPROVED, PolicyLifecycleStage.ACTIVE,
-        PolicyLifecycleStage.SUPERSEDED, PolicyLifecycleStage.ROLLED_BACK
+        PolicyLifecycleStage.SUPERSEDED, PolicyLifecycleStage.REVIEW,
+        PolicyLifecycleStage.ROLLED_BACK
     );
     private final PolicyLifecyclePersistence persistence;
     private final PolicyLifecycleTransitionValidator transitionValidator;
@@ -102,6 +103,7 @@ public class PolicyLifecycleService {
         PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
         boolean selectionTransition = target == PolicyLifecycleStage.ACTIVE
             || target == PolicyLifecycleStage.SUPERSEDED
+            || target == PolicyLifecycleStage.REVIEW
             || target == PolicyLifecycleStage.ROLLED_BACK;
         boolean supportedDigitalAssetTransition = runtimeSelection
             && current.executionPack() == ExecutionPackType.DIGITAL_ASSET
