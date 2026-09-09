@@ -1353,6 +1353,20 @@ class FlywayMigrationTests {
         assertThat(indexCount).isEqualTo(2);
     }
 
+    @Test
+    void createsPolicyOperationsReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*) from pg_indexes
+                where schemaname = 'policy'
+                  and indexname in (
+                      'idx_policy_lifecycle_operations_search',
+                      'idx_policy_shadow_candidate_history'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(indexCount).isEqualTo(2);
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);
