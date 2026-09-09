@@ -64,6 +64,16 @@ class DigitalAssetDescriptorTests {
             .hasMessage("DIGITAL_ASSET_ASSET_SCHEMA_MISMATCH");
     }
 
+    @Test
+    void rejectsUnversionedCallerControlledSemanticAssetClassification() {
+        Map<String, Object> asset = asset("FUNGIBLE_TOKEN");
+        asset.put("assetContractAddress", "0x0000000000000000000000000000000000000001");
+        asset.put("semanticAssetClass", "STABLECOIN");
+
+        assertThatThrownBy(() -> DigitalAssetDescriptor.from(asset))
+            .hasMessage("DIGITAL_ASSET_ASSET_SCHEMA_MISMATCH");
+    }
+
     private Map<String, Object> asset(String kind) {
         Map<String, Object> asset = new HashMap<>();
         asset.put("chainId", "eip155:1");
