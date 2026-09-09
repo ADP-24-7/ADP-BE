@@ -50,10 +50,10 @@ final class DaEvaluationBundleParserFixture {
             throw new IllegalArgumentException("DA bundle is missing a required section");
         }
         JsonNode manifest = root.path("manifest");
-        if (!"adp-ai-evaluation-bundle/v1".equals(manifest.path("schema_version").asText())) {
+        if (!Set.of("adp-ai-evaluation-bundle/v1", "adp-ai-evaluation-bundle/v2").contains(manifest.path("schema_version").asText())) {
             throw new IllegalArgumentException("DA bundle schema is unsupported");
         }
-        String calculatedDigest = canonicalizer.digest(Map.of(
+        Map<String, Object> content = new TreeMap<>(Map.of(
             "schema_version", manifest.path("schema_version").asText(),
             "execution_config", objectMapper.convertValue(root.path("execution_config"), Object.class),
             "case_results", objectMapper.convertValue(root.path("case_results"), Object.class),
@@ -61,6 +61,8 @@ final class DaEvaluationBundleParserFixture {
             "failure_summary", objectMapper.convertValue(root.path("failure_summary"), Object.class),
             "trace_index", objectMapper.convertValue(root.path("trace_index"), Object.class)
         ));
+        if (root.has("contract_evidence")) content.put("contract_evidence", root.get("contract_evidence"));
+        String calculatedDigest = canonicalizer.digest(content);
         if (!calculatedDigest.equals(manifest.path("content_digest").asText())) {
             throw new IllegalArgumentException("DA bundle content digest is inconsistent");
         }

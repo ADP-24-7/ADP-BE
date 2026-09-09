@@ -70,6 +70,8 @@ public class SecurityConfig {
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/ai/evaluation-runs/*/readiness")
                     .hasRole("PRIVILEGED_OPERATOR")
+                    .requestMatchers("/api/admin/ai/evaluation-runs/*/contract", "/api/admin/ai/evaluation-runs/*/contract/freeze")
+                    .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers("/api/admin/audit/executions/*/evidence")
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers(HttpMethod.GET, "/api/admin/recovery/incidents/**")

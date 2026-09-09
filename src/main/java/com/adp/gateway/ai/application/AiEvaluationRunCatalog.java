@@ -32,7 +32,7 @@ public class AiEvaluationRunCatalog {
     ) {
         this.inputHasher = inputHasher;
         String expectedInputDigest = inputHasher.hash(Map.of(
-            "prompt", "승인된 고객 정보를 간단히 요약하세요"
+            "prompt", AiEvaluationPrompt.TEXT
         ));
         var evaluationCase = new AiEvaluationCaseDefinition(
             BASELINE_CASE_ID, "synthetic:customer-100", "ai-evaluation-input/v1", expectedInputDigest

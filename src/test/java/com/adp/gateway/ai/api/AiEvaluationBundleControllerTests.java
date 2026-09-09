@@ -45,6 +45,15 @@ class AiEvaluationBundleControllerTests {
     @Autowired
     private AiEvaluationBundleCanonicalizer canonicalizer;
 
+    @org.junit.jupiter.api.BeforeEach
+    void freezeEvaluationContract() throws Exception {
+        mockMvc.perform(post("/api/admin/ai/evaluation-runs/{runId}/contract/freeze",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID)
+                .header("X-ADP-User-Id", "privileged-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk());
+    }
+
     @Test
     void privilegedOperatorExportsDaConsumableEvaluationBundle() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -66,7 +75,7 @@ class AiEvaluationBundleControllerTests {
 
         String firstResponse = export("PRIVILEGED_OPERATOR")
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.manifest.schema_version").value("adp-ai-evaluation-bundle/v1"))
+            .andExpect(jsonPath("$.manifest.schema_version").value("adp-ai-evaluation-bundle/v2"))
             .andExpect(jsonPath("$.manifest.content_digest")
                 .value(org.hamcrest.Matchers.matchesPattern("sha256:[0-9a-f]{64}")))
             .andExpect(jsonPath("$.manifest.generated_at").isString())
@@ -213,6 +222,7 @@ class AiEvaluationBundleControllerTests {
     private Map<String, Object> digestContent(JsonNode bundle) {
         return Map.of(
             "schema_version", bundle.path("manifest").path("schema_version").asText(),
+            "contract_evidence", objectMapper.convertValue(bundle.path("contract_evidence"), Object.class),
             "execution_config", objectMapper.convertValue(bundle.path("execution_config"), Object.class),
             "case_results", objectMapper.convertValue(bundle.path("case_results"), Object.class),
             "runtime_metrics", objectMapper.convertValue(bundle.path("runtime_metrics"), Object.class),

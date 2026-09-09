@@ -55,6 +55,11 @@ public class TransformEngine {
         RuntimePolicyContext policyContext,
         RuntimeDecision decision
     ) {
+        return transform(executionId, context, policyContext, decision, null);
+    }
+
+    public TransformResult transform(String executionId, CanonicalContext context,
+        RuntimePolicyContext policyContext, RuntimeDecision decision, String evaluationScope) {
         Timer.Sample timer = Timer.start(meterRegistry);
         String transformExecutionId = "trn_" + UUID.randomUUID();
         try {
@@ -66,7 +71,7 @@ public class TransformEngine {
 
             List<TransformFieldResult> fields = new ArrayList<>();
             for (CanonicalContextField field : context.fields()) {
-                transformField(policyContext, decision, fields, field);
+                transformField(policyContext, decision, fields, field, evaluationScope);
             }
             fields.sort(Comparator.comparing(TransformFieldResult::path));
             String outputDigest = hasher.hash(fields.stream()
@@ -90,13 +95,14 @@ public class TransformEngine {
         RuntimePolicyContext policyContext,
         RuntimeDecision decision,
         List<TransformFieldResult> fields,
-        CanonicalContextField field
+        CanonicalContextField field,
+        String evaluationScope
     ) {
         TransformInstruction instruction = null;
         try {
             instruction = strategyResolver.resolve(resolutionContext(policyContext, decision, field));
             validateInstruction(instruction);
-            TransformScope transformScope = TransformScope.from(policyContext, decision, field.dataClass(), hasher);
+            TransformScope transformScope = TransformScope.from(policyContext, decision, field.dataClass(), hasher, evaluationScope);
             Object transformedValue = transformedValue(field, instruction, transformScope);
             String instructionDigest = instructionDigest(instruction);
             String transformedDigest = transformedValue == null
@@ -233,12 +239,12 @@ public class TransformEngine {
         }
     }
 
-    private String value(String value) {
+    private static String value(String value) {
         return value == null ? "<removed>" : value;
     }
 
-    private String instructionDigest(TransformInstruction instruction) {
-        return hasher.hash(String.join("|",
+    public static String instructionDigest(TransformInstruction instruction) {
+        return new CanonicalValueHasher().hash(String.join("|",
             instruction.strategy().name(),
             value(instruction.strategyVersion()),
             value(instruction.keyVersion()),
@@ -248,7 +254,7 @@ public class TransformEngine {
         ));
     }
 
-    private String canonicalParameters(Map<String, String> parameters) {
+    private static String canonicalParameters(Map<String, String> parameters) {
         return parameters.entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
             .map(entry -> entry.getKey() + "=" + entry.getValue())

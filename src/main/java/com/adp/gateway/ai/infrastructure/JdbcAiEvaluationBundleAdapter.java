@@ -49,7 +49,8 @@ public class JdbcAiEvaluationBundleAdapter implements AiEvaluationBundlePort {
                    evidence.token_usage_status, evidence.provider_http_status,
                    re.decision_id, re.connector_execution_id,
                    re.provider_request_digest, re.provider_response_digest,
-                   re.created_at, re.updated_at
+                   re.created_at, re.updated_at,
+                   re.transform_execution_id, re.outbound_payload_id, re.outbound_guard_status
             from runtime.ai_model_execution_evidence evidence
             join runtime.runtime_execution re on re.execution_id = evidence.execution_id
             where evidence.evaluation_run_id = :evaluationRunId

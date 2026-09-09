@@ -35,6 +35,15 @@ class AiModelProfileRuntimeTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @org.junit.jupiter.api.BeforeEach
+    void freezeEvaluationContract() throws Exception {
+        mockMvc.perform(post("/api/admin/ai/evaluation-runs/{runId}/contract/freeze",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID)
+                .header("X-ADP-User-Id", "privileged-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk());
+    }
+
     @Test
     void replaysIdenticalEvaluationRequestWithTheResolvedContract() throws Exception {
         AiModelProfile profile = catalog.profiles().getFirst();

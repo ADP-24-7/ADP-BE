@@ -48,6 +48,43 @@ class AiEvaluationBundleServiceTests {
 
     private List<AiEvaluationBundleSource> completeRows;
 
+    @Test
+    void exportsFrozenContractForIndependentDaValidation() throws Exception {
+        var fixture = new AiEvaluationContractServiceTests();
+        var snapshot = fixture.snapshot(fixture.models.profiles().getFirst());
+        var contracts = mock(AiEvaluationContractPort.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "contractPort", contracts);
+        var bindings = new ArrayList<Map<String, Object>>();
+        for (var row : completeRows) {
+            String decisionId = "decision-" + row.executionId();
+            when(row.decisionId()).thenReturn(decisionId);
+            when(row.providerHttpStatus()).thenReturn(null);
+            when(row.attemptElapsedMillis()).thenReturn(null);
+            when(row.inputTokens()).thenReturn(null);
+            when(row.outputTokens()).thenReturn(null);
+            when(row.totalTokens()).thenReturn(null);
+            when(row.transformExecutionId()).thenReturn("test-transform");
+            when(row.outboundPayloadId()).thenReturn("test-outbound");
+            when(row.outboundGuardStatus()).thenReturn("PASSED");
+            when(row.providerRequestDigest()).thenReturn("sha256:" + "a".repeat(64));
+            bindings.add(Map.ofEntries(
+                Map.entry("execution_id", row.executionId()), Map.entry("evaluation_run_id", row.evaluationRunId()),
+                Map.entry("eval_case_id", row.evalCaseId()), Map.entry("fixed_conditions_digest", snapshot.fixedConditionsDigest()),
+                Map.entry("model_profile_digest", row.profileDigest()), Map.entry("decision_id", row.decisionId()),
+                Map.entry("transform_execution_id", "test-transform"), Map.entry("outbound_payload_id", "test-outbound"),
+                Map.entry("outbound_guard_status", "PASSED"), Map.entry("provider_request_digest", row.providerRequestDigest()),
+                Map.entry("provider_input_digest", "sha256:" + "b".repeat(64))));
+        }
+        when(contracts.evidence(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyList()))
+            .thenReturn(Map.of("snapshot", snapshot, "bindings", bindings));
+        var bundle = service.export(principal(), AiEvaluationRunCatalog.BASELINE_RUN_ID);
+        assertThat(bundle.manifest().schemaVersion()).isEqualTo("adp-ai-evaluation-bundle/v2");
+        // Test-only MOCK artifact, never runtime evidence or a measurement.
+        java.nio.file.Files.writeString(java.nio.file.Path.of("build", "test-contract-bundle.json"),
+            objectMapper.copy().disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .writeValueAsString(bundle));
+    }
+
     @BeforeEach
     void setUp() {
         completeRows = models.profiles().stream().map(this::source).toList();

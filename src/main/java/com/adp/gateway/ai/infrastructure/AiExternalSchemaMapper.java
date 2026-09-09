@@ -110,10 +110,7 @@ public class AiExternalSchemaMapper implements ExternalSchemaMapper {
     ) {
         Map<String, Object> payload = new TreeMap<>();
         payload.put("max_tokens", maxTokens);
-        payload.put("messages", List.of(Map.of(
-            "role", "user",
-            "content", canonicalJson(fields)
-        )));
+        payload.put("messages", com.adp.gateway.ai.application.AiEvaluationPrompt.messages(canonicalJson(fields)));
         payload.put("model", modelId);
         payload.put("stream", false);
         payload.put("temperature", temperature);

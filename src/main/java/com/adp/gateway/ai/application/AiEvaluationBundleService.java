@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AiEvaluationBundleService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private AiEvaluationContractPort contractPort;
     public static final String SCHEMA_VERSION = "adp-ai-evaluation-bundle/v1";
     static final int MAX_EXECUTION_COUNT = 10_000;
 
@@ -93,9 +95,18 @@ public class AiEvaluationBundleService {
             first.evaluationRunId(), first.evaluationRunVersion(), first.evaluationContractDigest(),
             first.datasetId(), first.datasetVersion(), first.datasetDigest(), first.policySnapshotDigest(), models
         );
-        String contentDigest = canonicalizer.digest(new BundleContent(
-            SCHEMA_VERSION, executionConfig, caseResults, runtimeMetrics, failureSummary, traceIndex
-        ));
+        Map<String, Object> contractEvidence = contractPort == null ? null : contractPort.evidence(
+            evaluationRunId, rows.stream().map(AiEvaluationBundleSource::executionId).toList());
+        String schemaVersion = contractEvidence == null ? SCHEMA_VERSION : "adp-ai-evaluation-bundle/v2";
+        Map<String, Object> content = new TreeMap<>();
+        content.put("schema_version", schemaVersion);
+        content.put("execution_config", executionConfig);
+        content.put("case_results", caseResults);
+        content.put("runtime_metrics", runtimeMetrics);
+        content.put("failure_summary", failureSummary);
+        content.put("trace_index", traceIndex);
+        if (contractEvidence != null) content.put("contract_evidence", contractEvidence);
+        String contentDigest = canonicalizer.digest(content);
         OffsetDateTime executionFrom = rows.stream().map(AiEvaluationBundleSource::createdAt)
             .min(Comparator.naturalOrder()).orElseThrow();
         OffsetDateTime executionCutoffAt = rows.stream().map(AiEvaluationBundleSource::updatedAt)
@@ -105,7 +116,7 @@ public class AiEvaluationBundleService {
 
         AiEvaluationBundle bundle = new AiEvaluationBundle(
             new AiEvaluationBundle.Manifest(
-                SCHEMA_VERSION, bundleId, "1.0.0", contentDigest,
+                schemaVersion, bundleId, contractEvidence == null ? "1.0.0" : "2.0.0", contentDigest,
                 first.evaluationRunId(), first.evaluationRunVersion(),
                 rows.size(), caseCount, models.size(), OffsetDateTime.now(clock), executionFrom, executionCutoffAt
             ),
@@ -113,7 +124,8 @@ public class AiEvaluationBundleService {
             caseResults,
             runtimeMetrics,
             failureSummary,
-            traceIndex
+            traceIndex,
+            contractEvidence
         );
         observability.aiEvaluationBundleExport(AiEvaluationBundleExportOutcome.SUCCESS);
         return bundle;
@@ -197,7 +209,8 @@ public class AiEvaluationBundleService {
             var model = new AiEvaluationBundle.ModelConfig(
                 row.profileId(), row.profileVersion(), row.profileDigest(), row.providerModelId(),
                 row.providerModelVersion(), row.connectionProfileId(), row.maxTokens(), row.temperature(),
-                row.samplingProfileVersion(), row.destinationProfileDigest()
+                row.samplingProfileVersion(), row.destinationProfileDigest(),
+                modelProfileCatalog.findByProfileId(row.profileId()).orElseThrow().destinationProfileId(), "NVIDIA"
             );
             AiEvaluationBundle.ModelConfig existing = models.putIfAbsent(row.profileId(), model);
             if (existing != null && !existing.equals(model)) {
@@ -309,7 +322,8 @@ public class AiEvaluationBundleService {
     private AiEvaluationBundle.TraceEntry traceEntry(AiEvaluationBundleSource row) {
         return new AiEvaluationBundle.TraceEntry(
             row.executionId(), row.decisionId(), row.connectorExecutionId(), row.providerRequestDigest(),
-            row.providerResponseDigest(), row.createdAt(), row.updatedAt()
+            row.providerResponseDigest(), row.createdAt(), row.updatedAt(),
+            row.transformExecutionId(), row.outboundPayloadId(), row.outboundGuardStatus()
         );
     }
 

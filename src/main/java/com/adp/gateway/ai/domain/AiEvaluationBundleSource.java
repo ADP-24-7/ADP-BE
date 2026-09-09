@@ -45,6 +45,9 @@ public record AiEvaluationBundleSource(
     String providerRequestDigest,
     String providerResponseDigest,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt
+    OffsetDateTime updatedAt,
+    String transformExecutionId,
+    String outboundPayloadId,
+    String outboundGuardStatus
 ) {
 }

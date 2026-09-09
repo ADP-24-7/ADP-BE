@@ -21,17 +21,22 @@ public record TransformScope(
         DataClass dataClass,
         CanonicalValueHasher hasher
     ) {
+        return from(policyContext, decision, dataClass, hasher, null);
+    }
+
+    public static TransformScope from(RuntimePolicyContext policyContext, RuntimeDecision decision,
+        DataClass dataClass, CanonicalValueHasher hasher, String evaluationScope) {
         String canonical = String.join("|",
             value(policyContext.workloadId()),
             value(policyContext.purpose()),
-            value(policyContext.provider()),
+            value(evaluationScope == null ? policyContext.provider() : evaluationScope),
             dataClass.name()
         );
         return new TransformScope(
             hasher.hash(canonical),
             policyContext.workloadId(),
             policyContext.purpose(),
-            policyContext.provider(),
+            evaluationScope == null ? policyContext.provider() : evaluationScope,
             decision.policyVersion(),
             decision.snapshotDigest(),
             dataClass

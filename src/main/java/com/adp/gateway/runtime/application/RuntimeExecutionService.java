@@ -78,6 +78,8 @@ import org.slf4j.LoggerFactory;
 
 @Service
 public class RuntimeExecutionService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.adp.gateway.ai.application.AiEvaluationContractService evaluationContracts;
 
     private static final Logger log = LoggerFactory.getLogger(RuntimeExecutionService.class);
 
@@ -230,6 +232,12 @@ public class RuntimeExecutionService {
         Map<String, Object> input,
         AiEvaluationReference resolvedEvaluation
     ) {
+        String evaluationScope = null;
+        if (resolvedEvaluation != null) {
+            if (evaluationContracts == null) throw new IllegalStateException("Evaluation contract service is required");
+            evaluationScope = evaluationContracts.required(resolvedEvaluation.evaluationRunId())
+                .fixedConditions().path("transform_scope").asText();
+        }
         SubjectRef subject = SubjectRef.from(requestContext.subject());
         String executionId = "exec_" + UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(clock);
@@ -341,12 +349,12 @@ public class RuntimeExecutionService {
                 decision = packPolicyEvaluation.get().decision();
             }
             persistence.recordRuntimeDecision(executionId, decision);
-            TransformResult transformResult = transformEngine.transform(
+            TransformResult transformResult = resolvedEvaluation == null ? transformEngine.transform(
                 executionId,
                 canonicalContext,
                 runtimePolicyContext,
                 decision
-            );
+            ) : transformEngine.transform(executionId, canonicalContext, runtimePolicyContext, decision, evaluationScope);
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             updateStatus(executionId, finalStatus);
@@ -496,6 +504,10 @@ public class RuntimeExecutionService {
                 outboundPayload
             );
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
+            if (resolvedEvaluation != null) {
+                evaluationContracts.validateAndBind(executionId, resolvedEvaluation, retrieval, canonicalContext,
+                    snapshot, decision, transformResult, destinationProfile, providerRequest);
+            }
             if (destinationProfile.packType() == ExecutionPackType.DIGITAL_ASSET) {
                 OffsetDateTime guardEvaluatedAt = OffsetDateTime.now(clock);
                 DestinationProfile currentDestination = destinationProfilePort.load(

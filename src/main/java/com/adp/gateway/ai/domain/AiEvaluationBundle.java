@@ -14,12 +14,19 @@ public record AiEvaluationBundle(
     List<CaseResult> caseResults,
     List<RuntimeMetric> runtimeMetrics,
     FailureSummary failureSummary,
-    List<TraceEntry> traceIndex
+    List<TraceEntry> traceIndex,
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    Map<String, Object> contractEvidence
 ) {
+    public AiEvaluationBundle(Manifest manifest, ExecutionConfig executionConfig, List<CaseResult> caseResults,
+        List<RuntimeMetric> runtimeMetrics, FailureSummary failureSummary, List<TraceEntry> traceIndex) {
+        this(manifest, executionConfig, caseResults, runtimeMetrics, failureSummary, traceIndex, null);
+    }
     public AiEvaluationBundle {
         caseResults = List.copyOf(caseResults);
         runtimeMetrics = List.copyOf(runtimeMetrics);
         traceIndex = List.copyOf(traceIndex);
+        contractEvidence = contractEvidence == null ? null : Map.copyOf(contractEvidence);
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -79,8 +86,18 @@ public record AiEvaluationBundle(
         int maxTokens,
         double temperature,
         String samplingProfileVersion,
-        String destinationProfileDigest
+        String destinationProfileDigest,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        String destinationProfileId,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        String provider
     ) {
+        public ModelConfig(String profileId, String profileVersion, String profileDigest, String providerModelId,
+            String providerModelVersion, String connectionProfileId, int maxTokens, double temperature,
+            String samplingProfileVersion, String destinationProfileDigest) {
+            this(profileId, profileVersion, profileDigest, providerModelId, providerModelVersion,
+                connectionProfileId, maxTokens, temperature, samplingProfileVersion, destinationProfileDigest, null, null);
+        }
     }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
@@ -127,7 +144,10 @@ public record AiEvaluationBundle(
         String providerRequestDigest,
         String providerResponseDigest,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String transformExecutionId,
+        String outboundPayloadId,
+        String outboundGuardStatus
     ) {
     }
 }
