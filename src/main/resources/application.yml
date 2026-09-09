@@ -24,6 +24,7 @@ adp:
       future-skew: ${ADP_REQUEST_FUTURE_SKEW:30s}
     egress:
       allow-private-destinations: ${ADP_EGRESS_ALLOW_PRIVATE_DESTINATIONS:false}
+      allowed-hosts: ${ADP_EGRESS_ALLOWED_HOSTS:integrate.api.nvidia.com}
   digital-asset:
     artifact-store:
       type: ${ADP_DIGITAL_ASSET_ARTIFACT_STORE_TYPE:disabled}

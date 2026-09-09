@@ -3,7 +3,10 @@ package com.adp.gateway.egress.application;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,17 +16,28 @@ import org.springframework.stereotype.Component;
 public class DestinationEndpointPolicy {
 
     private final boolean allowPrivateDestinations;
+    private final Set<String> allowedHosts;
     private final HostResolver hostResolver;
 
     @Autowired
     public DestinationEndpointPolicy(
-        @Value("${adp.security.egress.allow-private-destinations:false}") boolean allowPrivateDestinations
+        @Value("${adp.security.egress.allow-private-destinations:false}") boolean allowPrivateDestinations,
+        @Value("${adp.security.egress.allowed-hosts:integrate.api.nvidia.com}") String allowedHosts
     ) {
-        this(allowPrivateDestinations, InetAddress::getAllByName);
+        this(allowPrivateDestinations, parseAllowedHosts(allowedHosts), InetAddress::getAllByName);
     }
 
-    DestinationEndpointPolicy(boolean allowPrivateDestinations, HostResolver hostResolver) {
+    public DestinationEndpointPolicy(boolean allowPrivateDestinations) {
+        this(allowPrivateDestinations, Set.of(), InetAddress::getAllByName);
+    }
+
+    DestinationEndpointPolicy(
+        boolean allowPrivateDestinations,
+        Set<String> allowedHosts,
+        HostResolver hostResolver
+    ) {
         this.allowPrivateDestinations = allowPrivateDestinations;
+        this.allowedHosts = Set.copyOf(allowedHosts);
         this.hostResolver = hostResolver;
     }
 
@@ -38,10 +52,13 @@ public class DestinationEndpointPolicy {
                 || uri.getQuery() != null) {
                 return false;
             }
-            if (!allowPrivateDestinations && "http".equals(scheme)) {
+            if (!allowPrivateDestinations && ("http".equals(scheme) || (uri.getPort() != -1 && uri.getPort() != 443))) {
                 return false;
             }
             String host = uri.getHost().toLowerCase(Locale.ROOT);
+            if (!allowPrivateDestinations && !allowedHosts.contains(host)) {
+                return false;
+            }
             if (isMetadataHost(host)) {
                 return false;
             }
@@ -54,6 +71,14 @@ public class DestinationEndpointPolicy {
         } catch (IllegalArgumentException | UnknownHostException exception) {
             return false;
         }
+    }
+
+    private static Set<String> parseAllowedHosts(String configuredHosts) {
+        return Arrays.stream(configuredHosts.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isBlank())
+            .map(value -> value.toLowerCase(Locale.ROOT))
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     private boolean isMetadataHost(String host) {

@@ -61,7 +61,10 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         @Value("${adp.ai-connector.connect-timeout:2s}") Duration connectTimeout,
         @Value("${adp.ai-connector.read-timeout:5s}") Duration readTimeout
     ) {
-        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(connectTimeout)
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(readTimeout);
         this.restClientBuilder = restClientBuilder.requestFactory(requestFactory);

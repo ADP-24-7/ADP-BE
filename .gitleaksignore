@@ -1,0 +1,14 @@
+# Reviewed historical test fixture: synthetic AWS-shaped leakage detector input.
+29788daa339e504ba5adccbfae3d3c4ad836ff47:src/test/java/com/adp/gateway/egress/infrastructure/RegexResponseLeakageDetectorTests.java:aws-access-token:31
+b7fd52a95af196ad0ccc9f705753830dcd25235e:src/test/java/com/adp/gateway/egress/infrastructure/RegexResponseLeakageDetectorTests.java:aws-access-token:31
+
+# Reviewed historical test fixture: synthetic idempotency key.
+d8b1ad865ad4562e3ae6cea90a5f4c59526145f2:src/test/java/com/adp/gateway/runtime/api/RuntimeExecutionDefaultEnabledTests.java:generic-api-key:36
+
+# Reviewed historical documentation: local-only API credential examples.
+7db373469db74f6741a8868ad1cdf3deb486deee:README.md:curl-auth-header:76
+d5ae83278a630bfde4fb2f512fded127d072afbb:README.md:curl-auth-header:76
+2cfe418a6a56cac6a96633829d5a931ba8c6d044:README.md:curl-auth-header:70
+234018fafc3f21e4940b61c7c4ce545735adc9fe:README.md:curl-auth-header:70
+43e7c3cc4be23d3eb1ba15063e8f1183210f11bc:README.md:curl-auth-header:61
+7224fa8df0e9faad7265233858574ef834dfe9e0:README.md:curl-auth-header:61

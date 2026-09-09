@@ -10,13 +10,15 @@ class DestinationEndpointPolicyTests {
 
     @Test
     void allowsOnlyPublicHttpsDestinationByDefault() throws Exception {
-        var policy = new DestinationEndpointPolicy(false, host -> new InetAddress[] {
+        var policy = new DestinationEndpointPolicy(false, java.util.Set.of("provider.example"), host -> new InetAddress[] {
             InetAddress.getByAddress(new byte[] {8, 8, 8, 8})
         });
 
         assertThat(policy.allows("https://provider.example")).isTrue();
         assertThat(policy.allows("http://provider.example")).isFalse();
+        assertThat(policy.allows("https://provider.example:8443")).isFalse();
         assertThat(policy.allows("https://user@provider.example")).isFalse();
+        assertThat(policy.allows("https://unregistered.example")).isFalse();
     }
 
     @Test
@@ -37,6 +39,8 @@ class DestinationEndpointPolicyTests {
 
     private DestinationEndpointPolicy policyFor(String address) throws Exception {
         InetAddress resolved = InetAddress.getByName(address);
-        return new DestinationEndpointPolicy(false, host -> new InetAddress[] {resolved});
+        return new DestinationEndpointPolicy(
+            false, java.util.Set.of("provider.example"), host -> new InetAddress[] {resolved}
+        );
     }
 }
