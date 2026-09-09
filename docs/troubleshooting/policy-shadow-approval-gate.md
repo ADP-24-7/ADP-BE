@@ -32,3 +32,10 @@ PR #34와 동일한 Lifecycle Scope advisory lock을 획득하고 Candidate revi
 Governance 판단이 외부 입력으로 이동한다. 현재 server-owned policy `policy-shadow-approval/1.0.0`은
 `GOLDEN_ALLOW/1.0.0 + MATCH`만 허용하고 정책 버전을 Transition Evidence에 저장한다. 향후 versioned 분류 정책이 추가되기
 전까지 이 제한을 유지한다.
+
+## latest Evidence는 승인 Policy Case 범위에서 판정한다
+
+최신성은 Candidate 전체에서 가장 늦게 생성된 Evidence가 아니라 Candidate revision + Evaluation Case ID/Version 조합 안에서
+판정한다. Approval Policy가 요구하는 Case ID/Version은 별도로 검증하므로 다른 버전의 더 최근 Evidence가 현재 정책의 정상
+Evidence를 무효화하지 않는다. DB는 identity와 binding integrity를 담당하고, Case/result/policy version의 승인 의미는
+server-owned application policy가 담당한다.

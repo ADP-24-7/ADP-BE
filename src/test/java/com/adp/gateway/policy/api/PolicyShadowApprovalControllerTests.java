@@ -5,7 +5,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -13,8 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -30,6 +40,9 @@ class PolicyShadowApprovalControllerTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private Environment environment;
 
     @Test
     void approvesMatchingLatestEvidenceAndBindsTransitionEvidence() throws Exception {
@@ -137,6 +150,81 @@ class PolicyShadowApprovalControllerTests {
         assertStage(scope.candidateId(), "SHADOW");
     }
 
+    @Test
+    void rejectsApprovalByCandidateMaker() throws Exception {
+        Scope scope = insertScope("1".repeat(64), "1".repeat(64));
+        String shadowId = evaluate(scope.candidateId());
+        transitionToShadow(scope.candidateId());
+
+        approve(scope.candidateId(), shadowId, "approval-maker", "PRIVILEGED_OPERATOR")
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_LIFECYCLE_MAKER_CHECKER_VIOLATION"));
+        assertStage(scope.candidateId(), "SHADOW");
+    }
+
+    @Test
+    void rejectsApprovalWithoutPrivilegedOperatorRole() throws Exception {
+        Scope scope = insertScope("1".repeat(64), "1".repeat(64));
+        String shadowId = evaluate(scope.candidateId());
+        transitionToShadow(scope.candidateId());
+
+        approve(scope.candidateId(), shadowId, "approval-operator", "OPERATOR")
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_LIFECYCLE_FORBIDDEN"));
+        assertStage(scope.candidateId(), "SHADOW");
+    }
+
+    @Test
+    void concurrentApprovalAllowsExactlyOneWinner() throws Exception {
+        Scope scope = insertScope("1".repeat(64), "1".repeat(64));
+        String shadowId = evaluate(scope.candidateId());
+        transitionToShadow(scope.candidateId());
+        String lockScope = String.join(
+            "|", "institution_local", "WORKLOAD", "AI", scope.workloadId(), "CUSTOMER_SUPPORT"
+        );
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try (Connection lockConnection = connection();
+             PreparedStatement lock = lockConnection.prepareStatement(
+                 "select pg_advisory_lock(hashtextextended(?, 0))"
+             )) {
+            lock.setString(1, lockScope);
+            lock.execute();
+            List<Future<MvcResult>> approvals = List.of(
+                executor.submit(() -> concurrentApprove(scope.candidateId(), shadowId, "approval-checker-a", start)),
+                executor.submit(() -> concurrentApprove(scope.candidateId(), shadowId, "approval-checker-b", start))
+            );
+            start.countDown();
+            assertThat(awaitAdvisoryWaiters(2)).isTrue();
+            unlock(lockConnection, lockScope);
+
+            List<MvcResult> results = List.of(approvals.get(0).get(), approvals.get(1).get());
+            assertThat(results).extracting(result -> result.getResponse().getStatus())
+                .containsExactlyInAnyOrder(200, 409);
+            MvcResult rejected = results.stream()
+                .filter(result -> result.getResponse().getStatus() == 409)
+                .findFirst().orElseThrow();
+            assertThat(objectMapper.readTree(rejected.getResponse().getContentAsString()).get("reasonCode").asText())
+                .isEqualTo("POLICY_SHADOW_APPROVAL_EVIDENCE_STALE");
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        Integer approvals = jdbcClient.sql("""
+                select count(*) from policy.lifecycle_transition_event
+                where artifact_id = :candidateId and to_stage = 'APPROVED'
+                """)
+            .param("candidateId", scope.candidateId()).query(Integer.class).single();
+        Long revision = jdbcClient.sql("""
+                select revision from policy.lifecycle_artifact
+                where institution_id = 'institution_local' and artifact_id = :candidateId
+                """)
+            .param("candidateId", scope.candidateId()).query(Long.class).single();
+        assertThat(approvals).isEqualTo(1);
+        assertThat(revision).isEqualTo(5L);
+    }
+
     private Scope insertScope(String baselineDigest, String candidateDigest) {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         Scope scope = new Scope(
@@ -197,13 +285,68 @@ class PolicyShadowApprovalControllerTests {
 
     private org.springframework.test.web.servlet.ResultActions approve(String candidateId, String shadowId)
         throws Exception {
+        return approve(candidateId, shadowId, "approval-checker", "PRIVILEGED_OPERATOR");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions approve(
+        String candidateId, String shadowId, String actor, String roles
+    ) throws Exception {
         return mockMvc.perform(post(
                 "/api/admin/policy-lifecycle/{id}/versions/2.0.0/approvals", candidateId
             )
-                .header("X-ADP-User-Id", "approval-checker")
-                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .header("X-ADP-User-Id", actor)
+                .header("X-ADP-User-Roles", roles)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"shadowEvaluationId\":\"%s\"}".formatted(shadowId)));
+    }
+
+    private MvcResult concurrentApprove(
+        String candidateId,
+        String shadowId,
+        String actor,
+        CountDownLatch start
+    ) throws Exception {
+        start.await();
+        return approve(candidateId, shadowId, actor, "PRIVILEGED_OPERATOR")
+            .andReturn();
+    }
+
+    private Connection connection() throws Exception {
+        return DriverManager.getConnection(
+            environment.getRequiredProperty("spring.datasource.url"),
+            environment.getRequiredProperty("spring.datasource.username"),
+            environment.getRequiredProperty("spring.datasource.password")
+        );
+    }
+
+    private boolean awaitAdvisoryWaiters(int expected) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        try (Connection monitor = connection();
+             PreparedStatement statement = monitor.prepareStatement("""
+                 select count(*)
+                 from pg_stat_activity
+                 where datname = current_database() and wait_event = 'advisory'
+                 """)) {
+            while (System.nanoTime() < deadline) {
+                try (ResultSet result = statement.executeQuery()) {
+                    result.next();
+                    if (result.getInt(1) >= expected) {
+                        return true;
+                    }
+                }
+                Thread.sleep(20);
+            }
+            return false;
+        }
+    }
+
+    private void unlock(Connection connection, String lockScope) throws Exception {
+        try (PreparedStatement unlock = connection.prepareStatement(
+            "select pg_advisory_unlock(hashtextextended(?, 0))"
+        )) {
+            unlock.setString(1, lockScope);
+            unlock.execute();
+        }
     }
 
     private void replaceActive(Scope scope) {

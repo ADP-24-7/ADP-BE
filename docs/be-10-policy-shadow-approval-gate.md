@@ -11,7 +11,7 @@ Lifecycle `SHADOW` Candidate를 `APPROVED`로 전환할 때 PR #34의 Shadow Evi
 Privileged checker + Candidate ID/Version + Shadow Evidence ID
 -> Institution/Workload scope Candidate 조회
 -> Maker-Checker와 SHADOW stage 검증
--> Candidate에 속한 최신 Case Shadow Evidence 조회
+-> 승인 정책이 요구하는 Candidate revision + Evaluation Case ID/Version 범위의 최신 Shadow Evidence 조회
 -> server-owned Approval Policy 검증
 -> Lifecycle scope advisory lock
 -> Candidate identity/revision과 ACTIVE baseline 재검증
@@ -53,7 +53,8 @@ V34부터 신규 승인 이벤트는 다음 값을 함께 저장한다.
 - Shadow result
 - Approval Policy Version
 
-복합 FK는 Transition의 Institution, Candidate identity/digest와 Shadow Evidence binding을 DB에서도 일치시킨다. V34 이전
+복합 FK는 Transition의 Institution, Candidate identity/digest와 Shadow Evidence binding integrity를 DB에서 보장한다.
+Evidence의 approvability와 Approval Policy Version의 의미는 server-owned application policy가 검증한다. V34 이전
 승인 이력은 의미를 변경하지 않고 `LEGACY_UNBOUND`로 구분한다.
 
 ## 현재 범위
