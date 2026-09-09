@@ -4,7 +4,9 @@ BE-11A는 DA Artifact와 Pack별 운영 구현에 의존하지 않는 공통 관
 
 ## Prometheus
 
-Spring Boot Actuator가 제공하는 `/actuator/prometheus`에서 Prometheus text format을 조회한다. 기본값은 인증 필요이며, 격리된 로컬·수집망에서만 `ADP_PROMETHEUS_PUBLIC=true`로 공개할 수 있다. Endpoint에는 원문 요청·응답·Subject·Institution·Execution ID를 노출하지 않는다.
+Spring Boot Actuator가 제공하는 `/actuator/prometheus`에서 Prometheus text format을 조회한다. 기본값은 OPERATOR,
+PRIVILEGED_OPERATOR, AUDITOR 역할이 필요하며, 격리된 로컬·수집망에서만 `ADP_PROMETHEUS_PUBLIC=true`로 공개할 수 있다.
+Endpoint에는 원문 요청·응답·Subject·Institution·Execution ID를 노출하지 않는다.
 
 공통 metric은 다음과 같다.
 

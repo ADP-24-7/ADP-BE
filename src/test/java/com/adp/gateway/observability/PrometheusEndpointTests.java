@@ -28,6 +28,12 @@ class PrometheusEndpointTests {
             .andExpect(content().string(org.hamcrest.Matchers.containsString("jvm_info")))
             .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_recovery_processing_total")))
             .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_recovery_queue_depth")))
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_policy_drift_count")));
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_policy_drift_count")))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                "adp_operational_metrics_refresh_success"
+            )))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                "adp_operational_metrics_refresh_failures_total"
+            )));
     }
 }

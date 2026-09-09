@@ -30,9 +30,17 @@ idempotency key, provider correlation key와 credential은 포함하지 않는�
 | `adp.policy.lifecycle.transition.total` | Counter | target stage별 committed transition |
 | `adp.policy.current.selection.total` | Counter | activation/rollback event |
 | `adp.security.control.total` | Counter | freshness/authorization/destination rejection |
+| `adp.operational.metrics.refresh.success` | Gauge | 최근 전역 운영 Snapshot 갱신 성공 여부(1/0) |
+| `adp.operational.metrics.snapshot.age.seconds` | Gauge | 마지막 성공 Snapshot의 경과 시간 |
+| `adp.operational.metrics.refresh.failures` | Counter | 운영 Snapshot 갱신 실패 누적 횟수 |
 
 Drift는 selected artifact가 없거나 `ACTIVE`가 아니거나, selected digest/revision이 authoritative Lifecycle row와 다를 때다.
-Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache snapshot을 공유하며 기본 TTL은 5초다.
+Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache snapshot을 공유하며 기본 TTL은 5초다. DB 조회 실패 시
+마지막 성공 Snapshot을 유지하되 refresh 성공 여부와 Snapshot age를 별도 노출해 stale 값이 정상 상태로 해석되지 않게 한다.
+
+`/actuator/prometheus`는 기본적으로 `OPERATOR`, `PRIVILEGED_OPERATOR`, `AUDITOR`만 접근할 수 있다. 전역 운영 상태를
+포함하므로 `RUNTIME_EXECUTOR`를 비롯한 일반 인증 Principal에는 허용하지 않는다. `ADP_PROMETHEUS_PUBLIC=true`는 격리된
+로컬 개발·수집망에서만 사용하는 명시적 opt-in이다.
 
 ## Alert Rules
 
@@ -43,6 +51,8 @@ Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache sn
 - Current Selection drift 존재
 - 15분 내 rollback 3회 초과
 - 5분 Runtime failure rate 5% 초과
+- 운영 Snapshot refresh 실패
+- 마지막 성공 Snapshot age 60초 초과
 
 CI는 `prom/prometheus:v3.5.0`의 `/bin/promtool`로 rule syntax와 expression을 검증한다.
 

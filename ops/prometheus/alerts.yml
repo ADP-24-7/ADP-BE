@@ -43,3 +43,19 @@ groups:
           severity: critical
         annotations:
           summary: Runtime failure transition rate is above five percent
+
+      - alert: AdpOperationalMetricsRefreshFailed
+        expr: adp_operational_metrics_refresh_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Operational metrics refresh is failing
+
+      - alert: AdpOperationalMetricsSnapshotStale
+        expr: adp_operational_metrics_snapshot_age_seconds > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Operational metrics snapshot is stale

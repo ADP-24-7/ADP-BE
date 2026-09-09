@@ -3,10 +3,12 @@ package com.adp.gateway.observability.infrastructure;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.adp.gateway.observability.application.OperationsMonitoringPort;
 import com.adp.gateway.observability.domain.OperationalMetricSnapshot;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import org.slf4j.Logger;
@@ -24,7 +26,10 @@ public class OperationalMetricsBinder implements MeterBinder {
     private final Clock clock;
     private final Duration cacheDuration;
     private volatile OperationalMetricSnapshot snapshot = OperationalMetricSnapshot.empty();
+    private volatile OffsetDateTime snapshotCapturedAt;
     private volatile OffsetDateTime refreshAfter = OffsetDateTime.MIN;
+    private volatile boolean lastRefreshSuccessful;
+    private final AtomicLong refreshFailures = new AtomicLong();
 
     public OperationalMetricsBinder(
         OperationsMonitoringPort port,
@@ -53,6 +58,15 @@ public class OperationalMetricsBinder implements MeterBinder {
             value -> value.policyCurrentSelections());
         gauge(registry, "adp.policy.drift.count", "Current selections that differ from authoritative lifecycle state",
             value -> value.policyDriftedSelections());
+        Gauge.builder("adp.operational.metrics.refresh.success", this, OperationalMetricsBinder::refreshSuccess)
+            .description("Whether the latest operational metrics refresh succeeded")
+            .register(registry);
+        Gauge.builder("adp.operational.metrics.snapshot.age.seconds", this, OperationalMetricsBinder::snapshotAgeSeconds)
+            .description("Age of the latest successfully refreshed operational metrics snapshot")
+            .register(registry);
+        FunctionCounter.builder("adp.operational.metrics.refresh.failures", refreshFailures, AtomicLong::doubleValue)
+            .description("Total failed operational metrics refresh attempts")
+            .register(registry);
     }
 
     private void gauge(
@@ -78,7 +92,11 @@ public class OperationalMetricsBinder implements MeterBinder {
             }
             try {
                 snapshot = port.loadGlobalMetricSnapshot(now);
+                snapshotCapturedAt = now;
+                lastRefreshSuccessful = true;
             } catch (DataAccessException exception) {
+                lastRefreshSuccessful = false;
+                refreshFailures.incrementAndGet();
                 log.atWarn()
                     .addKeyValue("event", "operational_metrics_refresh")
                     .addKeyValue("outcome", "FAILED")
@@ -87,5 +105,20 @@ public class OperationalMetricsBinder implements MeterBinder {
             refreshAfter = now.plus(cacheDuration);
             return snapshot;
         }
+    }
+
+    private double refreshSuccess() {
+        currentSnapshot();
+        return lastRefreshSuccessful ? 1 : 0;
+    }
+
+    private double snapshotAgeSeconds() {
+        currentSnapshot();
+        OffsetDateTime capturedAt = snapshotCapturedAt;
+        if (capturedAt == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+        long ageMillis = Duration.between(capturedAt, OffsetDateTime.now(clock)).toMillis();
+        return Math.max(0, ageMillis) / 1_000.0;
     }
 }

@@ -49,7 +49,8 @@ public class SecurityConfig {
                 if (prometheusPublic) {
                     auth.requestMatchers("/actuator/prometheus").permitAll();
                 } else {
-                    auth.requestMatchers("/actuator/prometheus").authenticated();
+                    auth.requestMatchers("/actuator/prometheus")
+                        .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR");
                 }
                 auth.requestMatchers("/api/internal/info").permitAll()
                     .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
