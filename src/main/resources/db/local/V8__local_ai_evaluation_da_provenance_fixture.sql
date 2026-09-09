@@ -14,6 +14,22 @@ insert into synthetic_customer (
     'customer_type_1'
 ) on conflict (customer_id) do nothing;
 
+insert into auth_subject_grant (
+    principal_id,
+    workload_id,
+    action_name,
+    purpose,
+    subject_type,
+    subject_id
+) values (
+    'svc_local_runtime',
+    'customer_summary',
+    'RUNTIME_EXECUTE',
+    'CUSTOMER_SUPPORT',
+    'customer',
+    'da-customer-10832'
+) on conflict (principal_id, workload_id, action_name, purpose, subject_type, subject_id) do nothing;
+
 insert into synthetic_account (
     account_id,
     customer_id,
