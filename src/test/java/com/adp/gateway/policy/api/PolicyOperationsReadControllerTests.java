@@ -80,6 +80,19 @@ class PolicyOperationsReadControllerTests {
     }
 
     @Test
+    void exposesLocalAiPolicyFixtureForTheDefaultConsoleContext() throws Exception {
+        mockMvc.perform(get("/api/admin/policy-lifecycle")
+                .header("X-ADP-User-Id", "operations-reader")
+                .header("X-ADP-User-Roles", "OPERATOR")
+                .param("executionPack", "AI")
+                .param("query", "AI-POLICY-LOCAL-VALIDATED-001"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(1))
+            .andExpect(jsonPath("$.items[0].artifactId").value("AI-POLICY-LOCAL-VALIDATED-001"))
+            .andExpect(jsonPath("$.items[0].lifecycleStage").value("VALIDATED"));
+    }
+
+    @Test
     void enforcesInstitutionAndWorkloadScopeInSearchAndHistory() {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         seedArtifact("allowed-" + suffix, "institution-a", "workload-a", "DRAFT", "AI");

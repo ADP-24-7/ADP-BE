@@ -32,6 +32,10 @@ Policy 화면은 server-owned 목록에서 Artifact를 선택하고 Transition·
 Governance Command 패널로 전달한다. Pack 변경 시 이전 Pack의 선택을 제거하고 Command 성공 후 목록과 History cache를
 무효화한다.
 
+로컬 통합 Compose는 Vite proxy에서 개발용 Admin Principal을 주입하므로 별도 로그인 화면 없이 실제 BE API를 사용한다. 기본
+AI Context에서도 Read Model을 확인할 수 있도록 `AI-POLICY-LOCAL-VALIDATED-001` fixture를 제공하며 운영 profile에서는 로드하지
+않는다.
+
 ## 현재 범위와 후속
 
 이번 수직 Slice는 Policy와 Digital Asset Lifecycle 탐색을 닫는다. Security Finding, Admin Identity, Workload/Data Access

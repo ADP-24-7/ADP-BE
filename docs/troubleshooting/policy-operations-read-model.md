@@ -20,6 +20,14 @@ Shadow Evidence, Transition, Artifact를 FK 역순으로 제거해 테스트 간
 Pack을 바꿔도 이전 Artifact 선택을 유지하면 현재 화면 Pack과 Command 대상이 달라진다. Pack 변경 시 선택을 초기화하고 Create,
 Transition, Shadow, Approval, Activation, Rollback 이후 관련 목록·History query를 무효화하도록 했다.
 
+## 통합 Compose에서 모든 Admin API가 401이 된 문제
+
+FE 레포의 Vite 설정에는 로컬 BFF Header 주입이 있었지만 BE 레포의 통합 Compose가 활성화 변수와 로컬 Principal을 FE
+컨테이너에 전달하지 않았다. 로그인 화면이 없는 상태에서 `/api/admin/**` 요청이 익명 요청이 되어 Overview와 Policy Read
+Model이 모두 `Authentication required`로 실패했다. 통합 Compose도 FE 단독 Compose와 동일하게
+`VITE_LOCAL_BFF_ENABLED`, 로컬 Runtime API Key, User ID, Role을 전달하도록 맞췄다. 이 Header는 Vite 개발 서버가 proxy
+시점에만 추가하며 브라우저 코드에는 노출하지 않는다.
+
 ## 동적 SQL 조각 경계에서 Named Parameter가 합쳐진 문제
 
 선택 필터 뒤에 정렬 SQL을 문자열로 결합하면서 공백 경계가 사라져 `:executionPackorder`라는 잘못된 parameter로 해석됐다. SQL

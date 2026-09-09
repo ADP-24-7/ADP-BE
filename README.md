@@ -57,6 +57,10 @@ make setup
 make docker-up
 ```
 
+로컬 통합 환경은 로그인 화면 대신 Vite 개발 서버가 Admin 요청에 로컬 사용자 Header를 주입합니다. Credential은 브라우저
+번들에 포함되지 않으며 `VITE_LOCAL_BFF_ENABLED=true`인 로컬 Compose에서만 활성화됩니다. 배포 환경에서는 이 경로를
+비활성화하고 실제 관리자 인증 경계를 사용해야 합니다.
+
 ## Docker 파일 기준
 
 - `Dockerfile`: CI/NCP 배포용 jar image build
