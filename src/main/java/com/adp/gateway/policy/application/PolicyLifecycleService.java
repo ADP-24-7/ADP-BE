@@ -11,6 +11,7 @@ import com.adp.gateway.policy.domain.PolicyLayer;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
+import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,15 +26,21 @@ public class PolicyLifecycleService {
     );
     private final PolicyLifecyclePersistence persistence;
     private final PolicyLifecycleTransitionValidator transitionValidator;
+    private final PolicyShadowEvidencePersistence shadowEvidencePersistence;
+    private final PolicyShadowApprovalPolicy shadowApprovalPolicy;
     private final Clock clock;
 
     public PolicyLifecycleService(
         PolicyLifecyclePersistence persistence,
         PolicyLifecycleTransitionValidator transitionValidator,
+        PolicyShadowEvidencePersistence shadowEvidencePersistence,
+        PolicyShadowApprovalPolicy shadowApprovalPolicy,
         Clock clock
     ) {
         this.persistence = persistence;
         this.transitionValidator = transitionValidator;
+        this.shadowEvidencePersistence = shadowEvidencePersistence;
+        this.shadowApprovalPolicy = shadowApprovalPolicy;
         this.clock = clock;
     }
 
@@ -105,8 +112,41 @@ public class PolicyLifecycleService {
         if (reason == null) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_REASON_INVALID");
         }
+        if (target == PolicyLifecycleStage.APPROVED) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_REQUIRED");
+        }
         transitionValidator.validate(current.lifecycleStage(), target, reason);
         return persistence.transition(current, target, principal.principalId(), reason, OffsetDateTime.now(clock));
+    }
+
+    @Transactional
+    public PolicyLifecycleRecord approve(
+        AuthPrincipal principal,
+        String artifactId,
+        String artifactVersion,
+        String shadowEvaluationId
+    ) {
+        PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
+        requireRole(principal, AdpRole.PRIVILEGED_OPERATOR);
+        if (current.createdBy().equals(principal.principalId())) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_MAKER_CHECKER_VIOLATION");
+        }
+        if (shadowEvaluationId == null || shadowEvaluationId.isBlank() || shadowEvaluationId.length() > 80) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_EVIDENCE_NOT_FOUND");
+        }
+        transitionValidator.validate(
+            current.lifecycleStage(), PolicyLifecycleStage.APPROVED,
+            PolicyLifecycleTransitionReason.APPROVAL_GRANTED
+        );
+        var evidence = shadowEvidencePersistence.loadLatestForApproval(
+            current.institutionId(), principal.workloadIds(), current.artifactId(), current.artifactVersion(),
+            shadowEvaluationId
+        );
+        shadowApprovalPolicy.validate(evidence);
+        return persistence.approve(
+            current, principal.principalId(), OffsetDateTime.now(clock),
+            PolicyApprovalEvidenceBinding.from(evidence, PolicyShadowApprovalPolicy.VERSION)
+        );
     }
 
     public PolicyLifecycleRecord load(AuthPrincipal principal, String artifactId, String artifactVersion) {

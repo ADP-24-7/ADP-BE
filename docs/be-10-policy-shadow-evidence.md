@@ -55,5 +55,5 @@ typed diff를 DB constraint로 강제한다.
 
 ## 현재 범위
 
-이번 Slice는 Shadow 실행과 Diff Evidence Core다. 다음 BE-10 Slice에서 Evidence Gate를 Lifecycle `SHADOW -> APPROVED`와
-연결하고, Active Runtime Selection 및 Rollback Propagation을 완성한다.
+Shadow 실행과 Diff Evidence Core는 완료됐고, 후속 V34에서 Evidence Gate를 Lifecycle `SHADOW -> APPROVED`와 연결했다.
+Active Runtime Selection 및 Rollback Propagation은 다음 BE-10 Slice에서 완성한다.

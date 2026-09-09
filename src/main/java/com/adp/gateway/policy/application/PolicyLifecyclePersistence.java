@@ -6,6 +6,7 @@ import java.util.Set;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
+import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.PolicyLayer;
 
@@ -25,6 +26,13 @@ public interface PolicyLifecyclePersistence {
         String actorId,
         PolicyLifecycleTransitionReason reason,
         OffsetDateTime occurredAt
+    );
+
+    PolicyLifecycleRecord approve(
+        PolicyLifecycleRecord current,
+        String actorId,
+        OffsetDateTime occurredAt,
+        PolicyApprovalEvidenceBinding evidenceBinding
     );
 
     PolicyLifecycleRecord loadActive(

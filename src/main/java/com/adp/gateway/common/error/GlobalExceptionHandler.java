@@ -277,7 +277,8 @@ public class GlobalExceptionHandler {
             case POLICY_LIFECYCLE_ARTIFACT_CONFLICT,
                  POLICY_LIFECYCLE_CONCURRENT_MODIFICATION,
                  POLICY_SHADOW_EVIDENCE_CONFLICT,
-                 POLICY_SHADOW_STALE_EVALUATION -> HttpStatus.CONFLICT;
+                 POLICY_SHADOW_STALE_EVALUATION,
+                 POLICY_SHADOW_APPROVAL_EVIDENCE_STALE -> HttpStatus.CONFLICT;
             case POLICY_LIFECYCLE_FORBIDDEN -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };

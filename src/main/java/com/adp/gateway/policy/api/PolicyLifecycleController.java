@@ -63,6 +63,18 @@ public class PolicyLifecycleController {
         );
     }
 
+    @PostMapping("/{artifactId}/versions/{artifactVersion}/approvals")
+    PolicyLifecycleRecord approve(
+        @PathVariable @Size(max = 120) String artifactId,
+        @PathVariable @Size(max = 120) String artifactVersion,
+        @Valid @RequestBody ApprovePolicyLifecycleRequest request,
+        Authentication authentication
+    ) {
+        return service.approve(
+            principal(authentication), artifactId, artifactVersion, request.shadowEvaluationId()
+        );
+    }
+
     @PostMapping("/{artifactId}/versions/{artifactVersion}/shadow-evaluations")
     @ResponseStatus(HttpStatus.CREATED)
     PolicyShadowEvidence evaluateShadow(
