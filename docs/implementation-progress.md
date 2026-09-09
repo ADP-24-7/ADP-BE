@@ -455,6 +455,18 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] V12 legacy backfill과 upgrade test
 - [ ] BE-9B SENT_UNKNOWN Recovery Framework
 
+## SEC-1/2 Security Hardening Tracking
+
+상세 계약은 [SEC-1/2 Security Hardening](sec-1-2-security-hardening.md)에서 관리한다.
+
+- [x] Destination SSRF negative validation
+- [x] Request freshness와 replay-window validation
+- [x] Idempotency reservation과 독립된 denied-attempt evidence
+- [x] Caller trace digest와 server-owned trace 분리
+- [x] Secret Scan / SAST / Dependency Scan / Container Scan
+- [x] CycloneDX SBOM generation
+- [x] 보안 검사를 별도 GitHub Actions gate로 분리
+
 ## Troubleshooting
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.

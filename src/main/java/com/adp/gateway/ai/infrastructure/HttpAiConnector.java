@@ -21,6 +21,7 @@ import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.egress.application.DestinationEndpointPolicy;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +49,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
     private final CanonicalValueHasher hasher;
     private final MeterRegistry meterRegistry;
     private final AiProviderConnectionRegistry connections;
+    private final DestinationEndpointPolicy destinationEndpointPolicy;
 
     public HttpAiConnector(
         RestClient.Builder restClientBuilder,
@@ -55,6 +57,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         CanonicalValueHasher hasher,
         MeterRegistry meterRegistry,
         AiProviderConnectionRegistry connections,
+        DestinationEndpointPolicy destinationEndpointPolicy,
         @Value("${adp.ai-connector.connect-timeout:2s}") Duration connectTimeout,
         @Value("${adp.ai-connector.read-timeout:5s}") Duration readTimeout
     ) {
@@ -66,6 +69,7 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         this.hasher = hasher;
         this.meterRegistry = meterRegistry;
         this.connections = connections;
+        this.destinationEndpointPolicy = destinationEndpointPolicy;
     }
 
     @Override
@@ -83,7 +87,8 @@ public class HttpAiConnector implements RuntimeConnectorPort {
         String connectorExecutionId = "con_" + UUID.randomUUID();
         long startedAt = System.nanoTime();
         var connection = connections.resolve(providerRequest.providerProfileId());
-        if (connection.isEmpty() || credentialMissing(connection.get())) {
+        if (connection.isEmpty() || credentialMissing(connection.get())
+            || !destinationEndpointPolicy.allows(connection.get().baseUrl())) {
             log.warn("AI provider connection resolution failed for an approved provider profile");
             record(ConnectorStatus.FAILED);
             return failedNotAttempted(connectorExecutionId, payload);

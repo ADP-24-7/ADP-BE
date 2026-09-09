@@ -29,6 +29,10 @@ class OpenApiIntegrationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.info.title").value("ADP Gateway Runtime API"))
             .andExpect(jsonPath("$.paths['/v1/runtime/executions']").exists())
+            .andExpect(jsonPath("$.paths['/v1/runtime/executions'].post.parameters[0].name")
+                .value("X-ADP-Request-Timestamp"))
+            .andExpect(jsonPath("$.paths['/v1/runtime/executions'].post.parameters[0].required")
+                .value(true))
             .andExpect(jsonPath("$.components.schemas.DigitalAssetRuntimeInput").exists())
             .andExpect(jsonPath("$.components.schemas.DigitalAssetOutboundRequest").exists())
             .andExpect(jsonPath("$.components.schemas.DigitalAssetRuntimeInput.required", hasItems(

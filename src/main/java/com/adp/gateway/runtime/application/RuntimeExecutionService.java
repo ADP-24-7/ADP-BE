@@ -14,6 +14,8 @@ import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.audit.domain.AuditContext;
 import com.adp.gateway.auth.application.AuthorizationRequest;
 import com.adp.gateway.auth.application.AuthorizationService;
+import com.adp.gateway.auth.application.DeniedRequestAttemptPort;
+import com.adp.gateway.auth.domain.DeniedRequestAttempt;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.auth.domain.RuntimeAction;
 import com.adp.gateway.auth.domain.SubjectRef;
@@ -110,6 +112,7 @@ public class RuntimeExecutionService {
     private final AiEvaluationEvidenceRecorder evaluationEvidenceRecorder;
     private final DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService;
     private final DigitalAssetPreExecutionGuard digitalAssetPreExecutionGuard;
+    private final DeniedRequestAttemptPort deniedRequestAttemptPort;
 
     public RuntimeExecutionService(
         AuthorizationService authorizationService,
@@ -142,7 +145,8 @@ public class RuntimeExecutionService {
         AiEvaluationRunCatalog evaluationRuns,
         AiEvaluationEvidenceRecorder evaluationEvidenceRecorder,
         DigitalAssetRuntimeSnapshotService digitalAssetRuntimeSnapshotService,
-        DigitalAssetPreExecutionGuard digitalAssetPreExecutionGuard
+        DigitalAssetPreExecutionGuard digitalAssetPreExecutionGuard,
+        DeniedRequestAttemptPort deniedRequestAttemptPort
     ) {
         this.authorizationService = authorizationService;
         this.retrievalService = retrievalService;
@@ -175,6 +179,7 @@ public class RuntimeExecutionService {
         this.evaluationEvidenceRecorder = evaluationEvidenceRecorder;
         this.digitalAssetRuntimeSnapshotService = digitalAssetRuntimeSnapshotService;
         this.digitalAssetPreExecutionGuard = digitalAssetPreExecutionGuard;
+        this.deniedRequestAttemptPort = deniedRequestAttemptPort;
     }
 
     public RuntimeExecutionResult execute(
@@ -575,6 +580,7 @@ public class RuntimeExecutionService {
         SubjectRef subject
     ) {
         if (principal.institutionId() == null || !principal.institutionId().equals(institutionId)) {
+            recordDeniedAttempt(requestContext, principal, subject, "INSTITUTION_SCOPE_MISMATCH");
             throw new AccessDeniedException("Runtime institution is not allowed");
         }
         if (!authorizationService.authorize(new AuthorizationRequest(
@@ -584,8 +590,30 @@ public class RuntimeExecutionService {
             requestContext.purpose(),
             subject
         )).allowed()) {
+            recordDeniedAttempt(requestContext, principal, subject, "AUTHORIZATION_POLICY_DENIED");
             throw new AccessDeniedException("Runtime execution is not allowed");
         }
+    }
+
+    private void recordDeniedAttempt(
+        RuntimeRequestContext requestContext,
+        AuthPrincipal principal,
+        SubjectRef subject,
+        String reasonCode
+    ) {
+        deniedRequestAttemptPort.record(new DeniedRequestAttempt(
+            "attempt_" + UUID.randomUUID(),
+            requestContext.requestId(),
+            requestContext.traceId(),
+            requestContext.clientTraceIdDigest(),
+            principal.principalId(),
+            principal.institutionId(),
+            requestContext.workloadId(),
+            requestContext.purpose(),
+            subject == null ? null : subjectRefHasher.hash(subject),
+            reasonCode,
+            OffsetDateTime.now(clock)
+        ));
     }
 
     public RuntimeExecutionSubmission submit(
