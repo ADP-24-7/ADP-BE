@@ -26,7 +26,9 @@ public record OperationsSummary(
         long manualReview,
         long exhausted,
         long completedOperations,
-        Long averageOperationLatencyMillis
+        Long averageOperationLatencyMillis,
+        long staleOperations,
+        Long oldestStaleOperationAgeSeconds
     ) {
     }
 

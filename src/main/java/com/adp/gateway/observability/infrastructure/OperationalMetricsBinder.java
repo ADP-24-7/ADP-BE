@@ -54,6 +54,10 @@ public class OperationalMetricsBinder implements MeterBinder {
             value -> value.recoveryManualReview());
         gauge(registry, "adp.recovery.exhausted.count", "Current exhausted recovery incidents",
             value -> value.recoveryExhausted());
+        gauge(registry, "adp.recovery.operation.stale.count", "Recovery operations exceeding the stale threshold",
+            value -> value.recoveryStaleOperations());
+        gauge(registry, "adp.recovery.operation.oldest.age.seconds", "Age of the oldest stale recovery operation",
+            value -> value.recoveryOldestStaleOperationAgeSeconds());
         gauge(registry, "adp.policy.current.selection.count", "Current policy selections",
             value -> value.policyCurrentSelections());
         gauge(registry, "adp.policy.drift.count", "Current selections that differ from authoritative lifecycle state",

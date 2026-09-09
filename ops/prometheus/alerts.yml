@@ -17,6 +17,14 @@ groups:
         annotations:
           summary: At least one recovery incident exhausted automatic attempts
 
+      - alert: AdpRecoveryOperationStale
+        expr: adp_recovery_operation_stale_count > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: A manual recovery operation exceeded the completion threshold
+
       - alert: AdpPolicyCurrentSelectionDrift
         expr: adp_policy_drift_count > 0
         for: 1m

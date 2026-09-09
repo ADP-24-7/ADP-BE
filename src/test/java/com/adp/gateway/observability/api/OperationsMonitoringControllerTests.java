@@ -38,12 +38,20 @@ class OperationsMonitoringControllerTests {
     private String suffix;
     private String workload;
     private String artifactId;
+    private String executionId;
+    private String recoveryId;
+    private String connectorExecutionId;
+    private String outboundPayloadId;
 
     @BeforeEach
     void seedOperationalEvidence() {
         suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         workload = "operations-" + suffix;
         artifactId = "policy-operations-" + suffix;
+        executionId = "exec_operations_" + suffix;
+        recoveryId = "recovery_operations_" + suffix;
+        connectorExecutionId = "connector_operations_" + suffix;
+        outboundPayloadId = "outbound_operations_" + suffix;
         OffsetDateTime now = OffsetDateTime.now();
         jdbcClient.sql("""
                 insert into policy.lifecycle_artifact (
@@ -60,6 +68,91 @@ class OperationsMonitoringControllerTests {
             .param("digest", "a".repeat(64))
             .param("workload", workload)
             .param("now", now)
+            .update();
+        jdbcClient.sql("""
+                insert into runtime.runtime_execution (
+                    execution_id, request_id, trace_id, idempotency_key, workload_id,
+                    idempotency_institution_id, request_hash, purpose_code, input_digest,
+                    institution_id, status, created_at, updated_at
+                ) values (
+                    :executionId, :requestId, :traceId, :idempotencyKey, :workload,
+                    'institution_local', :requestHash, 'CUSTOMER_SUPPORT', :inputDigest,
+                    'institution_local', 'EGRESSING', :now, :now
+                )
+                """)
+            .param("executionId", executionId)
+            .param("requestId", "request_runtime_" + suffix)
+            .param("traceId", "trace_runtime_" + suffix)
+            .param("idempotencyKey", "idempotency_runtime_" + suffix)
+            .param("workload", workload)
+            .param("requestHash", "b".repeat(64))
+            .param("inputDigest", "c".repeat(64))
+            .param("now", now)
+            .update();
+        jdbcClient.sql("""
+                insert into runtime.outbound_candidate (
+                    outbound_payload_id, execution_id, destination_profile_id,
+                    destination_profile_version, destination_profile_digest, pack_type,
+                    schema_version, candidate_payload_digest, field_count, guard_status,
+                    guard_reason_codes, created_at
+                ) values (
+                    :outboundPayloadId, :executionId, 'destination-operations', '1.0.0',
+                    :destinationDigest, 'AI', 'operations/v1', :candidateDigest, 1,
+                    'PASSED', '', :now
+                )
+                """)
+            .param("outboundPayloadId", outboundPayloadId)
+            .param("executionId", executionId)
+            .param("destinationDigest", "d".repeat(64))
+            .param("candidateDigest", "e".repeat(64))
+            .param("now", now)
+            .update();
+        jdbcClient.sql("""
+                insert into runtime.connector_execution (
+                    connector_execution_id, execution_id, outbound_payload_id,
+                    outbound_candidate_digest, connector_id, status, created_at
+                ) values (
+                    :connectorExecutionId, :executionId, :outboundPayloadId,
+                    :candidateDigest, 'connector-operations', 'SENT_UNKNOWN', :now
+                )
+                """)
+            .param("connectorExecutionId", connectorExecutionId)
+            .param("executionId", executionId)
+            .param("outboundPayloadId", outboundPayloadId)
+            .param("candidateDigest", "e".repeat(64))
+            .param("now", now)
+            .update();
+        jdbcClient.sql("""
+                insert into runtime.external_interaction_recovery (
+                    recovery_id, execution_id, connector_execution_id, connector_id,
+                    provider_correlation_key, observed_status, recovery_status, retry_disposition,
+                    attempt_count, max_attempts, next_attempt_at, created_at, updated_at
+                ) values (
+                    :recoveryId, :executionId, :connectorExecutionId, 'connector-operations',
+                    'provider-operations', 'SENT_UNKNOWN', 'PENDING', 'RECONCILE_FIRST',
+                    0, 5, :now, :now, :now
+                )
+                """)
+            .param("recoveryId", recoveryId)
+            .param("executionId", executionId)
+            .param("connectorExecutionId", connectorExecutionId)
+            .param("now", now)
+            .update();
+        jdbcClient.sql("""
+                insert into runtime.recovery_operation_event (
+                    event_id, operation_id, recovery_id, execution_id, institution_id,
+                    workload_id, actor_principal_id, operation_type, outcome, created_at
+                ) values (
+                    :eventId, :operationId, :recoveryId, :executionId, 'institution_local',
+                    :workload, 'operator-operations', 'RECONCILE', 'IN_PROGRESS', :createdAt
+                )
+                """)
+            .param("eventId", "event_operations_" + suffix)
+            .param("operationId", "operation_operations_" + suffix)
+            .param("recoveryId", recoveryId)
+            .param("executionId", executionId)
+            .param("workload", workload)
+            .param("createdAt", now.minusMinutes(10))
             .update();
         jdbcClient.sql("""
                 insert into policy.lifecycle_transition_event (
@@ -125,6 +218,16 @@ class OperationsMonitoringControllerTests {
 
     @AfterEach
     void cleanUpOperationalEvidence() {
+        jdbcClient.sql("delete from runtime.recovery_operation_event where recovery_id = :recoveryId")
+            .param("recoveryId", recoveryId).update();
+        jdbcClient.sql("delete from runtime.external_interaction_recovery where recovery_id = :recoveryId")
+            .param("recoveryId", recoveryId).update();
+        jdbcClient.sql("delete from runtime.connector_execution where connector_execution_id = :id")
+            .param("id", connectorExecutionId).update();
+        jdbcClient.sql("delete from runtime.outbound_candidate where outbound_payload_id = :id")
+            .param("id", outboundPayloadId).update();
+        jdbcClient.sql("delete from runtime.runtime_execution where execution_id = :id")
+            .param("id", executionId).update();
         jdbcClient.sql("delete from runtime.request_attempt where attempt_id = :id")
             .param("id", "attempt_" + suffix).update();
         jdbcClient.sql("delete from policy.current_selection_event where workload_id = :workload")
@@ -147,7 +250,9 @@ class OperationsMonitoringControllerTests {
             .andExpect(jsonPath("$.schemaVersion").value("adp-operations-summary/v1"))
             .andExpect(jsonPath("$.policy.currentSelections").isNumber())
             .andExpect(jsonPath("$.policy.activations").isNumber())
-            .andExpect(jsonPath("$.security.deniedAttempts").isNumber());
+            .andExpect(jsonPath("$.security.deniedAttempts").isNumber())
+            .andExpect(jsonPath("$.recovery.staleOperations").value(1))
+            .andExpect(jsonPath("$.recovery.oldestStaleOperationAgeSeconds").isNumber());
 
         mockMvc.perform(get("/api/admin/operations/policy-events")
                 .header("X-ADP-User-Id", "auditor-operations")
@@ -167,6 +272,8 @@ class OperationsMonitoringControllerTests {
         assertThat(healthy.policy().currentSelections()).isEqualTo(1);
         assertThat(healthy.policy().driftedSelections()).isZero();
         assertThat(healthy.security().authorizationPolicyDenied()).isEqualTo(1);
+        assertThat(healthy.recovery().staleOperations()).isEqualTo(1);
+        assertThat(healthy.recovery().oldestStaleOperationAgeSeconds()).isGreaterThanOrEqualTo(600);
 
         jdbcClient.sql("""
                 update policy.lifecycle_artifact set lifecycle_stage = 'REVIEW'

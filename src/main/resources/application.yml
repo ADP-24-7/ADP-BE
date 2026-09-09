@@ -48,6 +48,7 @@ adp:
   observability:
     prometheus-public: ${ADP_PROMETHEUS_PUBLIC:false}
     operational-metrics-cache: ${ADP_OPERATIONAL_METRICS_CACHE:5s}
+    stale-operation-threshold: ${ADP_STALE_OPERATION_THRESHOLD:5m}
   idempotency:
     retention: ${ADP_IDEMPOTENCY_RETENTION:72h}
   local-user-auth:

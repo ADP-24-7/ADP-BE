@@ -25,6 +25,8 @@ idempotency key, provider correlation key와 credential은 포함하지 않는�
 | `adp.recovery.queue.oldest.age.seconds` | Gauge | 가장 오래된 backlog age |
 | `adp.recovery.manual.review.count` | Gauge | 현재 수동 검토 incident |
 | `adp.recovery.exhausted.count` | Gauge | 현재 exhausted incident |
+| `adp.recovery.operation.stale.count` | Gauge | 임계시간을 넘긴 `IN_PROGRESS` 운영 명령 수 |
+| `adp.recovery.operation.oldest.age.seconds` | Gauge | 가장 오래된 stale 운영 명령 age |
 | `adp.policy.current.selection.count` | Gauge | 현재 selection 수 |
 | `adp.policy.drift.count` | Gauge | Lifecycle Artifact와 불일치하는 selection 수 |
 | `adp.policy.lifecycle.transition.total` | Counter | target stage별 committed transition |
@@ -37,6 +39,8 @@ idempotency key, provider correlation key와 credential은 포함하지 않는�
 Drift는 selected artifact가 없거나 `ACTIVE`가 아니거나, selected digest/revision이 authoritative Lifecycle row와 다를 때다.
 Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache snapshot을 공유하며 기본 TTL은 5초다. DB 조회 실패 시
 마지막 성공 Snapshot을 유지하되 refresh 성공 여부와 Snapshot age를 별도 노출해 stale 값이 정상 상태로 해석되지 않게 한다.
+운영 명령은 기본 5분 이상 `IN_PROGRESS`일 때 stale로 관측한다. 이는 Evidence를 자동 변경하는 정책이 아니라 후속 조사를
+발생시키는 신호이며 `ADP_STALE_OPERATION_THRESHOLD`로 조정한다.
 
 `/actuator/prometheus`는 기본적으로 `OPERATOR`, `PRIVILEGED_OPERATOR`, `AUDITOR`만 접근할 수 있다. 전역 운영 상태를
 포함하므로 `RUNTIME_EXECUTOR`를 비롯한 일반 인증 Principal에는 허용하지 않는다. `ADP_PROMETHEUS_PUBLIC=true`는 격리된
@@ -48,6 +52,7 @@ Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache sn
 
 - Recovery oldest age 15분 초과
 - Exhausted recovery 존재
+- Stale recovery operation 존재
 - Current Selection drift 존재
 - 15분 내 rollback 3회 초과
 - 5분 Runtime failure rate 5% 초과
@@ -67,6 +72,7 @@ DB rollback 또는 commit failure를 성공 metric으로 기록하지 않는다.
 - Management port 분리와 private subnet/ACG 기반 scrape 제한
 - Prometheus credential 주입과 rotation
 - Metric, log, audit evidence별 retention 및 archive 기간
+- Stale operation의 `STALE`/`ABANDONED` 상태 전이와 운영 승인 정책
 - Alert routing, on-call destination과 운영 SLA 확정
 
 로컬에서 `/actuator/prometheus`를 공개하는 설정은 개발 opt-in이며 NCP 운영 보안의 대체물이 아니다.

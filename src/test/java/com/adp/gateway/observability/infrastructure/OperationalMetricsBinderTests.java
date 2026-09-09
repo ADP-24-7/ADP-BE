@@ -26,12 +26,14 @@ class OperationalMetricsBinderTests {
         OperationsMonitoringPort port = mock(OperationsMonitoringPort.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-09T00:00:00Z"), ZoneOffset.UTC);
         when(port.loadGlobalMetricSnapshot(OffsetDateTime.now(clock)))
-            .thenReturn(new OperationalMetricSnapshot(4, 120, 2, 1, 3, 1));
+            .thenReturn(new OperationalMetricSnapshot(4, 120, 2, 1, 3, 600, 3, 1));
         var registry = new SimpleMeterRegistry();
         new OperationalMetricsBinder(port, clock, Duration.ofSeconds(5)).bindTo(registry);
 
         assertThat(registry.get("adp.recovery.queue.depth").gauge().value()).isEqualTo(4);
         assertThat(registry.get("adp.recovery.queue.oldest.age.seconds").gauge().value()).isEqualTo(120);
+        assertThat(registry.get("adp.recovery.operation.stale.count").gauge().value()).isEqualTo(3);
+        assertThat(registry.get("adp.recovery.operation.oldest.age.seconds").gauge().value()).isEqualTo(600);
         assertThat(registry.get("adp.policy.drift.count").gauge().value()).isEqualTo(1);
         verify(port, times(1)).loadGlobalMetricSnapshot(OffsetDateTime.now(clock));
     }
@@ -41,7 +43,7 @@ class OperationalMetricsBinderTests {
         OperationsMonitoringPort port = mock(OperationsMonitoringPort.class);
         MutableClock clock = new MutableClock(Instant.parse("2026-09-09T00:00:00Z"));
         when(port.loadGlobalMetricSnapshot(org.mockito.ArgumentMatchers.any()))
-            .thenReturn(new OperationalMetricSnapshot(4, 120, 2, 1, 3, 1))
+            .thenReturn(new OperationalMetricSnapshot(4, 120, 2, 1, 3, 600, 3, 1))
             .thenThrow(new DataAccessResourceFailureException("database unavailable"));
         var registry = new SimpleMeterRegistry();
         new OperationalMetricsBinder(port, clock, Duration.ofMinutes(5)).bindTo(registry);

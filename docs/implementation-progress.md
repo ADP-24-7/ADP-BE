@@ -148,7 +148,7 @@ BE-10 Skeleton 계약은 [BE-10 Policy Lifecycle Skeleton](be-10-policy-lifecycl
     - Branch: `feature/be-10-shadow-approval-gate`
     - Migration: V34
     - 최신 MATCH Evidence, Privileged Maker-Checker, Candidate/Baseline 재검증과 Transition Evidence binding
-- [ ] Active Policy Runtime Selection과 Rollback Propagation
+- [x] Active Policy Runtime Selection과 Rollback Propagation
 
 ## BE-11 Parallel Tracking
 
@@ -168,6 +168,7 @@ BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-f
 - [x] Artifact Lifecycle·Activation·Rollback Evidence Read Model
 - [x] Policy Lifecycle·Current Selection·Rollback low-cardinality metric
 - [x] Recovery backlog depth·oldest age·manual review·exhausted gauge
+- [x] Stale Recovery Operation count·oldest age gauge와 Alert
 - [x] Security freshness·authorization·destination rejection metric
 - [x] Institution/Workload scoped Monitoring Summary API
 - [x] Recovery backlog·exhausted·policy drift·rollback spike·runtime failure Alert Rule
@@ -184,7 +185,7 @@ BE-9A 상세 계약과 후속 범위는 [BE-9A Idempotency Core](be-9a-idempoten
 - [x] 다른 request hash conflict 및 동시 실행 방지
 - [x] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation core 상태 계약
 - [x] Terminal 기준 Idempotency key retention, expiry, lazy namespace archive
-- [ ] BE-11 Denied Attempt Evidence persistence
+- [x] BE-11 Denied Attempt Evidence persistence
 - [ ] Controlled delivery 결과 재조회 또는 단기 암호화 보관 계약
 
 ## BE-9B Parallel Tracking

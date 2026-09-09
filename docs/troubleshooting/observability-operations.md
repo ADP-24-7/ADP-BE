@@ -43,3 +43,12 @@ YAML 파싱만으로는 PromQL 오류를 찾을 수 없다. 처음 Docker comman
 Freshness, Authorization, Destination rejection을 조사하기 위해 URL, trace, principal을 metric tag로 넣으면 민감정보와
 고카디널리티가 유입된다. Metric은 고정 enum outcome만 사용하며 개별 증적은 기존 Denied Attempt와 구조화 Audit 경계에서
 조회한다.
+
+## Crash 이후 IN_PROGRESS 운영 명령이 정상처럼 남는 문제
+
+Recovery operation을 예약한 직후 프로세스가 종료되면 append-only event가 `IN_PROGRESS`로 남을 수 있다. 이를 자동으로
+실패 처리하면 실제 외부 부수효과 여부를 모른 채 Evidence를 덮어쓰게 된다. 기본 5분 임계값을 넘긴 operation의 count와
+oldest age를 별도 Gauge와 scoped Summary로 노출하고 Alert만 발생시킨다. 상태 변경은 후속 운영 정책에서 명시적으로 다룬다.
+
+전역 Metric에는 operation ID, Institution, Workload를 tag로 넣지 않는다. 개별 대상 확인은 인증된 Summary/Recovery API의
+Institution·Workload SQL scope를 사용한다. stale 조회는 V39 partial index로 `IN_PROGRESS` row에 한정한다.

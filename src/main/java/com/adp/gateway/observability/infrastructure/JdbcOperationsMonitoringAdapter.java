@@ -1,5 +1,6 @@
 package com.adp.gateway.observability.infrastructure;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -10,6 +11,7 @@ import com.adp.gateway.observability.domain.OperationsSummary;
 import com.adp.gateway.observability.domain.PolicyOperationEvent;
 import com.adp.gateway.observability.domain.PolicyOperationEvent.PolicyEventCategory;
 import com.adp.gateway.observability.domain.PolicyOperationEventPage;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -17,9 +19,17 @@ import org.springframework.stereotype.Component;
 public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort {
 
     private final JdbcClient jdbcClient;
+    private final Duration staleOperationThreshold;
 
-    public JdbcOperationsMonitoringAdapter(JdbcClient jdbcClient) {
+    public JdbcOperationsMonitoringAdapter(
+        JdbcClient jdbcClient,
+        @Value("${adp.observability.stale-operation-threshold:5m}") Duration staleOperationThreshold
+    ) {
+        if (staleOperationThreshold.isNegative() || staleOperationThreshold.isZero()) {
+            throw new IllegalArgumentException("Stale operation threshold must be positive");
+        }
         this.jdbcClient = jdbcClient;
+        this.staleOperationThreshold = staleOperationThreshold;
     }
 
     @Override
@@ -60,14 +70,22 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
             .query(RecoveryCounts.class)
             .single();
         RecoveryOperationCounts recoveryOperations = bindOperationScope(jdbcClient.sql("""
-                select count(*) as completed_operations,
-                       cast(avg(extract(epoch from (e.completed_at - e.created_at)) * 1000) as bigint)
-                           as average_operation_latency_millis
+                select count(*) filter (where e.completed_at >= :windowStart) as completed_operations,
+                       cast(avg(extract(epoch from (e.completed_at - e.created_at)) * 1000)
+                           filter (where e.completed_at >= :windowStart) as bigint)
+                           as average_operation_latency_millis,
+                       count(*) filter (
+                           where e.outcome = 'IN_PROGRESS' and e.created_at <= :staleBefore
+                       ) as stale_operations,
+                       cast(extract(epoch from (:now - min(e.created_at) filter (
+                           where e.outcome = 'IN_PROGRESS' and e.created_at <= :staleBefore
+                       ))) as bigint) as oldest_stale_operation_age_seconds
                 from runtime.recovery_operation_event e
                 where e.institution_id = :institutionId
-                  and e.completed_at is not null and e.completed_at >= :windowStart
                 """ + operationWorkloadPredicate(allowedWorkloads)), institutionId, allowedWorkloads)
             .param("windowStart", windowStart)
+            .param("staleBefore", now.minus(staleOperationThreshold))
+            .param("now", now)
             .query(RecoveryOperationCounts.class)
             .single();
 
@@ -116,7 +134,8 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
             ),
             new OperationsSummary.RecoveryHealth(
                 recovery.backlog(), recovery.oldestBacklogAgeSeconds(), recovery.manualReview(), recovery.exhausted(),
-                recoveryOperations.completedOperations(), recoveryOperations.averageOperationLatencyMillis()
+                recoveryOperations.completedOperations(), recoveryOperations.averageOperationLatencyMillis(),
+                recoveryOperations.staleOperations(), recoveryOperations.oldestStaleOperationAgeSeconds()
             ),
             new OperationsSummary.PolicyHealth(
                 policy.currentSelections(), policy.driftedSelections(),
@@ -208,6 +227,19 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
             .param("now", now)
             .query(GlobalRecoveryCounts.class)
             .single();
+        GlobalRecoveryOperationCounts recoveryOperations = jdbcClient.sql("""
+                select count(*) filter (
+                           where outcome = 'IN_PROGRESS' and created_at <= :staleBefore
+                       ) as stale_operations,
+                       coalesce(cast(extract(epoch from (:now - min(created_at) filter (
+                           where outcome = 'IN_PROGRESS' and created_at <= :staleBefore
+                       ))) as bigint), 0) as oldest_stale_operation_age_seconds
+                from runtime.recovery_operation_event
+                """)
+            .param("staleBefore", now.minus(staleOperationThreshold))
+            .param("now", now)
+            .query(GlobalRecoveryOperationCounts.class)
+            .single();
         PolicyCounts policy = jdbcClient.sql("""
                 select count(*) as current_selections,
                        count(*) filter (where la.artifact_id is null
@@ -224,6 +256,7 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
             .single();
         return new OperationalMetricSnapshot(
             recovery.backlog(), recovery.oldestAgeSeconds(), recovery.manualReview(), recovery.exhausted(),
+            recoveryOperations.staleOperations(), recoveryOperations.oldestStaleOperationAgeSeconds(),
             policy.currentSelections(), policy.driftedSelections()
         );
     }
@@ -329,7 +362,12 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
     private record RecoveryCounts(long backlog, Long oldestBacklogAgeSeconds, long manualReview, long exhausted) {
     }
 
-    private record RecoveryOperationCounts(long completedOperations, Long averageOperationLatencyMillis) {
+    private record RecoveryOperationCounts(
+        long completedOperations,
+        Long averageOperationLatencyMillis,
+        long staleOperations,
+        Long oldestStaleOperationAgeSeconds
+    ) {
     }
 
     private record PolicyCounts(long currentSelections, long driftedSelections) {
@@ -351,5 +389,8 @@ public class JdbcOperationsMonitoringAdapter implements OperationsMonitoringPort
         long manualReview,
         long exhausted
     ) {
+    }
+
+    private record GlobalRecoveryOperationCounts(long staleOperations, long oldestStaleOperationAgeSeconds) {
     }
 }
