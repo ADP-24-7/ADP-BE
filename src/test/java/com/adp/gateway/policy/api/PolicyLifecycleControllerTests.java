@@ -20,6 +20,7 @@ import com.adp.gateway.policy.domain.PolicyLayer;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,6 +43,12 @@ class PolicyLifecycleControllerTests {
     @Autowired
     private PolicyLifecycleService service;
 
+    @AfterEach
+    void removeRuntimeSelectionFixture() {
+        jdbcClient.sql("delete from policy.current_selection_event where actor_id = 'checker-1'").update();
+        jdbcClient.sql("delete from policy.current_selection where selected_by = 'checker-1'").update();
+    }
+
     @Test
     void runsValidatedLifecycleWithMakerCheckerAndAppendOnlyEvidence() throws Exception {
         String artifactId = create("maker-1", "OPERATOR");
@@ -52,16 +59,34 @@ class PolicyLifecycleControllerTests {
         String shadowEvaluationId = seedMatchingShadowEvidence(artifactId);
         approve(artifactId, "checker-1", "PRIVILEGED_OPERATOR", shadowEvaluationId)
             .andExpect(status().isOk());
-        jdbcClient.sql("""
-                update policy.lifecycle_artifact
-                set lifecycle_stage = 'SUPERSEDED', revision = revision + 1, updated_at = now()
-                where institution_id = 'institution_local' and artifact_id = :artifactId
-                """)
-            .param("artifactId", "baseline-" + artifactId).update();
-        transition(artifactId, "checker-1", "PRIVILEGED_OPERATOR", "ACTIVE")
+        activate(artifactId, "checker-1", "PRIVILEGED_OPERATOR", 5, 0)
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.lifecycleStage").value("ACTIVE"))
-            .andExpect(jsonPath("$.revision").value(6));
+            .andExpect(jsonPath("$.artifactId").value(artifactId))
+            .andExpect(jsonPath("$.selectionRevision").value(1));
+
+        mockMvc.perform(get("/api/admin/policy-lifecycle/current-selection")
+                .header("X-ADP-User-Id", "checker-1")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .param("executionPack", "AI")
+                .param("workloadId", "customer_summary")
+                .param("purposeCode", "CUSTOMER_SUPPORT"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.artifactId").value(artifactId))
+            .andExpect(jsonPath("$.artifactRevision").value(6));
+
+        transition(artifactId, "review-operator", "OPERATOR", "REVIEW")
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.reasonCode").value("POLICY_LIFECYCLE_TRANSITION_INVALID"));
+
+        mockMvc.perform(get("/api/admin/policy-lifecycle/{id}/versions/1.0.0", artifactId)
+                .header("X-ADP-User-Id", "checker-1")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.lifecycleStage").value("ACTIVE"));
+        assertThat(service.loadCurrentSelection(
+            principal("checker-1", "institution_local", Set.of("customer_summary")),
+            ExecutionPackType.AI, "customer_summary", "CUSTOMER_SUPPORT"
+        ).artifactId()).isEqualTo(artifactId);
 
         mockMvc.perform(get("/api/admin/policy-lifecycle/{id}/versions/1.0.0", artifactId)
                 .header("X-ADP-User-Id", "auditor-1")
@@ -207,6 +232,18 @@ class PolicyLifecycleControllerTests {
             .content("""
                 {"shadowEvaluationId":"%s"}
                 """.formatted(shadowEvaluationId)));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions activate(
+        String artifactId, String actor, String roles, long artifactRevision, long selectionRevision
+    ) throws Exception {
+        return mockMvc.perform(post("/api/admin/policy-lifecycle/{id}/versions/1.0.0/activations", artifactId)
+            .header("X-ADP-User-Id", actor)
+            .header("X-ADP-User-Roles", roles)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"expectedArtifactRevision":%d,"expectedSelectionRevision":%d}
+                """.formatted(artifactRevision, selectionRevision)));
     }
 
     private String seedMatchingShadowEvidence(String candidateId) {

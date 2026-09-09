@@ -27,6 +27,7 @@ import com.adp.gateway.policy.domain.ArtifactReference;
 import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.RuntimePolicyContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -102,7 +103,9 @@ public class MockRuntimeController {
             runtimePolicyContext.purpose(),
             runtimePolicyContext.provider(),
             runtimePolicyContext.processingContexts(),
-            runtimePolicyContext.runtimeDataClasses()
+            runtimePolicyContext.runtimeDataClasses(),
+            principal.institutionId(),
+            ExecutionPackType.COMMON
         ));
         ApplicabilityResult applicabilityResult = policyApplicabilityEvaluator.evaluate(snapshot, runtimePolicyContext);
         RuntimeDecision decision = runtimeDecisionService.decide(

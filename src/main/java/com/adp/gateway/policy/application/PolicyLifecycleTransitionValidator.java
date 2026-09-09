@@ -21,6 +21,7 @@ public class PolicyLifecycleTransitionValidator {
             PolicyLifecycleStage.REVIEW,
             PolicyLifecycleStage.ROLLED_BACK
         ),
+        PolicyLifecycleStage.SUPERSEDED, Set.of(PolicyLifecycleStage.ACTIVE),
         PolicyLifecycleStage.REVIEW, Set.of(PolicyLifecycleStage.ROLLED_BACK)
     );
 

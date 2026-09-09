@@ -5,6 +5,8 @@ import com.adp.gateway.policy.application.PolicyLifecycleService;
 import com.adp.gateway.policy.application.PolicyShadowService;
 import com.adp.gateway.policy.domain.PolicyShadowEvidence;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
+import com.adp.gateway.policy.domain.PolicyCurrentSelection;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -72,6 +75,44 @@ public class PolicyLifecycleController {
     ) {
         return service.approve(
             principal(authentication), artifactId, artifactVersion, request.shadowEvaluationId()
+        );
+    }
+
+    @PostMapping("/{artifactId}/versions/{artifactVersion}/activations")
+    PolicyCurrentSelection activate(
+        @PathVariable @Size(max = 120) String artifactId,
+        @PathVariable @Size(max = 120) String artifactVersion,
+        @Valid @RequestBody ActivatePolicyRequest request,
+        Authentication authentication
+    ) {
+        return service.activate(
+            principal(authentication), artifactId, artifactVersion,
+            request.expectedArtifactRevision(), request.expectedSelectionRevision()
+        );
+    }
+
+    @PostMapping("/{artifactId}/versions/{artifactVersion}/rollbacks")
+    PolicyCurrentSelection rollback(
+        @PathVariable @Size(max = 120) String artifactId,
+        @PathVariable @Size(max = 120) String artifactVersion,
+        @Valid @RequestBody RollbackPolicyRequest request,
+        Authentication authentication
+    ) {
+        return service.rollback(
+            principal(authentication), artifactId, artifactVersion,
+            request.expectedTargetRevision(), request.expectedSelectionRevision()
+        );
+    }
+
+    @GetMapping("/current-selection")
+    PolicyCurrentSelection currentSelection(
+        @RequestParam ExecutionPackType executionPack,
+        @RequestParam @Size(max = 120) String workloadId,
+        @RequestParam @Size(max = 120) String purposeCode,
+        Authentication authentication
+    ) {
+        return service.loadCurrentSelection(
+            principal(authentication), executionPack, workloadId, purposeCode
         );
     }
 

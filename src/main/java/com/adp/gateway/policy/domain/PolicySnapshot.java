@@ -10,8 +10,20 @@ public record PolicySnapshot(
     OffsetDateTime effectiveAt,
     PolicyLifecycleStage lifecycleStage,
     SourcePolicyEvaluationArtifactRef sourcePolicyEvaluationArtifactRef,
-    PolicyEvaluation evaluation
+    PolicyEvaluation evaluation,
+    PolicyCurrentSelectionRef currentSelectionRef
 ) {
+
+    public PolicySnapshot(
+        String policyVersion,
+        String snapshotDigest,
+        OffsetDateTime effectiveAt,
+        PolicyLifecycleStage lifecycleStage,
+        SourcePolicyEvaluationArtifactRef sourcePolicyEvaluationArtifactRef,
+        PolicyEvaluation evaluation
+    ) {
+        this(policyVersion, snapshotDigest, effectiveAt, lifecycleStage, sourcePolicyEvaluationArtifactRef, evaluation, null);
+    }
 
     public PolicySnapshot {
         Objects.requireNonNull(policyVersion, "policyVersion must not be null");

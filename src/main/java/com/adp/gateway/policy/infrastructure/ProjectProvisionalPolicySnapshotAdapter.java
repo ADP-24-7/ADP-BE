@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.digitalasset.domain.DigitalAssetCanonicalContract;
 import com.adp.gateway.policy.domain.ArtifactDigest;
 import com.adp.gateway.policy.domain.ArtifactReference;
@@ -12,6 +13,9 @@ import com.adp.gateway.policy.domain.PolicyApplicabilitySpec;
 import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.PolicyEvaluation;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
+import com.adp.gateway.policy.domain.PolicyCurrentSelection;
+import com.adp.gateway.policy.domain.PolicyCurrentSelectionRef;
+import com.adp.gateway.policy.application.PolicyLifecyclePersistence;
 import com.adp.gateway.policy.domain.PolicySelectionContext;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.policy.domain.PolicySnapshotPort;
@@ -34,13 +38,29 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     private static final String LEGACY_FIXTURE_PURPOSE = "BE-0 local E2E";
     private static final OffsetDateTime FIXTURE_EFFECTIVE_AT = OffsetDateTime.parse("2026-01-01T00:00:00Z");
     private final AiModelProfileCatalog aiModelProfiles;
+    private final PolicyLifecyclePersistence lifecyclePersistence;
+    private final CanonicalValueHasher hasher;
 
-    public ProjectProvisionalPolicySnapshotAdapter(AiModelProfileCatalog aiModelProfiles) {
+    public ProjectProvisionalPolicySnapshotAdapter(
+        AiModelProfileCatalog aiModelProfiles,
+        PolicyLifecyclePersistence lifecyclePersistence,
+        CanonicalValueHasher hasher
+    ) {
         this.aiModelProfiles = aiModelProfiles;
+        this.lifecyclePersistence = lifecyclePersistence;
+        this.hasher = hasher;
     }
 
     @Override
     public PolicySnapshot load(PolicySelectionContext context) {
+        if (context.institutionId() != null && context.executionPack() != null) {
+            var current = lifecyclePersistence.findCurrentSelection(
+                context.institutionId(), context.executionPack(), context.workloadId(), context.purposeCode()
+            );
+            if (current.isPresent()) {
+                return selectedSnapshot(current.get());
+            }
+        }
         var aiModelProfile = aiModelProfiles.findByProfileId(context.providerProfileId());
         if (FIXTURE_WORKLOAD_ID.equals(context.workloadId()) && FIXTURE_PURPOSE.equals(context.purposeCode())
             && aiModelProfile.isPresent()) {
@@ -193,6 +213,54 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
             PolicyLifecycleStage.PROJECT_PROVISIONAL,
             sourceArtifact,
             evaluation
+        );
+    }
+
+    private PolicySnapshot selectedSnapshot(PolicyCurrentSelection selection) {
+        boolean restrictive = Integer.parseInt(selection.artifactDigest().substring(0, 1), 16) >= 8;
+        PolicyAction action = restrictive ? PolicyAction.BLOCK : PolicyAction.ALLOW;
+        PolicyEvaluation evaluation = new PolicyEvaluation(
+            List.of(new ArtifactReference(selection.artifactId(), "policy", selection.artifactVersion())),
+            List.of(new ArtifactReference(
+                selection.artifactId() + ":runtime-rule", "rule", selection.artifactVersion()
+            )),
+            List.of(),
+            List.of(),
+            action,
+            restrictive
+                ? List.of(new ArtifactReference("MANUAL_REVIEW", "control", "1.0.0"))
+                : List.of(),
+            List.of(),
+            new PolicyApplicabilitySpec(
+                AnalysisStatus.VALIDATED,
+                AnalysisStatus.VALIDATED,
+                "Server-owned current policy selection.",
+                List.of(),
+                List.of(selection.executionPack().name()),
+                List.of(),
+                new RuntimeBinding(
+                    "mapped", "CURRENT_SELECTION", selection.workloadId(), selection.purposeCode(),
+                    "POLICY_CURRENT_SELECTION"
+                )
+            )
+        );
+        String snapshotDigest = "sha256:" + hasher.hash(String.join("|",
+            selection.institutionId(), selection.executionPack().name(), selection.workloadId(),
+            selection.purposeCode(), selection.artifactId(), selection.artifactVersion(),
+            selection.artifactDigest(), Long.toString(selection.artifactRevision()),
+            Long.toString(selection.selectionRevision())
+        ));
+        return new PolicySnapshot(
+            selection.artifactVersion(), snapshotDigest, selection.selectedAt(), PolicyLifecycleStage.ACTIVE,
+            new SourcePolicyEvaluationArtifactRef(
+                selection.artifactId(), selection.artifactVersion(),
+                new ArtifactDigest("sha256", selection.artifactDigest())
+            ),
+            evaluation,
+            new PolicyCurrentSelectionRef(
+                selection.policyLayer(), selection.executionPack(), selection.artifactRevision(),
+                selection.selectionRevision(), selection.selectedAt()
+            )
         );
     }
 }

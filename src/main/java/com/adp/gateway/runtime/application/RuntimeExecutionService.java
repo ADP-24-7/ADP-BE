@@ -305,7 +305,9 @@ public class RuntimeExecutionService {
                 runtimePolicyContext.purpose(),
                 runtimePolicyContext.provider(),
                 runtimePolicyContext.processingContexts(),
-                runtimePolicyContext.runtimeDataClasses()
+                runtimePolicyContext.runtimeDataClasses(),
+                institutionId,
+                destinationProfile.packType()
             ));
             Optional<DigitalAssetRuntimeSnapshot> digitalAssetSnapshot =
                 digitalAssetRuntimeSnapshotService.pinIfRequired(
@@ -499,7 +501,9 @@ public class RuntimeExecutionService {
                     runtimePolicyContext.purpose(),
                     runtimePolicyContext.provider(),
                     runtimePolicyContext.processingContexts(),
-                    runtimePolicyContext.runtimeDataClasses()
+                    runtimePolicyContext.runtimeDataClasses(),
+                    institutionId,
+                    destinationProfile.packType()
                 ));
                 var preExecutionGuard = digitalAssetPreExecutionGuard.evaluate(
                     executionId, institutionId, subjectRefDigest, packRequestScope, input, canonicalContext,

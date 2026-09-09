@@ -16,12 +16,14 @@ stage에 대응하는 서버 정의 enum만 허용한다.
 
 ## Authorization
 
-- `OPERATOR`: Artifact 생성, VALIDATED/CANDIDATE/REPLAY/SHADOW/REVIEW 전이
-- `PRIVILEGED_OPERATOR`: APPROVED/ACTIVE/SUPERSEDED/ROLLED_BACK 전이
+- `OPERATOR`: Artifact 생성, VALIDATED/CANDIDATE/REPLAY/SHADOW 전이
+- `PRIVILEGED_OPERATOR`: APPROVED 및 전용 Current Selection command 실행
 - `AUDITOR`: Institution과 Workload scope 안에서 조회만 가능
 - Artifact 생성자는 자신의 Artifact를 APPROVED 또는 ACTIVE로 전이할 수 없다.
 
 HTTP role 검사 이후 Service에서 Institution, Workload, 역할, Maker-Checker를 다시 검증한다.
+`ACTIVE`에서 `REVIEW`로 가는 상태 정의는 유지하지만, Current Selection과 원자적으로 처리하는 전용 command가 없으므로
+범용 Transition API에서는 차단한다.
 
 ## Persistence
 
