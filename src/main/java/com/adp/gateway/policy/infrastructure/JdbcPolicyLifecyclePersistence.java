@@ -8,6 +8,7 @@ import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.policy.application.PolicyLifecyclePersistence;
 import com.adp.gateway.policy.domain.PolicyLayer;
+import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
@@ -125,10 +126,10 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         jdbcClient.sql("""
                 insert into policy.lifecycle_transition_event (
                     institution_id, artifact_id, artifact_version, from_stage, to_stage, actor_id,
-                    reason_code, artifact_digest, occurred_at
+                    reason_code, artifact_digest, occurred_at, approval_gate_version
                 ) values (
                     :institutionId, :artifactId, :artifactVersion, :fromStage, :toStage, :actorId,
-                    :reason, :artifactDigest, :occurredAt
+                    :reason, :artifactDigest, :occurredAt, 'NOT_APPLICABLE'
                 )
                 """)
             .param("artifactId", current.artifactId())
@@ -140,6 +141,86 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             .param("reason", reason.name())
             .param("artifactDigest", current.artifactDigest())
             .param("occurredAt", occurredAt)
+            .update();
+        return load(current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion());
+    }
+
+    @Override
+    public PolicyLifecycleRecord approve(
+        PolicyLifecycleRecord current,
+        String actorId,
+        OffsetDateTime occurredAt,
+        PolicyApprovalEvidenceBinding binding
+    ) {
+        lockScope(current);
+        PolicyLifecycleRecord authoritative = load(
+            current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion()
+        );
+        PolicyLifecycleRecord active;
+        try {
+            active = loadActive(
+                current.institutionId(), Set.of(current.workloadId()), current.policyLayer(), current.executionPack(),
+                current.workloadId(), current.purposeCode()
+            );
+        } catch (PolicyLifecycleException exception) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_EVIDENCE_STALE");
+        }
+        if (!sameCurrentApprovalCandidate(current, authoritative)
+            || binding.candidateRevision() + 1 != authoritative.revision()
+            || !Objects.equals(binding.candidateArtifactDigest(), authoritative.artifactDigest())
+            || !sameApprovalBaseline(binding, active)) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_EVIDENCE_STALE");
+        }
+
+        int updated = jdbcClient.sql("""
+                update policy.lifecycle_artifact
+                set lifecycle_stage = 'APPROVED', revision = revision + 1, updated_at = :occurredAt
+                where institution_id = :institutionId
+                  and artifact_id = :artifactId and artifact_version = :artifactVersion
+                  and workload_id = :workloadId
+                  and lifecycle_stage = 'SHADOW' and revision = :revision
+                """)
+            .param("occurredAt", occurredAt)
+            .param("institutionId", current.institutionId())
+            .param("artifactId", current.artifactId())
+            .param("artifactVersion", current.artifactVersion())
+            .param("workloadId", current.workloadId())
+            .param("revision", current.revision())
+            .update();
+        if (updated != 1) {
+            throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_EVIDENCE_STALE");
+        }
+        jdbcClient.sql("""
+                insert into policy.lifecycle_transition_event (
+                    institution_id, artifact_id, artifact_version, from_stage, to_stage, actor_id,
+                    reason_code, artifact_digest, occurred_at, approval_gate_version,
+                    shadow_evaluation_id, shadow_candidate_revision,
+                    shadow_baseline_artifact_id, shadow_baseline_artifact_version,
+                    shadow_baseline_artifact_digest, shadow_evaluation_case_id,
+                    shadow_evaluation_case_version, shadow_result, approval_policy_version
+                ) values (
+                    :institutionId, :artifactId, :artifactVersion, 'SHADOW', 'APPROVED', :actorId,
+                    'APPROVAL_GRANTED', :artifactDigest, :occurredAt, 'SHADOW_EVIDENCE_V1',
+                    :shadowEvaluationId, :candidateRevision,
+                    :baselineId, :baselineVersion, :baselineDigest, :caseId, :caseVersion, :shadowResult,
+                    :approvalPolicyVersion
+                )
+                """)
+            .param("institutionId", current.institutionId())
+            .param("artifactId", current.artifactId())
+            .param("artifactVersion", current.artifactVersion())
+            .param("actorId", actorId)
+            .param("artifactDigest", current.artifactDigest())
+            .param("occurredAt", occurredAt)
+            .param("shadowEvaluationId", binding.shadowEvaluationId())
+            .param("candidateRevision", binding.candidateRevision())
+            .param("baselineId", binding.baselineArtifactId())
+            .param("baselineVersion", binding.baselineArtifactVersion())
+            .param("baselineDigest", binding.baselineArtifactDigest())
+            .param("caseId", binding.evaluationCaseId())
+            .param("caseVersion", binding.evaluationCaseVersion())
+            .param("shadowResult", binding.shadowResult())
+            .param("approvalPolicyVersion", binding.approvalPolicyVersion())
             .update();
         return load(current.institutionId(), Set.of(current.workloadId()), current.artifactId(), current.artifactVersion());
     }
@@ -241,6 +322,22 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
         return sameIdentityAndScope(expected, actual)
             && expected.revision() == actual.revision()
             && actual.lifecycleStage() == PolicyLifecycleStage.ACTIVE;
+    }
+
+    private boolean sameCurrentApprovalCandidate(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {
+        return sameIdentityAndScope(expected, actual)
+            && expected.revision() == actual.revision()
+            && actual.lifecycleStage() == PolicyLifecycleStage.SHADOW;
+    }
+
+    private boolean sameApprovalBaseline(
+        PolicyApprovalEvidenceBinding binding,
+        PolicyLifecycleRecord active
+    ) {
+        return Objects.equals(binding.baselineArtifactId(), active.artifactId())
+            && Objects.equals(binding.baselineArtifactVersion(), active.artifactVersion())
+            && Objects.equals(binding.baselineArtifactDigest(), active.artifactDigest())
+            && active.lifecycleStage() == PolicyLifecycleStage.ACTIVE;
     }
 
     private boolean sameIdentityAndScope(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {

@@ -49,7 +49,15 @@ class PolicyLifecycleControllerTests {
         transition(artifactId, "maker-1", "OPERATOR", "CANDIDATE").andExpect(status().isOk());
         transition(artifactId, "maker-1", "OPERATOR", "REPLAY").andExpect(status().isOk());
         transition(artifactId, "maker-1", "OPERATOR", "SHADOW").andExpect(status().isOk());
-        transition(artifactId, "checker-1", "PRIVILEGED_OPERATOR", "APPROVED").andExpect(status().isOk());
+        String shadowEvaluationId = seedMatchingShadowEvidence(artifactId);
+        approve(artifactId, "checker-1", "PRIVILEGED_OPERATOR", shadowEvaluationId)
+            .andExpect(status().isOk());
+        jdbcClient.sql("""
+                update policy.lifecycle_artifact
+                set lifecycle_stage = 'SUPERSEDED', revision = revision + 1, updated_at = now()
+                where institution_id = 'institution_local' and artifact_id = :artifactId
+                """)
+            .param("artifactId", "baseline-" + artifactId).update();
         transition(artifactId, "checker-1", "PRIVILEGED_OPERATOR", "ACTIVE")
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.lifecycleStage").value("ACTIVE"))
@@ -187,6 +195,60 @@ class PolicyLifecycleControllerTests {
             .content("""
                 {"targetStage":"%s","reasonCode":"%s"}
                 """.formatted(target, reason(target))));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions approve(
+        String artifactId, String actor, String roles, String shadowEvaluationId
+    ) throws Exception {
+        return mockMvc.perform(post("/api/admin/policy-lifecycle/{id}/versions/1.0.0/approvals", artifactId)
+            .header("X-ADP-User-Id", actor)
+            .header("X-ADP-User-Roles", roles)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"shadowEvaluationId":"%s"}
+                """.formatted(shadowEvaluationId)));
+    }
+
+    private String seedMatchingShadowEvidence(String candidateId) {
+        String baselineId = "baseline-" + candidateId;
+        String shadowId = "shadow-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbcClient.sql("""
+                insert into policy.lifecycle_artifact (
+                    artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                    execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                    revision, created_at, updated_at
+                ) values (
+                    :baselineId, '0.9.0', :digest, 'institution_local', 'WORKLOAD',
+                    'AI', 'customer_summary', 'CUSTOMER_SUPPORT', 'ACTIVE', 'baseline-checker',
+                    6, now(), now()
+                )
+                """)
+            .param("baselineId", baselineId).param("digest", "a".repeat(64)).update();
+        jdbcClient.sql("""
+                insert into policy.shadow_evaluation_evidence (
+                    shadow_evaluation_id, institution_id, workload_id, purpose_code,
+                    baseline_artifact_id, baseline_artifact_version, baseline_artifact_digest,
+                    candidate_artifact_id, candidate_artifact_version, candidate_artifact_digest,
+                    candidate_revision, evaluation_case_id, evaluation_case_version, input_digest,
+                    baseline_outcome_digest, candidate_outcome_digest, diff_fields, result,
+                    evaluated_by, evaluated_at
+                ) values (
+                    :shadowId, 'institution_local', 'customer_summary', 'CUSTOMER_SUPPORT',
+                    :baselineId, '0.9.0', :digest,
+                    :candidateId, '1.0.0', :digest,
+                    3, 'GOLDEN_ALLOW', '1.0.0', :inputDigest,
+                    :outcomeDigest, :outcomeDigest, '[]'::jsonb, 'MATCH',
+                    'shadow-evaluator', now()
+                )
+                """)
+            .param("shadowId", shadowId)
+            .param("baselineId", baselineId)
+            .param("candidateId", candidateId)
+            .param("digest", "a".repeat(64))
+            .param("inputDigest", "b".repeat(64))
+            .param("outcomeDigest", "c".repeat(64))
+            .update();
+        return shadowId;
     }
 
     private String reason(String target) {

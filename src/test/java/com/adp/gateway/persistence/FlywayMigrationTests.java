@@ -689,11 +689,9 @@ class FlywayMigrationTests {
                 where table_schema = 'policy'
                   and table_name = 'lifecycle_transition_event'
                   and constraint_name in (
-                      select constraint_name
-                      from information_schema.table_constraints
-                      where table_schema = 'policy'
-                        and table_name = 'lifecycle_transition_event'
-                        and constraint_type = 'FOREIGN KEY'
+                      select constraint_name from information_schema.referential_constraints
+                      where constraint_schema = 'policy'
+                        and unique_constraint_name = 'lifecycle_artifact_pkey'
                   )
                   and column_name in ('institution_id', 'artifact_id', 'artifact_version')
                 """).query(Integer.class).single();
@@ -1009,6 +1007,87 @@ class FlywayMigrationTests {
 
         assertThat(columnCount).isEqualTo(20);
         assertThat(constraintCount).isEqualTo(5);
+    }
+
+    @Test
+    void v34MigrationBindsApprovalTransitionToShadowEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'policy'
+                  and table_name = 'lifecycle_transition_event'
+                  and column_name in (
+                    'approval_gate_version', 'shadow_evaluation_id', 'shadow_candidate_revision',
+                    'shadow_baseline_artifact_id', 'shadow_baseline_artifact_version',
+                    'shadow_baseline_artifact_digest', 'shadow_evaluation_case_id',
+                    'shadow_evaluation_case_version', 'shadow_result',
+                    'approval_policy_version'
+                  )
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'policy'
+                  and table_name = 'lifecycle_transition_event'
+                  and constraint_name in (
+                    'fk_policy_transition_shadow_approval',
+                    'chk_policy_transition_approval_binding'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(columnCount).isEqualTo(10);
+        assertThat(constraintCount).isEqualTo(2);
+    }
+
+    @Test
+    void v34MigrationPreservesLegacyUnboundApprovalHistory() throws Exception {
+        String databaseName = "adp_v34_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("33").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into policy.lifecycle_artifact (
+                        artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                        execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                        revision, created_at, updated_at
+                    ) values (
+                        'legacy-approved', '1.0.0', repeat('a', 64), 'institution-legacy', 'WORKLOAD',
+                        'AI', 'legacy-workload', 'CUSTOMER_SUPPORT', 'APPROVED', 'legacy-maker',
+                        5, now(), now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into policy.lifecycle_transition_event (
+                        institution_id, artifact_id, artifact_version, from_stage, to_stage,
+                        actor_id, reason_code, artifact_digest, occurred_at
+                    ) values (
+                        'institution-legacy', 'legacy-approved', '1.0.0', 'SHADOW', 'APPROVED',
+                        'legacy-checker', 'APPROVAL_GRANTED', repeat('a', 64), now()
+                    )
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select approval_gate_version, shadow_evaluation_id
+                     from policy.lifecycle_transition_event
+                     where artifact_id = 'legacy-approved'
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("approval_gate_version")).isEqualTo("LEGACY_UNBOUND");
+                assertThat(resultSet.getString("shadow_evaluation_id")).isNull();
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
     }
 
     @Test
