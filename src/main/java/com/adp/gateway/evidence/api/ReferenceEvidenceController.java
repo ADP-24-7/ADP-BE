@@ -5,7 +5,6 @@ import com.adp.gateway.evidence.application.ReferenceEvidenceService;
 import com.adp.gateway.evidence.domain.ReferenceEvidence;
 import com.adp.gateway.evidence.domain.ReferenceEvidenceBundleReceipt;
 import com.adp.gateway.evidence.domain.ReferenceEvidencePage;
-import com.adp.gateway.evidence.domain.ReferenceEvidenceStatus;
 import com.adp.gateway.evidence.domain.ReferenceEvidenceType;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.Max;
@@ -45,17 +44,14 @@ public class ReferenceEvidenceController {
     @GetMapping
     ReferenceEvidencePage search(
         @RequestParam(required = false) ReferenceEvidenceType evidenceType,
-        @RequestParam(required = false) ReferenceEvidenceStatus status,
         @RequestParam(required = false) @Size(max = 120) String workloadId,
-        @RequestParam(required = false) @Size(max = 120) String policyArtifactRef,
         @RequestParam(required = false) @Size(max = 120) String query,
         @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit,
         @RequestParam(defaultValue = "0") @Min(0) int offset,
         Authentication authentication
     ) {
         return service.search(
-            principal(authentication), evidenceType, status, workloadId,
-            policyArtifactRef, query, limit, offset
+            principal(authentication), evidenceType, workloadId, query, limit, offset
         );
     }
 

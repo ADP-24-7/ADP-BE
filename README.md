@@ -32,7 +32,7 @@ ADP-BE/
 │   ├── vault/          # Vault Mapping 경계
 │   ├── connector/      # Connector 경계
 │   ├── egress/         # Outbound Guard / Connector / Response Guard 경계
-│   ├── evidence/       # DA Reference Evidence Registry와 Read API
+│   ├── evidence/       # 관리자 추적용 Reference Evidence 조회 경계
 │   ├── audit/          # Audit Event 경계
 │   ├── operations/     # 내부 운영·Mock Runtime API
 │   └── config/         # 공통 애플리케이션 설정

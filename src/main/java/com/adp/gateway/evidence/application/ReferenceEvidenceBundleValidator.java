@@ -58,10 +58,6 @@ public class ReferenceEvidenceBundleValidator {
                 ReferenceEvidenceStatus status = ReferenceEvidenceStatus.valueOf(
                     evidence.path("status").asText()
                 );
-                List<String> policyRefs = strings(evidence.path("policy_artifact_refs"));
-                if (status == ReferenceEvidenceStatus.REFERENCE_ONLY && !policyRefs.isEmpty()) {
-                    throw invalid("REFERENCE_EVIDENCE_BINDING_INVALID");
-                }
                 LocalDate effectiveFrom = nullableDate(evidence.path("effective_from"));
                 LocalDate effectiveTo = nullableDate(evidence.path("effective_to"));
                 if (effectiveFrom != null && effectiveTo != null && effectiveFrom.isAfter(effectiveTo)) {
@@ -81,10 +77,11 @@ public class ReferenceEvidenceBundleValidator {
                     evidence.path("claim_scope").asText(),
                     evidence.path("claim_summary").asText(),
                     evidence.path("source_locator").asText(),
+                    evidence.path("analysis_ref").asText(),
+                    evidence.path("analysis_locator").asText(),
                     evidence.path("analysis_version").asText(),
                     status,
                     strings(evidence.path("workload_refs")),
-                    policyRefs,
                     evidence.path("content_digest").asText()
                 ));
             }

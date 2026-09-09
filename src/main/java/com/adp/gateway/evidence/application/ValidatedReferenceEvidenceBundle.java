@@ -34,15 +34,15 @@ public record ValidatedReferenceEvidenceBundle(
         String claimScope,
         String claimSummary,
         String sourceLocator,
+        String analysisRef,
+        String analysisLocator,
         String analysisVersion,
         ReferenceEvidenceStatus status,
         List<String> workloadRefs,
-        List<String> policyArtifactRefs,
         String contentDigest
     ) {
         public Item {
             workloadRefs = List.copyOf(workloadRefs);
-            policyArtifactRefs = List.copyOf(policyArtifactRefs);
         }
     }
 }

@@ -28,9 +28,7 @@ public interface ReferenceEvidencePersistence {
         String institutionId,
         Set<String> allowedWorkloads,
         ReferenceEvidenceType evidenceType,
-        ReferenceEvidenceStatus status,
         String workloadId,
-        String policyArtifactRef,
         String query,
         int limit,
         int offset

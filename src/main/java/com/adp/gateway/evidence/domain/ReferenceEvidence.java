@@ -20,15 +20,15 @@ public record ReferenceEvidence(
     String claimScope,
     String claimSummary,
     String sourceLocator,
+    String analysisRef,
+    String analysisLocator,
     String analysisVersion,
     ReferenceEvidenceStatus status,
     List<String> workloadRefs,
-    List<String> policyArtifactRefs,
     String contentDigest,
     OffsetDateTime createdAt
 ) {
     public ReferenceEvidence {
         workloadRefs = List.copyOf(workloadRefs);
-        policyArtifactRefs = List.copyOf(policyArtifactRefs);
     }
 }

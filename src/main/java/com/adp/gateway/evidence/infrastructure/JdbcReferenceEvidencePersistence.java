@@ -28,18 +28,14 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
         select e.evidence_id, e.evidence_version, e.bundle_id, e.bundle_version,
                e.evidence_type, e.authority, e.title, e.source_ref, e.source_url,
                e.source_date, e.effective_from, e.effective_to, e.claim_scope,
-               e.claim_summary, e.source_locator, e.analysis_version, e.status,
+               e.claim_summary, e.source_locator, e.analysis_ref, e.analysis_locator,
+               e.analysis_version, e.status,
                e.content_digest, e.created_at,
                array(select w.workload_id from evidence.reference_evidence_workload w
                      where w.institution_id = e.institution_id
                        and w.evidence_id = e.evidence_id
                        and w.evidence_version = e.evidence_version
-                     order by w.workload_id) as workload_refs,
-               array(select p.policy_artifact_ref from evidence.reference_evidence_policy_artifact p
-                     where p.institution_id = e.institution_id
-                       and p.evidence_id = e.evidence_id
-                       and p.evidence_version = e.evidence_version
-                     order by p.policy_artifact_ref) as policy_artifact_refs
+                     order by w.workload_id) as workload_refs
         from evidence.reference_evidence e
         """;
 
@@ -111,7 +107,6 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
             for (ValidatedReferenceEvidenceBundle.Item item : bundle.evidence()) {
                 insertEvidence(institutionId, bundle, item, ingestedAt);
                 item.workloadRefs().forEach(workload -> insertWorkload(institutionId, item, workload));
-                item.policyArtifactRefs().forEach(policy -> insertPolicy(institutionId, item, policy));
             }
             return new ReferenceEvidenceBundleReceipt(
                 bundle.bundleId(), bundle.bundleVersion(), bundle.schemaVersion(),
@@ -128,9 +123,7 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
         String institutionId,
         Set<String> allowedWorkloads,
         ReferenceEvidenceType evidenceType,
-        ReferenceEvidenceStatus status,
         String workloadId,
-        String policyArtifactRef,
         String query,
         int limit,
         int offset
@@ -139,8 +132,7 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
             return new ReferenceEvidencePage(List.of(), 0, limit, offset);
         }
         QueryParts parts = queryParts(
-            institutionId, allowedWorkloads, evidenceType, status,
-            workloadId, policyArtifactRef, query
+            institutionId, allowedWorkloads, evidenceType, workloadId, query
         );
         long total = bind(jdbcClient.sql("select count(*) from evidence.reference_evidence e " + parts.where()),
             parts).query(Long.class).single();
@@ -203,12 +195,12 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
                     institution_id, evidence_id, evidence_version, bundle_id, bundle_version,
                     evidence_type, authority, title, source_ref, source_url, source_date,
                     effective_from, effective_to, claim_scope, claim_summary, source_locator,
-                    analysis_version, status, content_digest, created_at
+                    analysis_ref, analysis_locator, analysis_version, status, content_digest, created_at
                 ) values (
                     :institutionId, :evidenceId, :evidenceVersion, :bundleId, :bundleVersion,
                     :evidenceType, :authority, :title, :sourceRef, :sourceUrl, :sourceDate,
                     :effectiveFrom, :effectiveTo, :claimScope, :claimSummary, :sourceLocator,
-                    :analysisVersion, :status, :contentDigest, :createdAt
+                    :analysisRef, :analysisLocator, :analysisVersion, :status, :contentDigest, :createdAt
                 )
                 """)
             .param("institutionId", institutionId)
@@ -227,6 +219,8 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
             .param("claimScope", item.claimScope())
             .param("claimSummary", item.claimSummary())
             .param("sourceLocator", item.sourceLocator())
+            .param("analysisRef", item.analysisRef())
+            .param("analysisLocator", item.analysisLocator())
             .param("analysisVersion", item.analysisVersion())
             .param("status", item.status().name())
             .param("contentDigest", item.contentDigest())
@@ -249,28 +243,11 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
             .update();
     }
 
-    private void insertPolicy(
-        String institutionId, ValidatedReferenceEvidenceBundle.Item item, String policy
-    ) {
-        jdbcClient.sql("""
-                insert into evidence.reference_evidence_policy_artifact (
-                    institution_id, evidence_id, evidence_version, policy_artifact_ref
-                ) values (:institutionId, :evidenceId, :evidenceVersion, :policy)
-                """)
-            .param("institutionId", institutionId)
-            .param("evidenceId", item.evidenceId())
-            .param("evidenceVersion", item.evidenceVersion())
-            .param("policy", policy)
-            .update();
-    }
-
     private QueryParts queryParts(
         String institutionId,
         Set<String> allowedWorkloads,
         ReferenceEvidenceType evidenceType,
-        ReferenceEvidenceStatus status,
         String workloadId,
-        String policyArtifactRef,
         String query
     ) {
         StringBuilder where = new StringBuilder(" where e.institution_id = :institutionId ");
@@ -292,9 +269,6 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
         if (evidenceType != null) {
             where.append(" and e.evidence_type = :evidenceType ");
         }
-        if (status != null) {
-            where.append(" and e.status = :status ");
-        }
         if (workloadId != null) {
             where.append("""
                 and exists (select 1 from evidence.reference_evidence_workload requested_workload
@@ -304,22 +278,12 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
                       and requested_workload.workload_id = :workloadId)
                 """).append(" ");
         }
-        if (policyArtifactRef != null) {
-            where.append("""
-                and exists (select 1 from evidence.reference_evidence_policy_artifact requested_policy
-                    where requested_policy.institution_id = e.institution_id
-                      and requested_policy.evidence_id = e.evidence_id
-                      and requested_policy.evidence_version = e.evidence_version
-                      and requested_policy.policy_artifact_ref = :policyArtifactRef)
-                """).append(" ");
-        }
         if (query != null) {
             where.append(" and (lower(e.evidence_id) like :query or lower(e.title) like :query"
                 + " or lower(e.authority) like :query)");
         }
         return new QueryParts(
-            where.toString(), institutionId, allowedWorkloads, evidenceType, status,
-            workloadId, policyArtifactRef, query
+            where.toString(), institutionId, allowedWorkloads, evidenceType, workloadId, query
         );
     }
 
@@ -331,14 +295,8 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
         if (parts.evidenceType() != null) {
             spec = spec.param("evidenceType", parts.evidenceType().name());
         }
-        if (parts.status() != null) {
-            spec = spec.param("status", parts.status().name());
-        }
         if (parts.workloadId() != null) {
             spec = spec.param("workloadId", parts.workloadId());
-        }
-        if (parts.policyArtifactRef() != null) {
-            spec = spec.param("policyArtifactRef", parts.policyArtifactRef());
         }
         if (parts.query() != null) {
             spec = spec.param("query", "%" + parts.query().toLowerCase(java.util.Locale.ROOT) + "%");
@@ -355,8 +313,9 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
             rs.getString("source_url"), rs.getObject("source_date", LocalDate.class),
             rs.getObject("effective_from", LocalDate.class), rs.getObject("effective_to", LocalDate.class),
             rs.getString("claim_scope"), rs.getString("claim_summary"), rs.getString("source_locator"),
+            rs.getString("analysis_ref"), rs.getString("analysis_locator"),
             rs.getString("analysis_version"), ReferenceEvidenceStatus.valueOf(rs.getString("status")),
-            strings(rs.getArray("workload_refs")), strings(rs.getArray("policy_artifact_refs")),
+            strings(rs.getArray("workload_refs")),
             rs.getString("content_digest"), rs.getObject("created_at", OffsetDateTime.class)
         );
     }
@@ -382,9 +341,7 @@ public class JdbcReferenceEvidencePersistence implements ReferenceEvidencePersis
         String institutionId,
         Set<String> allowedWorkloads,
         ReferenceEvidenceType evidenceType,
-        ReferenceEvidenceStatus status,
         String workloadId,
-        String policyArtifactRef,
         String query
     ) {
     }

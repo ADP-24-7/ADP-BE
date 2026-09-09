@@ -9,7 +9,6 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.evidence.domain.ReferenceEvidence;
 import com.adp.gateway.evidence.domain.ReferenceEvidenceBundleReceipt;
 import com.adp.gateway.evidence.domain.ReferenceEvidencePage;
-import com.adp.gateway.evidence.domain.ReferenceEvidenceStatus;
 import com.adp.gateway.evidence.domain.ReferenceEvidenceType;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
@@ -65,21 +64,19 @@ public class ReferenceEvidenceService {
     public ReferenceEvidencePage search(
         AuthPrincipal principal,
         ReferenceEvidenceType evidenceType,
-        ReferenceEvidenceStatus status,
         String workloadId,
-        String policyArtifactRef,
         String query,
         int limit,
         int offset
     ) {
         requireReader(principal);
-        validateSearch(workloadId, policyArtifactRef, query, limit, offset);
+        validateSearch(workloadId, query, limit, offset);
         if (workloadId != null && !principal.canAccessWorkload(workloadId)) {
             throw rejected("REFERENCE_EVIDENCE_FORBIDDEN");
         }
         return persistence.search(
-            principal.institutionId(), principal.workloadIds(), evidenceType, status,
-            workloadId, policyArtifactRef, normalize(query), limit, offset
+            principal.institutionId(), principal.workloadIds(), evidenceType,
+            workloadId, normalize(query), limit, offset
         );
     }
 
@@ -92,11 +89,9 @@ public class ReferenceEvidenceService {
         ).orElseThrow(() -> rejected("REFERENCE_EVIDENCE_NOT_FOUND"));
     }
 
-    private void validateSearch(
-        String workloadId, String policyArtifactRef, String query, int limit, int offset
-    ) {
+    private void validateSearch(String workloadId, String query, int limit, int offset) {
         if (limit < 1 || limit > 100 || offset < 0 || tooLong(workloadId, 120)
-            || tooLong(policyArtifactRef, 120) || tooLong(query, 120)) {
+            || tooLong(query, 120)) {
             throw rejected("REFERENCE_EVIDENCE_SEARCH_INVALID");
         }
     }
