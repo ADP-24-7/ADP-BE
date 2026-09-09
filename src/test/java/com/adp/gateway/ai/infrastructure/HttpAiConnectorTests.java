@@ -19,6 +19,7 @@ import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
+import com.adp.gateway.egress.application.DestinationEndpointPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -146,7 +147,7 @@ class HttpAiConnectorTests {
                 .doesNotContain(apiKey);
             var connector = new HttpAiConnector(
                 RestClient.builder(), new ObjectMapper(), new CanonicalValueHasher(), new SimpleMeterRegistry(),
-                connections,
+                connections, new DestinationEndpointPolicy(true),
                 Duration.ofSeconds(1), Duration.ofSeconds(1)
             );
 
@@ -271,6 +272,7 @@ class HttpAiConnectorTests {
             new CanonicalValueHasher(),
             new SimpleMeterRegistry(),
             connections,
+            new DestinationEndpointPolicy(true),
             Duration.ofSeconds(1),
             readTimeout
         );

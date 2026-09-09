@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import com.adp.gateway.common.error.ErrorResponse;
 import com.adp.gateway.common.error.ReasonCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.adp.gateway.context.application.CanonicalValueHasher;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,7 @@ import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
@@ -27,10 +29,19 @@ public class TraceContextFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final CanonicalValueHasher hasher;
+    private final boolean acceptCallerTraceId;
 
-    public TraceContextFilter(ObjectMapper objectMapper, Clock clock) {
+    public TraceContextFilter(
+        ObjectMapper objectMapper,
+        Clock clock,
+        CanonicalValueHasher hasher,
+        @Value("${adp.security.trace.accept-caller-trace-id:false}") boolean acceptCallerTraceId
+    ) {
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.hasher = hasher;
+        this.acceptCallerTraceId = acceptCallerTraceId;
     }
 
     @Override
@@ -40,9 +51,10 @@ public class TraceContextFilter extends OncePerRequestFilter {
         FilterChain filterChain
     ) throws ServletException, IOException {
         String requestId = valueOrNew(request.getHeader(TraceHeaders.REQUEST_ID));
-        String traceId = valueOrNew(request.getHeader(TraceHeaders.TRACE_ID));
+        String clientTraceId = request.getHeader(TraceHeaders.TRACE_ID);
+        String traceId = acceptCallerTraceId ? valueOrNew(clientTraceId) : UUID.randomUUID().toString();
 
-        if (!isSafeTraceValue(requestId) || !isSafeTraceValue(traceId)) {
+        if (!isSafeTraceValue(requestId) || !isOptionalSafeTraceValue(clientTraceId)) {
             writeMalformedHeaderResponse(response, requestId, traceId);
             return;
         }
@@ -51,6 +63,9 @@ public class TraceContextFilter extends OncePerRequestFilter {
         response.setHeader(TraceHeaders.TRACE_ID, traceId);
         request.setAttribute(TraceHeaders.REQUEST_ID_ATTRIBUTE, requestId);
         request.setAttribute(TraceHeaders.TRACE_ID_ATTRIBUTE, traceId);
+        if (clientTraceId != null && !clientTraceId.isBlank()) {
+            request.setAttribute(TraceHeaders.CLIENT_TRACE_ID_DIGEST_ATTRIBUTE, hasher.hash(clientTraceId));
+        }
 
         MDC.put("request_id", requestId);
         MDC.put("trace_id", traceId);
@@ -68,6 +83,10 @@ public class TraceContextFilter extends OncePerRequestFilter {
 
     private boolean isSafeTraceValue(String value) {
         return SAFE_TRACE_VALUE.matcher(value).matches();
+    }
+
+    private boolean isOptionalSafeTraceValue(String value) {
+        return value == null || value.isBlank() || isSafeTraceValue(value);
     }
 
     private void writeMalformedHeaderResponse(

@@ -15,6 +15,16 @@ spring:
       add-mappings: false
 
 adp:
+  security:
+    trace:
+      accept-caller-trace-id: ${ADP_ACCEPT_CALLER_TRACE_ID:false}
+    request-freshness:
+      enabled: ${ADP_REQUEST_FRESHNESS_ENABLED:true}
+      replay-window: ${ADP_REQUEST_REPLAY_WINDOW:5m}
+      future-skew: ${ADP_REQUEST_FUTURE_SKEW:30s}
+    egress:
+      allow-private-destinations: ${ADP_EGRESS_ALLOW_PRIVATE_DESTINATIONS:false}
+      allowed-hosts: ${ADP_EGRESS_ALLOWED_HOSTS:integrate.api.nvidia.com}
   digital-asset:
     artifact-store:
       type: ${ADP_DIGITAL_ASSET_ARTIFACT_STORE_TYPE:disabled}

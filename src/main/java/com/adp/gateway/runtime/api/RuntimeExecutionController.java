@@ -10,6 +10,8 @@ import com.adp.gateway.runtime.application.RuntimeExecutionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +42,13 @@ public class RuntimeExecutionController {
     @PostMapping
     @Operation(
         summary = "Execute an approved runtime request",
+        parameters = @Parameter(
+            name = "X-ADP-Request-Timestamp",
+            in = ParameterIn.HEADER,
+            required = true,
+            description = "UTC ISO-8601 request time used for replay-window validation",
+            example = "2026-09-09T01:00:00Z"
+        ),
         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(examples = @ExampleObject(
                 name = "digitalAsset",

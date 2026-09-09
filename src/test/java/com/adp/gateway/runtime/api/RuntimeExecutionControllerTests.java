@@ -562,6 +562,23 @@ class RuntimeExecutionControllerTests {
             .query(Integer.class)
             .single();
         assertThat(reservationCount).isZero();
+        var deniedAttempt = jdbcClient.sql("""
+                select authorization_result, reason_code, subject_ref_digest, client_trace_id_digest
+                from runtime.request_attempt
+                where request_id = :requestId
+                """)
+            .param("requestId", requestId)
+            .query((resultSet, rowNum) -> java.util.List.of(
+                resultSet.getString("authorization_result"),
+                resultSet.getString("reason_code"),
+                resultSet.getString("subject_ref_digest"),
+                resultSet.getString("client_trace_id_digest")
+            ))
+            .single();
+        assertThat(deniedAttempt.get(0)).isEqualTo("DENIED");
+        assertThat(deniedAttempt.get(1)).isEqualTo("INSTITUTION_SCOPE_MISMATCH");
+        assertThat(deniedAttempt.get(2)).hasSize(64);
+        assertThat(deniedAttempt.get(3)).hasSize(64);
     }
 
     @Test

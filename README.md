@@ -90,6 +90,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 
 - [구현 진행 현황](docs/implementation-progress.md)
 - [SEC-0 Security Contract](docs/sec-0-security-contract.md)
+- [SEC-1/2 Security Hardening](docs/sec-1-2-security-hardening.md)
 - [AI-EVAL-0 NVIDIA Model Connector And Profiles](docs/ai-eval-0-nvidia-model-profiles.md)
 - [AI-EVAL-1 Evaluation Run Contract](docs/ai-eval-1-evaluation-run-contract.md)
 - [AI-EVAL-2 Runtime Evidence Capture](docs/ai-eval-2-runtime-evidence.md)

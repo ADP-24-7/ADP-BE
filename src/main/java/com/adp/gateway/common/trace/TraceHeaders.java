@@ -4,9 +4,11 @@ public final class TraceHeaders {
 
     public static final String REQUEST_ID = "X-Request-Id";
     public static final String TRACE_ID = "X-Trace-Id";
+    public static final String REQUEST_TIMESTAMP = "X-ADP-Request-Timestamp";
     public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
     public static final String REQUEST_ID_ATTRIBUTE = "adp.requestId";
     public static final String TRACE_ID_ATTRIBUTE = "adp.traceId";
+    public static final String CLIENT_TRACE_ID_DIGEST_ATTRIBUTE = "adp.clientTraceIdDigest";
 
     private TraceHeaders() {
     }

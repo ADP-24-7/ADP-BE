@@ -149,7 +149,8 @@ class RuntimeExecutionServiceTests {
                 persistence, mock(com.adp.gateway.observability.GatewayObservability.class)
             ),
             mock(com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotService.class),
-            mock(com.adp.gateway.digitalasset.application.DigitalAssetPreExecutionGuard.class)
+            mock(com.adp.gateway.digitalasset.application.DigitalAssetPreExecutionGuard.class),
+            mock(com.adp.gateway.auth.application.DeniedRequestAttemptPort.class)
         );
     }
 

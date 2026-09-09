@@ -2,7 +2,7 @@
 
 ## 감사 범위와 방법
 
-2026-09-08 기준 `main`의 first-parent 이력과 로컬에 남아 있는 각 feature branch의 `feat/fix/test/docs` 커밋을
+2026-09-09 기준 `main`의 first-parent 이력과 로컬에 남아 있는 각 feature branch의 `feat/fix/test/docs` 커밋을
 대조했다. `main`은 PR별 squash commit을 사용하므로, 아래 표의 main commit은 최종 병합 결과를 가리키고 상세 원인은
 각 troubleshooting 문서에서 리뷰 보완 commit과 함께 설명한다.
 
@@ -45,15 +45,20 @@ GitHub CLI는 인증되지 않은 환경에서도 재현할 수 있도록 감사
 | #29 | `969aa14` | Producer Schema 신뢰 역전, symlink escape, ingest transaction | `digital-asset-artifact-loader.md` |
 | #30 | `31ae5f1` | ACTIVE selection, atomic replacement와 pinned snapshot | `digital-asset-runtime-snapshot.md` |
 | #31 | `062ab8a` | NCP object key와 다운로드 bytes의 content-address 결속 | `ncp-artifact-content-store.md` |
+| #32 | `5a7c3c0` | Connector 직전 snapshot 재검증과 exact field digest lineage | `digital-asset-pre-execution-guard.md` |
+| #33 | `b5897a5` | Provider 응답과 독립된 사후 증적, typed unknown recovery | `digital-asset-post-execution-evidence.md` |
+| #34 | `80027c0` | Shadow 평가 중 Candidate/ACTIVE 변경에 대한 stale evidence 차단 | `policy-shadow-evidence.md` |
+| #35 | `b7b3a8e` | 범용 승인 우회 차단과 Shadow Evidence 기반 maker-checker 승인 | `policy-shadow-approval-gate.md` |
+| #36 | `b99752f` | 단일 Current Selection, 원자적 교체/롤백과 stale approval 차단 | `policy-current-selection-rollback.md` |
 
 ## 현재 브랜치
 
-`feature/da-p0-7-pre-execution-guard`의 `02a6b09`는 아직 `main`에 병합되지 않았다. Connector 직전 TOCTOU와
-exact digest lineage 문제는 `digital-asset-pre-execution-guard.md`에서 별도로 추적한다.
+`feature/sec-1-2-security-hardening`은 아직 `main`에 병합되지 않았다. Caller trace 신뢰, denied-attempt evidence,
+request freshness, destination SSRF와 CI security gate는 `security-hardening.md`에서 추적한다.
 
 ## 확인 결과
 
-- PR #1~#31의 main merge commit을 모두 문서에 연결했다.
+- PR #1~#36의 main merge commit을 모두 문서에 연결했다.
 - feature branch commit hash와 main squash commit을 같은 identity로 취급하지 않는다.
 - 구현 설명만 있던 Approved Transaction, NCP ContentStore 이슈를 troubleshooting 문서로 승격했다.
 - AI real E2E의 fresh execution identity와 Lifecycle optimistic locking/transaction 문제를 기존 문서에 보강했다.

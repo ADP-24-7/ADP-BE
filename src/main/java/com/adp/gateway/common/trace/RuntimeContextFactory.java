@@ -40,7 +40,8 @@ public class RuntimeContextFactory {
             idempotencyKey,
             workloadId,
             purpose,
-            subject
+            subject,
+            attribute(httpRequest, TraceHeaders.CLIENT_TRACE_ID_DIGEST_ATTRIBUTE)
         );
     }
 

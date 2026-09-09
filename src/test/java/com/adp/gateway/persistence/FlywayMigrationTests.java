@@ -1195,6 +1195,25 @@ class FlywayMigrationTests {
         }
     }
 
+    @Test
+    void v36MigrationCreatesPrivacySafeDeniedRequestAttemptEvidence() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'request_attempt'
+                  and column_name in (
+                      'attempt_id', 'request_id', 'trace_id', 'client_trace_id_digest',
+                      'principal_id', 'institution_id', 'workload_id', 'purpose_code',
+                      'subject_ref_digest', 'authorization_result', 'reason_code', 'created_at'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(12);
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);
