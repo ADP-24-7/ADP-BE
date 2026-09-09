@@ -7,6 +7,7 @@ public enum PolicyLifecycleTransitionReason {
     SHADOW_PASSED(PolicyLifecycleStage.SHADOW),
     APPROVAL_GRANTED(PolicyLifecycleStage.APPROVED),
     ACTIVATION_APPROVED(PolicyLifecycleStage.ACTIVE),
+    ROLLBACK_RESTORED(PolicyLifecycleStage.ACTIVE),
     ACTIVE_VERSION_SUPERSEDED(PolicyLifecycleStage.SUPERSEDED),
     REVIEW_OPENED(PolicyLifecycleStage.REVIEW),
     ROLLBACK_APPROVED(PolicyLifecycleStage.ROLLED_BACK);

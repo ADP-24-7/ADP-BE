@@ -2,6 +2,7 @@ package com.adp.gateway.policy.infrastructure;
 
 import java.time.OffsetDateTime;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
@@ -9,6 +10,7 @@ import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.policy.application.PolicyLifecyclePersistence;
 import com.adp.gateway.policy.domain.PolicyLayer;
 import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
+import com.adp.gateway.policy.domain.PolicyCurrentSelection;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
@@ -226,6 +228,128 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
     }
 
     @Override
+    public PolicyCurrentSelection activate(
+        PolicyLifecycleRecord expectedArtifact,
+        long expectedSelectionRevision,
+        String actorId,
+        OffsetDateTime occurredAt
+    ) {
+        lockCurrentSelectionScope(expectedArtifact);
+        PolicyLifecycleRecord candidate = load(
+            expectedArtifact.institutionId(), Set.of(expectedArtifact.workloadId()),
+            expectedArtifact.artifactId(), expectedArtifact.artifactVersion()
+        );
+        if (!sameIdentityAndScope(expectedArtifact, candidate)
+            || expectedArtifact.revision() != candidate.revision()
+            || candidate.lifecycleStage() != PolicyLifecycleStage.APPROVED) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
+        }
+
+        Optional<PolicyCurrentSelection> currentSelection = findCurrentSelection(
+            candidate.institutionId(), candidate.executionPack(), candidate.workloadId(), candidate.purposeCode()
+        );
+        if (currentSelection.map(PolicyCurrentSelection::selectionRevision).orElse(0L)
+            != expectedSelectionRevision) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
+        }
+        Optional<PolicyLifecycleRecord> previous = currentSelection
+            .map(selection -> loadSelectedLifecycle(selection, PolicyLifecycleStage.ACTIVE))
+            .or(() -> findOnlyActive(candidate));
+        if (previous.filter(value -> sameIdentityAndScope(value, candidate)).isPresent()) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
+        }
+        if (previous.isEmpty() || !approvalMatchesBaseline(candidate, previous.get())) {
+            throw new PolicyLifecycleException("POLICY_CURRENT_SELECTION_APPROVAL_STALE");
+        }
+        previous.ifPresent(value -> transition(
+            value, PolicyLifecycleStage.SUPERSEDED, actorId,
+            PolicyLifecycleTransitionReason.ACTIVE_VERSION_SUPERSEDED, occurredAt
+        ));
+        PolicyLifecycleRecord activated = transition(
+            candidate, PolicyLifecycleStage.ACTIVE, actorId,
+            PolicyLifecycleTransitionReason.ACTIVATION_APPROVED, occurredAt
+        );
+        long selectionRevision = expectedSelectionRevision + 1;
+        saveCurrentSelection(activated, selectionRevision, actorId, occurredAt);
+        recordSelectionEvent("ACTIVATED", previous.orElse(null), activated, selectionRevision,
+            actorId, PolicyLifecycleTransitionReason.ACTIVATION_APPROVED, occurredAt);
+        return requireCurrentSelection(activated);
+    }
+
+    @Override
+    public PolicyCurrentSelection rollback(
+        PolicyLifecycleRecord expectedTarget,
+        long expectedSelectionRevision,
+        String actorId,
+        OffsetDateTime occurredAt
+    ) {
+        lockCurrentSelectionScope(expectedTarget);
+        PolicyLifecycleRecord target = load(
+            expectedTarget.institutionId(), Set.of(expectedTarget.workloadId()),
+            expectedTarget.artifactId(), expectedTarget.artifactVersion()
+        );
+        if (!sameIdentityAndScope(expectedTarget, target)
+            || expectedTarget.revision() != target.revision()
+            || target.lifecycleStage() != PolicyLifecycleStage.SUPERSEDED
+            || !wasApprovedAndActivated(target)) {
+            throw new PolicyLifecycleException("POLICY_ROLLBACK_TARGET_INVALID");
+        }
+        PolicyCurrentSelection selection = findCurrentSelection(
+            target.institutionId(), target.executionPack(), target.workloadId(), target.purposeCode()
+        ).orElseThrow(() -> new PolicyLifecycleException("POLICY_CURRENT_SELECTION_NOT_FOUND"));
+        if (selection.selectionRevision() != expectedSelectionRevision) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
+        }
+        PolicyLifecycleRecord current = loadSelectedLifecycle(selection, PolicyLifecycleStage.ACTIVE);
+        if (sameIdentityAndScope(current, target)) {
+            throw new PolicyLifecycleException("POLICY_ROLLBACK_TARGET_INVALID");
+        }
+
+        transition(current, PolicyLifecycleStage.ROLLED_BACK, actorId,
+            PolicyLifecycleTransitionReason.ROLLBACK_APPROVED, occurredAt);
+        PolicyLifecycleRecord restored = transition(target, PolicyLifecycleStage.ACTIVE, actorId,
+            PolicyLifecycleTransitionReason.ROLLBACK_RESTORED, occurredAt);
+        long nextSelectionRevision = selection.selectionRevision() + 1;
+        saveCurrentSelection(restored, nextSelectionRevision, actorId, occurredAt);
+        recordSelectionEvent("ROLLED_BACK", current, restored, nextSelectionRevision,
+            actorId, PolicyLifecycleTransitionReason.ROLLBACK_APPROVED, occurredAt);
+        return requireCurrentSelection(restored);
+    }
+
+    @Override
+    public Optional<PolicyCurrentSelection> findCurrentSelection(
+        String institutionId,
+        ExecutionPackType executionPack,
+        String workloadId,
+        String purposeCode
+    ) {
+        Optional<PolicyCurrentSelection> selection = jdbcClient.sql("""
+                select institution_id, policy_layer, execution_pack, workload_id, purpose_code,
+                       artifact_id, artifact_version, artifact_digest, artifact_revision,
+                       selection_revision, selected_by, selected_at
+                from policy.current_selection
+                where institution_id = :institutionId
+                  and execution_pack = :executionPack
+                  and workload_id = :workloadId
+                  and purpose_code = :purposeCode
+                """)
+            .param("institutionId", institutionId)
+            .param("executionPack", executionPack.name())
+            .param("workloadId", workloadId)
+            .param("purposeCode", purposeCode)
+            .query((rs, rowNum) -> new PolicyCurrentSelection(
+                rs.getString("institution_id"), PolicyLayer.valueOf(rs.getString("policy_layer")),
+                ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
+                rs.getString("purpose_code"), rs.getString("artifact_id"), rs.getString("artifact_version"),
+                rs.getString("artifact_digest"), rs.getLong("artifact_revision"),
+                rs.getLong("selection_revision"), rs.getString("selected_by"),
+                rs.getObject("selected_at", OffsetDateTime.class)
+            )).optional();
+        selection.ifPresent(value -> loadSelectedLifecycle(value, PolicyLifecycleStage.ACTIVE));
+        return selection;
+    }
+
+    @Override
     public PolicyLifecycleRecord loadActive(
         String institutionId,
         Set<String> allowedWorkloads,
@@ -310,6 +434,181 @@ public class JdbcPolicyLifecyclePersistence implements PolicyLifecyclePersistenc
             .param("scope", scope)
             .query((rs, rowNum) -> true)
             .single();
+    }
+
+    private void lockCurrentSelectionScope(PolicyLifecycleRecord record) {
+        String scope = String.join("|",
+            record.institutionId(), record.executionPack().name(), record.workloadId(), record.purposeCode()
+        );
+        jdbcClient.sql("select pg_advisory_xact_lock(hashtextextended(:scope, 0))")
+            .param("scope", scope)
+            .query((rs, rowNum) -> true)
+            .single();
+    }
+
+    private Optional<PolicyLifecycleRecord> findOnlyActive(PolicyLifecycleRecord scope) {
+        var active = jdbcClient.sql("""
+                select artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                       execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                       revision, created_at, updated_at
+                from policy.lifecycle_artifact
+                where institution_id = :institutionId and execution_pack = :executionPack
+                  and workload_id = :workloadId and purpose_code = :purposeCode
+                  and lifecycle_stage = 'ACTIVE'
+                order by artifact_id, artifact_version
+                limit 2
+                """)
+            .param("institutionId", scope.institutionId()).param("executionPack", scope.executionPack().name())
+            .param("workloadId", scope.workloadId()).param("purposeCode", scope.purposeCode())
+            .query((rs, rowNum) -> mapLifecycle(rs)).list();
+        if (active.size() > 1) {
+            throw new PolicyLifecycleException("POLICY_CURRENT_SELECTION_AMBIGUOUS");
+        }
+        return active.stream().findFirst();
+    }
+
+    private PolicyLifecycleRecord loadSelectedLifecycle(
+        PolicyCurrentSelection selection,
+        PolicyLifecycleStage expectedStage
+    ) {
+        PolicyLifecycleRecord record = load(
+            selection.institutionId(), Set.of(selection.workloadId()),
+            selection.artifactId(), selection.artifactVersion()
+        );
+        if (record.lifecycleStage() != expectedStage
+            || record.policyLayer() != selection.policyLayer()
+            || record.executionPack() != selection.executionPack()
+            || !Objects.equals(record.purposeCode(), selection.purposeCode())
+            || !Objects.equals(record.artifactDigest(), selection.artifactDigest())
+            || record.revision() != selection.artifactRevision()) {
+            throw new PolicyLifecycleException("POLICY_CURRENT_SELECTION_STALE");
+        }
+        return record;
+    }
+
+    private boolean wasApprovedAndActivated(PolicyLifecycleRecord target) {
+        Integer approvals = jdbcClient.sql("""
+                select count(*) from policy.lifecycle_transition_event
+                where institution_id = :institutionId and artifact_id = :artifactId
+                  and artifact_version = :artifactVersion and artifact_digest = :artifactDigest
+                  and to_stage = 'APPROVED'
+                """)
+            .param("institutionId", target.institutionId()).param("artifactId", target.artifactId())
+            .param("artifactVersion", target.artifactVersion()).param("artifactDigest", target.artifactDigest())
+            .query(Integer.class).single();
+        Integer activations = jdbcClient.sql("""
+                select count(*) from policy.lifecycle_transition_event
+                where institution_id = :institutionId and artifact_id = :artifactId
+                  and artifact_version = :artifactVersion and artifact_digest = :artifactDigest
+                  and to_stage = 'ACTIVE'
+                """)
+            .param("institutionId", target.institutionId()).param("artifactId", target.artifactId())
+            .param("artifactVersion", target.artifactVersion()).param("artifactDigest", target.artifactDigest())
+            .query(Integer.class).single();
+        return approvals > 0 && activations > 0;
+    }
+
+    private boolean approvalMatchesBaseline(
+        PolicyLifecycleRecord candidate,
+        PolicyLifecycleRecord baseline
+    ) {
+        Integer matches = jdbcClient.sql("""
+                select count(*) from policy.lifecycle_transition_event
+                where institution_id = :institutionId
+                  and artifact_id = :candidateId and artifact_version = :candidateVersion
+                  and artifact_digest = :candidateDigest and to_stage = 'APPROVED'
+                  and approval_gate_version = 'SHADOW_EVIDENCE_V1'
+                  and shadow_baseline_artifact_id = :baselineId
+                  and shadow_baseline_artifact_version = :baselineVersion
+                  and shadow_baseline_artifact_digest = :baselineDigest
+                """)
+            .param("institutionId", candidate.institutionId())
+            .param("candidateId", candidate.artifactId()).param("candidateVersion", candidate.artifactVersion())
+            .param("candidateDigest", candidate.artifactDigest()).param("baselineId", baseline.artifactId())
+            .param("baselineVersion", baseline.artifactVersion()).param("baselineDigest", baseline.artifactDigest())
+            .query(Integer.class).single();
+        return matches == 1;
+    }
+
+    private void saveCurrentSelection(
+        PolicyLifecycleRecord selected,
+        long selectionRevision,
+        String actorId,
+        OffsetDateTime occurredAt
+    ) {
+        jdbcClient.sql("""
+                insert into policy.current_selection (
+                    institution_id, policy_layer, execution_pack, workload_id, purpose_code,
+                    artifact_id, artifact_version, artifact_digest, artifact_revision,
+                    selection_revision, selected_by, selected_at
+                ) values (
+                    :institutionId, :policyLayer, :executionPack, :workloadId, :purposeCode,
+                    :artifactId, :artifactVersion, :artifactDigest, :artifactRevision,
+                    :selectionRevision, :actorId, :occurredAt
+                ) on conflict (institution_id, execution_pack, workload_id, purpose_code) do update set
+                    policy_layer = excluded.policy_layer, artifact_id = excluded.artifact_id,
+                    artifact_version = excluded.artifact_version, artifact_digest = excluded.artifact_digest,
+                    artifact_revision = excluded.artifact_revision,
+                    selection_revision = excluded.selection_revision,
+                    selected_by = excluded.selected_by, selected_at = excluded.selected_at
+                """)
+            .param("institutionId", selected.institutionId()).param("policyLayer", selected.policyLayer().name())
+            .param("executionPack", selected.executionPack().name()).param("workloadId", selected.workloadId())
+            .param("purposeCode", selected.purposeCode()).param("artifactId", selected.artifactId())
+            .param("artifactVersion", selected.artifactVersion()).param("artifactDigest", selected.artifactDigest())
+            .param("artifactRevision", selected.revision()).param("selectionRevision", selectionRevision)
+            .param("actorId", actorId).param("occurredAt", occurredAt).update();
+    }
+
+    private void recordSelectionEvent(
+        String eventType,
+        PolicyLifecycleRecord previous,
+        PolicyLifecycleRecord selected,
+        long selectionRevision,
+        String actorId,
+        PolicyLifecycleTransitionReason reason,
+        OffsetDateTime occurredAt
+    ) {
+        jdbcClient.sql("""
+                insert into policy.current_selection_event (
+                    institution_id, policy_layer, execution_pack, workload_id, purpose_code, event_type,
+                    previous_artifact_id, previous_artifact_version, previous_artifact_digest,
+                    selected_artifact_id, selected_artifact_version, selected_artifact_digest,
+                    selected_artifact_revision, selection_revision, actor_id, reason_code, occurred_at
+                ) values (
+                    :institutionId, :policyLayer, :executionPack, :workloadId, :purposeCode, :eventType,
+                    :previousId, :previousVersion, :previousDigest,
+                    :selectedId, :selectedVersion, :selectedDigest,
+                    :artifactRevision, :selectionRevision, :actorId, :reasonCode, :occurredAt
+                )
+                """)
+            .param("institutionId", selected.institutionId()).param("policyLayer", selected.policyLayer().name())
+            .param("executionPack", selected.executionPack().name()).param("workloadId", selected.workloadId())
+            .param("purposeCode", selected.purposeCode()).param("eventType", eventType)
+            .param("previousId", previous == null ? null : previous.artifactId())
+            .param("previousVersion", previous == null ? null : previous.artifactVersion())
+            .param("previousDigest", previous == null ? null : previous.artifactDigest())
+            .param("selectedId", selected.artifactId()).param("selectedVersion", selected.artifactVersion())
+            .param("selectedDigest", selected.artifactDigest()).param("artifactRevision", selected.revision())
+            .param("selectionRevision", selectionRevision).param("actorId", actorId)
+            .param("reasonCode", reason.name()).param("occurredAt", occurredAt).update();
+    }
+
+    private PolicyCurrentSelection requireCurrentSelection(PolicyLifecycleRecord record) {
+        return findCurrentSelection(
+            record.institutionId(), record.executionPack(), record.workloadId(), record.purposeCode()
+        ).orElseThrow(() -> new PolicyLifecycleException("POLICY_CURRENT_SELECTION_NOT_FOUND"));
+    }
+
+    private PolicyLifecycleRecord mapLifecycle(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new PolicyLifecycleRecord(
+            rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),
+            rs.getString("institution_id"), PolicyLayer.valueOf(rs.getString("policy_layer")),
+            ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
+            rs.getString("purpose_code"), PolicyLifecycleStage.valueOf(rs.getString("lifecycle_stage")),
+            rs.getString("created_by"), rs.getLong("revision"),
+            rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
+        );
     }
 
     private boolean sameCandidate(PolicyLifecycleRecord expected, PolicyLifecycleRecord actual) {

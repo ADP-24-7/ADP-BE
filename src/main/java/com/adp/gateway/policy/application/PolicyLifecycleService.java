@@ -12,6 +12,7 @@ import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
 import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
+import com.adp.gateway.policy.domain.PolicyCurrentSelection;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,9 +100,14 @@ public class PolicyLifecycleService {
         boolean runtimeSelection
     ) {
         PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
-        boolean digitalAssetSelectionTransition = current.executionPack() == ExecutionPackType.DIGITAL_ASSET
+        boolean selectionTransition = target == PolicyLifecycleStage.ACTIVE
+            || target == PolicyLifecycleStage.SUPERSEDED
+            || target == PolicyLifecycleStage.ROLLED_BACK;
+        boolean supportedDigitalAssetTransition = runtimeSelection
+            && current.executionPack() == ExecutionPackType.DIGITAL_ASSET
             && (target == PolicyLifecycleStage.ACTIVE || target == PolicyLifecycleStage.SUPERSEDED);
-        if (digitalAssetSelectionTransition != runtimeSelection) {
+        if ((selectionTransition && !supportedDigitalAssetTransition)
+            || (runtimeSelection && !supportedDigitalAssetTransition)) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
         }
         requireRole(principal, PRIVILEGED_TARGETS.contains(target) ? AdpRole.PRIVILEGED_OPERATOR : AdpRole.OPERATOR);
@@ -147,6 +153,74 @@ public class PolicyLifecycleService {
             current, principal.principalId(), OffsetDateTime.now(clock),
             PolicyApprovalEvidenceBinding.from(evidence, PolicyShadowApprovalPolicy.VERSION)
         );
+    }
+
+    @Transactional
+    public PolicyCurrentSelection activate(
+        AuthPrincipal principal,
+        String artifactId,
+        String artifactVersion,
+        long expectedArtifactRevision,
+        long expectedSelectionRevision
+    ) {
+        PolicyLifecycleRecord current = loadScoped(principal, artifactId, artifactVersion);
+        requireRole(principal, AdpRole.PRIVILEGED_OPERATOR);
+        if (current.executionPack() == ExecutionPackType.DIGITAL_ASSET) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
+        }
+        if (current.createdBy().equals(principal.principalId())) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_MAKER_CHECKER_VIOLATION");
+        }
+        if (current.lifecycleStage() != PolicyLifecycleStage.APPROVED) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
+        }
+        if (current.revision() != expectedArtifactRevision) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
+        }
+        return persistence.activate(
+            current, expectedSelectionRevision, principal.principalId(), OffsetDateTime.now(clock)
+        );
+    }
+
+    @Transactional
+    public PolicyCurrentSelection rollback(
+        AuthPrincipal principal,
+        String artifactId,
+        String artifactVersion,
+        long expectedTargetRevision,
+        long expectedSelectionRevision
+    ) {
+        PolicyLifecycleRecord target = loadScoped(principal, artifactId, artifactVersion);
+        requireRole(principal, AdpRole.PRIVILEGED_OPERATOR);
+        if (target.executionPack() == ExecutionPackType.DIGITAL_ASSET) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_TRANSITION_INVALID");
+        }
+        if (target.createdBy().equals(principal.principalId())) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_MAKER_CHECKER_VIOLATION");
+        }
+        if (target.revision() != expectedTargetRevision) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
+        }
+        return persistence.rollback(
+            target, expectedSelectionRevision, principal.principalId(), OffsetDateTime.now(clock)
+        );
+    }
+
+    public PolicyCurrentSelection loadCurrentSelection(
+        AuthPrincipal principal,
+        ExecutionPackType executionPack,
+        String workloadId,
+        String purposeCode
+    ) {
+        if (principal == null || principal.institutionId() == null || principal.institutionId().isBlank()
+            || (!principal.hasRole(AdpRole.OPERATOR) && !principal.hasRole(AdpRole.PRIVILEGED_OPERATOR)
+                && !principal.hasRole(AdpRole.AUDITOR))) {
+            throw new PolicyLifecycleException("POLICY_LIFECYCLE_FORBIDDEN");
+        }
+        requireScope(principal, workloadId);
+        return persistence.findCurrentSelection(
+            principal.institutionId(), executionPack, workloadId, purposeCode
+        ).orElseThrow(() -> new PolicyLifecycleException("POLICY_CURRENT_SELECTION_NOT_FOUND"));
     }
 
     public PolicyLifecycleRecord load(AuthPrincipal principal, String artifactId, String artifactVersion) {

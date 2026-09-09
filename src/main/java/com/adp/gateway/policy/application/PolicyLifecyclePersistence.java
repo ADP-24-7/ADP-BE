@@ -1,12 +1,14 @@
 package com.adp.gateway.policy.application;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
 import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
+import com.adp.gateway.policy.domain.PolicyCurrentSelection;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.PolicyLayer;
 
@@ -33,6 +35,27 @@ public interface PolicyLifecyclePersistence {
         String actorId,
         OffsetDateTime occurredAt,
         PolicyApprovalEvidenceBinding evidenceBinding
+    );
+
+    PolicyCurrentSelection activate(
+        PolicyLifecycleRecord expectedArtifact,
+        long expectedSelectionRevision,
+        String actorId,
+        OffsetDateTime occurredAt
+    );
+
+    PolicyCurrentSelection rollback(
+        PolicyLifecycleRecord expectedTarget,
+        long expectedSelectionRevision,
+        String actorId,
+        OffsetDateTime occurredAt
+    );
+
+    Optional<PolicyCurrentSelection> findCurrentSelection(
+        String institutionId,
+        ExecutionPackType executionPack,
+        String workloadId,
+        String purposeCode
     );
 
     PolicyLifecycleRecord loadActive(

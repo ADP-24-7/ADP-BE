@@ -16,6 +16,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [Digital Asset POST_EXECUTION Evidence 트러블슈팅](digital-asset-post-execution-evidence.md)
 - [Policy Replay / Shadow Evidence 트러블슈팅](policy-shadow-evidence.md)
 - [Policy Shadow Approval Gate 트러블슈팅](policy-shadow-approval-gate.md)
+- [Policy Current Selection / Rollback 트러블슈팅](policy-current-selection-rollback.md)
 - [NCP Artifact ContentStore 트러블슈팅](ncp-artifact-content-store.md)
 - [PR #1~#31 Troubleshooting Coverage Audit](pr-history-audit.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)

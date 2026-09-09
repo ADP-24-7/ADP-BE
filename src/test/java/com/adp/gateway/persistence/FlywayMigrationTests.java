@@ -1091,6 +1091,45 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v35MigrationPreservesLegacyActiveRowsWithoutGuessingCurrentSelection() throws Exception {
+        String databaseName = "adp_v35_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("34").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into policy.lifecycle_artifact (
+                        artifact_id, artifact_version, artifact_digest, institution_id, policy_layer,
+                        execution_pack, workload_id, purpose_code, lifecycle_stage, created_by,
+                        revision, created_at, updated_at
+                    ) values
+                        ('legacy-active-a', '1.0.0', repeat('a', 64), 'institution-legacy', 'WORKLOAD',
+                         'AI', 'legacy-workload', 'CUSTOMER_SUPPORT', 'ACTIVE', 'legacy-maker', 6, now(), now()),
+                        ('legacy-active-b', '1.0.0', repeat('b', 64), 'institution-legacy', 'INSTITUTION',
+                         'AI', 'legacy-workload', 'CUSTOMER_SUPPORT', 'ACTIVE', 'legacy-maker', 6, now(), now())
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("select count(*) from policy.current_selection")) {
+                resultSet.next();
+                assertThat(resultSet.getInt(1)).isZero();
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
+    }
+
+    @Test
     void v15MigrationBackfillsExistingAuditEventExecutionId() throws Exception {
         String databaseName = "adp_v15_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String sourceUrl = environment.getRequiredProperty("spring.datasource.url");

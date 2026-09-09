@@ -191,14 +191,14 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                 source_artifact_id, source_artifact_version,
                 source_artifact_digest_algorithm, source_artifact_digest_value,
                 policy_action, matched_rule_refs, evidence_refs, required_controls,
-                created_at
+                current_selection_revision, selected_artifact_revision, selected_policy_layer, created_at
             )
             values (
                 :executionId, :policyVersion, :snapshotDigest,
                 :sourceArtifactId, :sourceArtifactVersion,
                 :sourceArtifactDigestAlgorithm, :sourceArtifactDigestValue,
                 :policyAction, :matchedRuleRefs, :evidenceRefs, :requiredControls,
-                :createdAt
+                :currentSelectionRevision, :selectedArtifactRevision, :selectedPolicyLayer, :createdAt
             )
             """)
             .param("executionId", executionId)
@@ -212,6 +212,12 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("matchedRuleRefs", auditValue(snapshot.evaluation().matchedRuleRefs()))
             .param("evidenceRefs", auditValue(snapshot.evaluation().evidenceRefs()))
             .param("requiredControls", auditValue(snapshot.evaluation().requiredControls()))
+            .param("currentSelectionRevision", snapshot.currentSelectionRef() == null
+                ? null : snapshot.currentSelectionRef().selectionRevision(), java.sql.Types.BIGINT)
+            .param("selectedArtifactRevision", snapshot.currentSelectionRef() == null
+                ? null : snapshot.currentSelectionRef().artifactRevision(), java.sql.Types.BIGINT)
+            .param("selectedPolicyLayer", snapshot.currentSelectionRef() == null
+                ? null : snapshot.currentSelectionRef().policyLayer().name(), java.sql.Types.VARCHAR)
             .param("createdAt", OffsetDateTime.now(clock))
             .update();
     }
