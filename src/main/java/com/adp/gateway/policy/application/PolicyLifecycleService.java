@@ -13,8 +13,12 @@ import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
 import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
 import com.adp.gateway.policy.domain.PolicyCurrentSelection;
+import com.adp.gateway.observability.GatewayObservability;
+import com.adp.gateway.observability.GatewayObservability.CurrentSelectionOutcome;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class PolicyLifecycleService {
@@ -30,6 +34,7 @@ public class PolicyLifecycleService {
     private final PolicyLifecycleTransitionValidator transitionValidator;
     private final PolicyShadowEvidencePersistence shadowEvidencePersistence;
     private final PolicyShadowApprovalPolicy shadowApprovalPolicy;
+    private final GatewayObservability observability;
     private final Clock clock;
 
     public PolicyLifecycleService(
@@ -37,12 +42,14 @@ public class PolicyLifecycleService {
         PolicyLifecycleTransitionValidator transitionValidator,
         PolicyShadowEvidencePersistence shadowEvidencePersistence,
         PolicyShadowApprovalPolicy shadowApprovalPolicy,
+        GatewayObservability observability,
         Clock clock
     ) {
         this.persistence = persistence;
         this.transitionValidator = transitionValidator;
         this.shadowEvidencePersistence = shadowEvidencePersistence;
         this.shadowApprovalPolicy = shadowApprovalPolicy;
+        this.observability = observability;
         this.clock = clock;
     }
 
@@ -124,7 +131,11 @@ public class PolicyLifecycleService {
             throw new PolicyLifecycleException("POLICY_SHADOW_APPROVAL_REQUIRED");
         }
         transitionValidator.validate(current.lifecycleStage(), target, reason);
-        return persistence.transition(current, target, principal.principalId(), reason, OffsetDateTime.now(clock));
+        PolicyLifecycleRecord transitioned = persistence.transition(
+            current, target, principal.principalId(), reason, OffsetDateTime.now(clock)
+        );
+        afterCommit(() -> observability.policyLifecycle(target));
+        return transitioned;
     }
 
     @Transactional
@@ -151,10 +162,12 @@ public class PolicyLifecycleService {
             shadowEvaluationId
         );
         shadowApprovalPolicy.validate(evidence);
-        return persistence.approve(
+        PolicyLifecycleRecord approved = persistence.approve(
             current, principal.principalId(), OffsetDateTime.now(clock),
             PolicyApprovalEvidenceBinding.from(evidence, PolicyShadowApprovalPolicy.VERSION)
         );
+        afterCommit(() -> observability.policyLifecycle(PolicyLifecycleStage.APPROVED));
+        return approved;
     }
 
     @Transactional
@@ -179,9 +192,15 @@ public class PolicyLifecycleService {
         if (current.revision() != expectedArtifactRevision) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
         }
-        return persistence.activate(
+        PolicyCurrentSelection selection = persistence.activate(
             current, expectedSelectionRevision, principal.principalId(), OffsetDateTime.now(clock)
         );
+        afterCommit(() -> {
+            observability.policyLifecycle(PolicyLifecycleStage.SUPERSEDED);
+            observability.policyLifecycle(PolicyLifecycleStage.ACTIVE);
+            observability.currentSelection(CurrentSelectionOutcome.ACTIVATED);
+        });
+        return selection;
     }
 
     @Transactional
@@ -203,9 +222,15 @@ public class PolicyLifecycleService {
         if (target.revision() != expectedTargetRevision) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_CONCURRENT_MODIFICATION");
         }
-        return persistence.rollback(
+        PolicyCurrentSelection selection = persistence.rollback(
             target, expectedSelectionRevision, principal.principalId(), OffsetDateTime.now(clock)
         );
+        afterCommit(() -> {
+            observability.policyLifecycle(PolicyLifecycleStage.ROLLED_BACK);
+            observability.policyLifecycle(PolicyLifecycleStage.ACTIVE);
+            observability.currentSelection(CurrentSelectionOutcome.ROLLED_BACK);
+        });
+        return selection;
     }
 
     public PolicyCurrentSelection loadCurrentSelection(
@@ -257,6 +282,19 @@ public class PolicyLifecycleService {
         if (!principal.hasRole(role)) {
             throw new PolicyLifecycleException("POLICY_LIFECYCLE_FORBIDDEN");
         }
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private boolean blank(String value) {

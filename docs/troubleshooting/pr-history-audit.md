@@ -55,8 +55,8 @@ GitHub CLI는 인증되지 않은 환경에서도 재현할 수 있도록 감사
 
 ## 현재 브랜치
 
-`feature/be-9-recovery-operations`는 아직 `main`에 병합되지 않았다. 안전 재전송, 운영 scheduler와 수동 Recovery API는
-`recovery-operations.md`에서 추적한다.
+`feature/be-11-observability-operations`는 아직 `main`에 병합되지 않았으며 미병합 BE-9 Recovery Operations 커밋 위에서
+분기한 stacked branch다. BE-9는 `recovery-operations.md`, BE-11은 `observability-operations.md`에서 각각 추적한다.
 
 ## 확인 결과
 

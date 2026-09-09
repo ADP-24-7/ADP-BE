@@ -33,5 +33,8 @@ Console log는 Logstash JSON 형식을 사용하며 Trace filter가 MDC에 설�
 
 - BE-11B Audit Read Model과 Evidence Export
 - Policy Lifecycle, Artifact Drift, Rollback 전용 metric
-- Recovery queue depth/age gauge와 운영 alert
+- NCP 환경 Prometheus scrape network isolation과 retention
+
+Recovery queue gauge, Policy/Security metric과 운영 Alert Rule은
+[BE-11 Observability Operations](be-11-observability-operations.md)에서 후속 구현했다.
 - NCP Prometheus scrape network policy·retention 설정

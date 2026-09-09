@@ -17,6 +17,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
 | BE-9 | Baseline Completed | Consistency, Recovery & Operations |
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
+| BE-11 | Baseline Completed | Observability Operations |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
 
 ## AI Runtime Evaluation Tracking
@@ -164,8 +165,12 @@ BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-f
 - [x] BE-11B Privileged Evidence Export와 조회 시점 content fingerprint
 - [x] BE-11B raw payload·subject·idempotency key·provider correlation key 비노출
 - [x] BE-11B V14 검색 인덱스와 권한/검색/export 통합 테스트
-- [ ] Artifact Lifecycle·Rollback Evidence
-- [ ] Policy Lifecycle·Artifact Drift·Rollback metric
+- [x] Artifact Lifecycle·Activation·Rollback Evidence Read Model
+- [x] Policy Lifecycle·Current Selection·Rollback low-cardinality metric
+- [x] Recovery backlog depth·oldest age·manual review·exhausted gauge
+- [x] Security freshness·authorization·destination rejection metric
+- [x] Institution/Workload scoped Monitoring Summary API
+- [x] Recovery backlog·exhausted·policy drift·rollback spike·runtime failure Alert Rule
 - [ ] NCP scrape 인증·network policy·retention
 
 ## BE-9A Parallel Tracking

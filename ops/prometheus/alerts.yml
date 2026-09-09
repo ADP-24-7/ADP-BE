@@ -1,0 +1,45 @@
+groups:
+  - name: adp-runtime-operations
+    rules:
+      - alert: AdpRecoveryBacklogOldestAgeExceeded
+        expr: adp_recovery_queue_oldest_age_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Recovery backlog age exceeded the operating threshold
+
+      - alert: AdpRecoveryExhaustedIncident
+        expr: adp_recovery_exhausted_count > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: At least one recovery incident exhausted automatic attempts
+
+      - alert: AdpPolicyCurrentSelectionDrift
+        expr: adp_policy_drift_count > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Current policy selection differs from authoritative lifecycle state
+
+      - alert: AdpPolicyRollbackSpike
+        expr: increase(adp_policy_current_selection_total{outcome="ROLLED_BACK"}[15m]) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Policy rollback volume exceeded the operating threshold
+
+      - alert: AdpRuntimeFailureRateHigh
+        expr: >-
+          sum(rate(adp_runtime_terminal_transition_total{status="FAILED"}[5m]))
+          /
+          clamp_min(sum(rate(adp_runtime_terminal_transition_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Runtime failure transition rate is above five percent

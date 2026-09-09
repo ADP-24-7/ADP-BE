@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.adp.gateway.observability.GatewayObservability;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -19,7 +21,8 @@ class RequestFreshnessFilterTests {
     private static final Instant NOW = Instant.parse("2026-09-09T01:00:00Z");
     private final RequestFreshnessFilter filter = new RequestFreshnessFilter(
         new ObjectMapper().findAndRegisterModules(), Clock.fixed(NOW, ZoneOffset.UTC),
-        true, Duration.ofMinutes(5), Duration.ofSeconds(30)
+        true, Duration.ofMinutes(5), Duration.ofSeconds(30),
+        new GatewayObservability(new SimpleMeterRegistry())
     );
 
     @Test

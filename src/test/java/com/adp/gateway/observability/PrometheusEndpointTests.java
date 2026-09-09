@@ -26,6 +26,8 @@ class PrometheusEndpointTests {
         mockMvc.perform(get("/actuator/prometheus"))
             .andExpect(status().isOk())
             .andExpect(content().string(org.hamcrest.Matchers.containsString("jvm_info")))
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_recovery_processing_total")));
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_recovery_processing_total")))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_recovery_queue_depth")))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("adp_policy_drift_count")));
     }
 }

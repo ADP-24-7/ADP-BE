@@ -49,6 +49,14 @@ jobs:
           sh -n scripts/run-ncp-artifact-ingest-e2e.sh
           python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
+      - name: Validate Prometheus alert rules
+        run: >-
+          docker run --rm
+          --entrypoint /bin/promtool
+          --volume "$PWD/ops/prometheus:/etc/prometheus/rules:ro"
+          prom/prometheus:v3.5.0
+          check rules /etc/prometheus/rules/alerts.yml
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

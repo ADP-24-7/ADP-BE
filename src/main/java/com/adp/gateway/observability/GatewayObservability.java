@@ -1,6 +1,7 @@
 package com.adp.gateway.observability;
 
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
+import com.adp.gateway.policy.domain.PolicyLifecycleStage;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +42,18 @@ public class GatewayObservability {
         increment("adp.recovery.processing.total", "outcome", outcome.name(), count);
     }
 
+    public void policyLifecycle(PolicyLifecycleStage stage) {
+        meterRegistry.counter("adp.policy.lifecycle.transition.total", "stage", stage.name()).increment();
+    }
+
+    public void currentSelection(CurrentSelectionOutcome outcome) {
+        meterRegistry.counter("adp.policy.current.selection.total", "outcome", outcome.name()).increment();
+    }
+
+    public void security(SecurityOutcome outcome) {
+        meterRegistry.counter("adp.security.control.total", "outcome", outcome.name()).increment();
+    }
+
     private void increment(String name, String tagName, String tagValue, int count) {
         if (count < 1) {
             throw new IllegalArgumentException("Metric increment count must be positive");
@@ -61,6 +74,18 @@ public class GatewayObservability {
         EXHAUSTED,
         MANUAL_REVIEW,
         STALE_LEASE
+    }
+
+    public enum CurrentSelectionOutcome {
+        ACTIVATED,
+        ROLLED_BACK
+    }
+
+    public enum SecurityOutcome {
+        REQUEST_FRESHNESS_REJECTED,
+        INSTITUTION_SCOPE_REJECTED,
+        AUTHORIZATION_POLICY_REJECTED,
+        DESTINATION_REJECTED
     }
 
     public enum AiEvaluationEvidenceOutcome {

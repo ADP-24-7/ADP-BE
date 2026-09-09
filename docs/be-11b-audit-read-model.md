@@ -32,4 +32,7 @@ Audit Event는 결정론적으로 재사용될 수 있는 `decision_id`가 아�
 - DA Artifact Lifecycle, Drift, Approval, Rollback Evidence
 - Denied request attempt evidence
 - 서명된 Evidence Bundle과 장기 보관 정책
-- Recovery queue depth/age 및 Audit completeness 운영 지표
+- NCP 환경 Audit/Metric retention과 장기 archive
+
+Lifecycle/Selection Event와 운영 Summary Read Model은
+[BE-11 Observability Operations](be-11-observability-operations.md)에서 후속 구현했다.
