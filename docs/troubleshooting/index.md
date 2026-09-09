@@ -22,6 +22,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [DA Analysis to BE Contract Gap Review 트러블슈팅](da-runtime-contract-gap-review.md)
 - [Recovery Operations 트러블슈팅](recovery-operations.md)
 - [Observability Operations 트러블슈팅](observability-operations.md)
+- [Reference Evidence Plane 트러블슈팅](reference-evidence-plane.md)
 - [PR #1~#37 Troubleshooting Coverage Audit](pr-history-audit.md)
 - [발표용 Troubleshooting Highlights](presentation-highlights.md)
 
