@@ -22,7 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
-    "adp.mock-runtime.enabled=true"
+    "adp.mock-runtime.enabled=true",
+    "adp.local-user-auth.enabled=true"
 })
 @AutoConfigureMockMvc
 class AiModelProfileRuntimeTests {

@@ -39,7 +39,8 @@ Snapshot은 `fixed_conditions`, `fixed_conditions_digest`, `model_profiles`로 �
 `destination_profile_digest`를 재사용하고 `destination_profile_id`, `provider`를 노출한다.
 provider model version은 기존 catalog 등록값이며 hosted revision의 실측 확인값은 아니다.
 
-V40 migration은 immutable contract, case provider-input pin, execution binding을 저장한다.
+V41 migration은 immutable contract, case provider-input pin, execution binding을 저장한다.
+main의 V40 reference evidence registry migration과 충돌하지 않도록 P0 migration 번호를 V41로 고정한다.
 run/case/fixed digest/model digest/decision/transform/outbound/provider request를 FK와 서버
 검증으로 연결한다. Export SQL은 runtime의 decision, transform, outbound ID, PASSED guard,
 provider request digest와 model evidence를 join하여 불완전한 binding의 export를 거부한다.
@@ -91,7 +92,10 @@ export된 digest가 실행 전 읽은 digest와 일치해야 소비를 허용한
 - BE application/mapper/transform/runtime 단위 테스트 및 DA contract/e2e/bundle 테스트를 사용한다.
 - BE의 `build/test-contract-bundle.json`은 단위 테스트가 만든 MOCK fixture다. 독립 DA 검증에만
   사용하며 실측 Trace나 평가 표본으로 취급하지 않는다.
-- 로컬 PostgreSQL 연결 거부로 V40 적용/실 DB freeze/동시 binding/API 통합 테스트는 미검증이다.
+- 초기 점검에서는 로컬 PostgreSQL 연결 거부로 migration 적용/실 DB freeze/동시 binding/API 통합 테스트가 미검증이었다.
+- PR #43 merge 상태를 PostgreSQL 16, Java 21, Gradle 9.7.1로 검증했다.
+  `gradle --no-daemon test`: 450 passed, 0 failed, 기존 opt-in NCP E2E 1 skipped.
+  `gradle --no-daemon bootJar`: PASS. 테스트 fixture 검증이며 실제 Provider 실행 증거는 아니다.
 - 실제 실행 환경에 migration, 승인/정책/조회 데이터, privileged freeze가 필요하다.
 - catalog dataset digest는 기존 DA manifest의 등록 provenance다. `retrieved_context_digest`는
   freeze 때 조회한 실제 값과 이후 실행의 동일성을 증명하지만, DB 전체가 원본 manifest에서
@@ -137,7 +141,7 @@ src/main/java/com/adp/gateway/ai/application/AiEvaluationContractService.java
 src/main/java/com/adp/gateway/ai/application/AiEvaluationPrompt.java
 src/main/java/com/adp/gateway/ai/domain/AiEvaluationContractSnapshot.java
 src/main/java/com/adp/gateway/ai/infrastructure/JdbcAiEvaluationContractAdapter.java
-src/main/resources/db/migration/V40__freeze_ai_evaluation_contract.sql
+src/main/resources/db/migration/V41__freeze_ai_evaluation_contract.sql
 src/test/java/com/adp/gateway/ai/application/AiEvaluationContractServiceTests.java
 ```
 

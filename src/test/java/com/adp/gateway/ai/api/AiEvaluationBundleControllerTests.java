@@ -13,10 +13,12 @@ import java.util.UUID;
 
 import com.adp.gateway.ai.application.AiEvaluationBundleCanonicalizer;
 import com.adp.gateway.ai.application.AiEvaluationBundlePort;
+import com.adp.gateway.ai.application.AiEvaluationPrompt;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -44,6 +46,9 @@ class AiEvaluationBundleControllerTests {
 
     @Autowired
     private AiEvaluationBundleCanonicalizer canonicalizer;
+
+    @Autowired
+    private AiEvaluationRunCatalog evaluationRuns;
 
     @org.junit.jupiter.api.BeforeEach
     void freezeEvaluationContract() throws Exception {
@@ -112,12 +117,16 @@ class AiEvaluationBundleControllerTests {
             assertThat(first.path("runtime_metrics").toString()).contains(executionId);
             assertThat(first.path("trace_index").toString()).contains(executionId);
         });
-        assertThat(firstResponse)
-            .doesNotContain("승인된 고객 정보를 간단히 요약하세요")
-            .doesNotContain("customer-100")
-            .doesNotContain("local-dev-api-key")
-            .doesNotContain("req_eval_bundle_")
-            .doesNotContain("trace_eval_bundle_");
+        assertOnlyFrozenPublicMetadataContainsPromptAndSubject(first);
+        ObjectNode leakedPrompt = first.deepCopy();
+        ((ObjectNode) leakedPrompt.path("case_results").get(0))
+            .put("raw_prompt", AiEvaluationPrompt.TEXT);
+        assertThatThrownBy(() -> assertOnlyFrozenPublicMetadataContainsPromptAndSubject(leakedPrompt))
+            .isInstanceOf(AssertionError.class);
+        ObjectNode leakedSubject = first.deepCopy();
+        ((ObjectNode) leakedSubject.path("contract_evidence")).put("raw_subject", "customer-100");
+        assertThatThrownBy(() -> assertOnlyFrozenPublicMetadataContainsPromptAndSubject(leakedSubject))
+            .isInstanceOf(AssertionError.class);
 
         assertThat(bundlePort.load(
             AiEvaluationRunCatalog.BASELINE_RUN_ID, "other-institution", Set.of("*"), 10
@@ -138,6 +147,28 @@ class AiEvaluationBundleControllerTests {
             .isEqualTo(first.path("manifest").path("bundle_id").asText());
         assertThat(latest.path("manifest").path("content_digest").asText())
             .isNotEqualTo(first.path("manifest").path("content_digest").asText());
+    }
+
+    private void assertOnlyFrozenPublicMetadataContainsPromptAndSubject(JsonNode bundle) throws Exception {
+        ObjectNode evidence = bundle.deepCopy();
+        JsonNode fixed = evidence.path("contract_evidence").path("snapshot").path("fixed_conditions");
+        JsonNode prompt = fixed.path("prompt_snapshot");
+        JsonNode cases = fixed.path("cases");
+        assertThat(prompt).isEqualTo(objectMapper.valueToTree(AiEvaluationPrompt.snapshot()));
+        assertThat(cases).isEqualTo(objectMapper.valueToTree(evaluationRuns
+            .find(AiEvaluationRunCatalog.BASELINE_RUN_ID).orElseThrow().cases().values().stream()
+            .sorted(java.util.Comparator.comparing(com.adp.gateway.ai.domain.AiEvaluationCaseDefinition::caseId))
+            .toList()));
+
+        // V2 freezes these exact public metadata values; raw execution data is still forbidden.
+        ((ObjectNode) prompt).remove("input_prompt");
+        cases.forEach(evaluationCase -> ((ObjectNode) evaluationCase).remove("datasetRowRef"));
+        assertThat(objectMapper.writeValueAsString(evidence))
+            .doesNotContain("승인된 고객 정보를 간단히 요약하세요")
+            .doesNotContain("customer-100")
+            .doesNotContain("local-dev-api-key")
+            .doesNotContain("req_eval_bundle_")
+            .doesNotContain("trace_eval_bundle_");
     }
 
     private void assertDaParserRejectsInconsistentIdentity(JsonNode validBundle) throws Exception {

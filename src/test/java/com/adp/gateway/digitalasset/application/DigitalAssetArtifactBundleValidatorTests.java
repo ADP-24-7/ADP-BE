@@ -42,7 +42,7 @@ class DigitalAssetArtifactBundleValidatorTests {
         store = new MapStore();
         try (var files = Files.list(Path.of(ROOT))) {
             for (Path path : files.toList()) {
-                store.values.put(path.toString(), Files.readString(path));
+                store.values.put(ROOT + path.getFileName(), Files.readString(path));
             }
         }
     }
