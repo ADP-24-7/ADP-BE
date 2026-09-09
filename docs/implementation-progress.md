@@ -17,6 +17,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-8 | In Progress | Digital Asset Thin E2E & Recovery |
 | BE-9 | Baseline Completed | Consistency, Recovery & Operations |
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
+| BE-11 | Baseline Completed | Observability Operations |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
 
 ## AI Runtime Evaluation Tracking
@@ -147,13 +148,14 @@ BE-10 Skeleton 계약은 [BE-10 Policy Lifecycle Skeleton](be-10-policy-lifecycl
     - Branch: `feature/be-10-shadow-approval-gate`
     - Migration: V34
     - 최신 MATCH Evidence, Privileged Maker-Checker, Candidate/Baseline 재검증과 Transition Evidence binding
-- [ ] Active Policy Runtime Selection과 Rollback Propagation
+- [x] Active Policy Runtime Selection과 Rollback Propagation
 
 ## BE-11 Parallel Tracking
 
 BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-foundation.md)에서 관리한다.
 
 - [x] Prometheus registry와 `/actuator/prometheus` scrape endpoint
+- [x] `METRICS_SCRAPER` 전용 Service Principal을 통한 전역 Metric 접근 분리
 - [x] Runtime terminal transition metric과 기본 HTTP request metric
 - [x] Idempotency resolution metric
 - [x] Recovery processing outcome metric
@@ -164,8 +166,14 @@ BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-f
 - [x] BE-11B Privileged Evidence Export와 조회 시점 content fingerprint
 - [x] BE-11B raw payload·subject·idempotency key·provider correlation key 비노출
 - [x] BE-11B V14 검색 인덱스와 권한/검색/export 통합 테스트
-- [ ] Artifact Lifecycle·Rollback Evidence
-- [ ] Policy Lifecycle·Artifact Drift·Rollback metric
+- [x] Artifact Lifecycle·Activation·Rollback Evidence Read Model
+- [x] Policy Lifecycle·Current Selection·Rollback low-cardinality metric
+- [x] Post-commit Metric 장애와 영속 업무 결과 격리
+- [x] Recovery backlog depth·oldest age·manual review·exhausted gauge
+- [x] Stale Recovery Operation count·oldest age gauge와 Alert
+- [x] Security freshness·authorization·destination rejection metric
+- [x] Institution/Workload scoped Monitoring Summary API
+- [x] Recovery backlog·exhausted·policy drift·rollback spike·runtime failure Alert Rule
 - [ ] NCP scrape 인증·network policy·retention
 
 ## BE-9A Parallel Tracking
@@ -179,7 +187,7 @@ BE-9A 상세 계약과 후속 범위는 [BE-9A Idempotency Core](be-9a-idempoten
 - [x] 다른 request hash conflict 및 동시 실행 방지
 - [x] BE-9B terminal/transient/SENT_UNKNOWN retry·reconciliation core 상태 계약
 - [x] Terminal 기준 Idempotency key retention, expiry, lazy namespace archive
-- [ ] BE-11 Denied Attempt Evidence persistence
+- [x] BE-11 Denied Attempt Evidence persistence
 - [ ] Controlled delivery 결과 재조회 또는 단기 암호화 보관 계약
 
 ## BE-9B Parallel Tracking

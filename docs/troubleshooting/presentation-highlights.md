@@ -83,6 +83,12 @@ HTTP client, base image 취약점을 검출했다. 실제 사용 dependency만 �
 scheduler가 같은 claim/lease를 사용하게 하고, Provider 상태 조회에서 `NOT_SENT`가 확인된 경우에만 Connector별 retry
 Port를 호출하도록 고정했다. operation ID별 append-only evidence로 같은 운영 명령의 중복 실행도 차단했다.
 
+## 17. Current Selection이 존재해도 실제 ACTIVE와 달라질 수 있던 문제
+
+선택 row 개수만 관측하면 Lifecycle stage, artifact digest 또는 revision이 달라진 상태를 정상으로 오판할 수 있다.
+Current Selection과 authoritative Lifecycle Artifact를 매 snapshot에서 다시 비교해 drift gauge와 critical alert로 연결하고,
+운영 API에서는 tenant/workload 범위를 강제한 activation/rollback evidence를 함께 제공하도록 했다.
+
 ## 발표 시 강조할 공통 원칙
 
 - Fail closed는 예외를 던지는 것뿐 아니라 부수효과 순서, DB scope, 복구 상태까지 포함한다.

@@ -10,5 +10,6 @@ public enum AdpRole {
     OPERATOR,
     PRIVILEGED_OPERATOR,
     AUDITOR,
+    METRICS_SCRAPER,
     RUNTIME_EXECUTOR
 }

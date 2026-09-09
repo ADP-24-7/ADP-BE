@@ -8,6 +8,7 @@ import java.time.format.DateTimeParseException;
 
 import com.adp.gateway.common.error.ErrorResponse;
 import com.adp.gateway.common.error.ReasonCode;
+import com.adp.gateway.observability.GatewayObservability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,19 +30,22 @@ public class RequestFreshnessFilter extends OncePerRequestFilter {
     private final boolean enabled;
     private final Duration replayWindow;
     private final Duration futureSkew;
+    private final GatewayObservability observability;
 
     public RequestFreshnessFilter(
         ObjectMapper objectMapper,
         Clock clock,
         @Value("${adp.security.request-freshness.enabled:true}") boolean enabled,
         @Value("${adp.security.request-freshness.replay-window:5m}") Duration replayWindow,
-        @Value("${adp.security.request-freshness.future-skew:30s}") Duration futureSkew
+        @Value("${adp.security.request-freshness.future-skew:30s}") Duration futureSkew,
+        GatewayObservability observability
     ) {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.enabled = enabled;
         this.replayWindow = replayWindow;
         this.futureSkew = futureSkew;
+        this.observability = observability;
     }
 
     @Override
@@ -69,6 +73,7 @@ public class RequestFreshnessFilter extends OncePerRequestFilter {
             || timestamp.isBefore(now.minus(replayWindow))
             || timestamp.isAfter(now.plus(futureSkew))) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            observability.security(GatewayObservability.SecurityOutcome.REQUEST_FRESHNESS_REJECTED);
             response.setContentType("application/json");
             objectMapper.writeValue(response.getWriter(), new ErrorResponse(
                 ReasonCode.REQUEST_FRESHNESS_INVALID.name(),

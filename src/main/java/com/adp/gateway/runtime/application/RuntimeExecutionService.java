@@ -614,6 +614,9 @@ public class RuntimeExecutionService {
             reasonCode,
             OffsetDateTime.now(clock)
         ));
+        observability.security("INSTITUTION_SCOPE_MISMATCH".equals(reasonCode)
+            ? GatewayObservability.SecurityOutcome.INSTITUTION_SCOPE_REJECTED
+            : GatewayObservability.SecurityOutcome.AUTHORIZATION_POLICY_REJECTED);
     }
 
     public RuntimeExecutionSubmission submit(

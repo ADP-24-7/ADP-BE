@@ -45,6 +45,23 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v39MigrationCreatesStaleRecoveryOperationIndex() {
+        String indexDefinition = jdbcClient.sql("""
+                select indexdef from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'recovery_operation_event'
+                  and indexname = 'idx_recovery_operation_event_stale'
+                """)
+            .query(String.class)
+            .single();
+
+        assertThat(indexDefinition)
+            .contains("idx_recovery_operation_event_stale")
+            .contains("created_at")
+            .contains("IN_PROGRESS");
+    }
+
+    @Test
     void baselineMigrationCreatesAuditEventTable() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*)
