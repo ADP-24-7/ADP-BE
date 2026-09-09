@@ -71,6 +71,12 @@ Caller가 지정한 trace를 서버의 authoritative correlation으로 사용했
 환경변수의 Provider URL이 검증 없이 HTTP client에 전달됐다. Connector 직전에 scheme과 DNS 결과를 검증해 private,
 loopback, link-local, metadata endpoint를 기본 차단하고 로컬 mock 허용은 명시적 override로 격리했다.
 
+## 15. Security Gate를 추가했지만 Release Image가 안전하지 않았던 문제
+
+Container Scan이 최신 Spring Boot BOM 아래에서도 수정 가능한 Tomcat/PostgreSQL 취약점과 사용하지 않는 AWS SDK
+HTTP client, base image 취약점을 검출했다. 실제 사용 dependency만 패키징하고 수정 버전과 minimal runtime image digest를
+고정했으며, Gate 실패 시에도 원인 분석용 SBOM이 남도록 pipeline 순서를 조정했다.
+
 ## 발표 시 강조할 공통 원칙
 
 - Fail closed는 예외를 던지는 것뿐 아니라 부수효과 순서, DB scope, 복구 상태까지 포함한다.

@@ -465,6 +465,8 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Caller trace digest와 server-owned trace 분리
 - [x] Secret Scan / SAST / Dependency Scan / Container Scan
 - [x] CycloneDX SBOM generation
+- [x] Fixable HIGH/CRITICAL dependency 제거와 patched runtime image digest pinning
+- [x] Container Scan 실패 전 SBOM evidence 생성
 - [x] 보안 검사를 별도 GitHub Actions gate로 분리
 
 ## Troubleshooting

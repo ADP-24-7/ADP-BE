@@ -65,6 +65,13 @@ jobs:
           exit-code: '1'
       - name: Build release image
         run: docker build --tag adp-be:security-scan .
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: adp-be:security-scan
+          format: cyclonedx-json
+          output-file: adp-be-sbom.cdx.json
+          upload-artifact: true
       - name: Container vulnerability scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -73,10 +80,3 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-      - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: adp-be:security-scan
-          format: cyclonedx-json
-          output-file: adp-be-sbom.cdx.json
-          upload-artifact: true

@@ -27,6 +27,10 @@ Runtime 기능 테스트와 독립된 보안 경계를 만들고, 외부 요청�
 | SAST | Java/Kotlin CodeQL 분석 및 Security 결과 업로드 |
 | Dependency Container SBOM | dependency/filesystem 및 release image 취약점 차단, CycloneDX SBOM 생성 |
 
+Release image는 패치된 Temurin 21 UBI minimal image를 digest로 고정한다. 애플리케이션은 실제 사용하는 AWS SDK
+URL Connection Client만 패키징하고, Spring Boot BOM보다 먼저 수정된 Tomcat/PostgreSQL 버전은 명시적으로 관리한다.
+SBOM은 Container Scan보다 먼저 생성해 취약점 Gate가 실패하더라도 분석 artifact가 남도록 한다.
+
 GitHub branch protection에서는 `Secret Scan`, `SAST`, `Dependency Container SBOM`을 required checks로 지정한다.
 
 ## 운영 기본값

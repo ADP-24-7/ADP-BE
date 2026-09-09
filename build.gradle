@@ -8,6 +8,11 @@ group = 'com.adp'
 version = '0.0.1-SNAPSHOT'
 description = 'ADP Gateway Runtime'
 
+ext {
+    set('tomcat.version', '10.1.59')
+    set('postgresql.version', '42.7.12')
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -32,7 +37,10 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13'
     implementation 'com.networknt:json-schema-validator:2.0.4'
-    implementation 'software.amazon.awssdk:s3'
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'apache5-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
     implementation 'software.amazon.awssdk:url-connection-client'
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'

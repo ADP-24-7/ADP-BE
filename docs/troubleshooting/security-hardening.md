@@ -40,3 +40,19 @@ job의 성공과 실패를 결정하도록 수정했다.
 최초 OSS scan에서는 과거 테스트의 synthetic AWS 패턴, idempotency fixture, 로컬 API 문서 예제가 검출됐다. Git 이력을
 숨기는 path-wide allowlist 대신 검토가 끝난 9개 commit fingerprint만 `.gitleaksignore`에 등록했다. 같은 파일이나 규칙에서
 새로운 값이 추가되면 fingerprint가 달라지므로 Security Gate가 다시 실패한다.
+
+## Security Gate가 실제 Release Image 취약점을 차단한 문제
+
+최초 Container Scan은 애플리케이션 JAR의 Tomcat, PostgreSQL, Netty, Apache HttpCore와 Temurin base image의
+`pebble`에서 수정 가능한 HIGH/CRITICAL 취약점을 검출했다. Spring Boot `3.5.16`이 최신 3.5.x여도 BOM이 모든
+upstream security fix를 즉시 포함한다는 보장은 없으므로, Gate 추가 자체를 완료로 보지 않고 최종 image contents를
+기준으로 보완했다.
+
+Tomcat과 PostgreSQL은 수정 버전으로 dependency-management property를 올렸다. 반면 AWS S3 client는
+`UrlConnectionHttpClient`를 명시적으로 사용하므로 transitive Apache5/Netty HTTP client를 버전 override하지 않고
+패키징에서 제외했다. 사용하지 않는 라이브러리의 버전을 올리는 것보다 release image의 공격 표면을 줄이는 선택이다.
+
+floating `eclipse-temurin:21-jre`는 패치된 Temurin 21 UBI minimal multi-architecture image digest로 고정했다. 이미지에
+배포판별 user 관리 명령을 추가하지 않고 numeric non-root UID로 실행해 minimal image와 non-root 원칙을 함께 유지한다.
+또한 Container Scan 전에 CycloneDX SBOM을 생성하도록 순서를 바꿔, 취약점으로 Gate가 실패하더라도 분석할 dependency
+evidence를 보존한다.
