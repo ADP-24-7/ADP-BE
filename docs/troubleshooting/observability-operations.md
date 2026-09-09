@@ -6,6 +6,13 @@ Policy Service에서 persistence 호출 직후 metric을 증가시키면 이후 
 관측된다. Lifecycle과 Current Selection counter는 transaction synchronization의 `afterCommit`에서만 기록하도록 했다.
 DB event가 authoritative evidence이고 metric은 운영 추세라는 책임도 분리했다.
 
+## Commit 이후 Metric 예외가 성공 API를 실패로 바꾸는 문제
+
+Transaction `afterCommit` callback에서 Meter Registry가 예외를 던지면 DB 변경은 이미 commit됐지만 API caller는
+실패를 받을 수 있다. 이는 재시도를 유도해 동시성 충돌과 운영 혼선을 만든다. Post-commit 관측 호출을
+best-effort로 격리하고, 고정된 `event`/`outcome`을 사용한 구조화 경고만 남기도록 변경했다. DB Evidence가
+권위 있는 결과이며 Metric 실패는 이를 뒤집지 않는다.
+
 ## Selection Row 존재만으로 Drift가 없다고 판단한 문제
 
 `current_selection` row가 있어도 대상 Lifecycle row가 삭제됐거나 stage/digest/revision이 달라질 수 있다. Selection과
@@ -24,8 +31,11 @@ alert로 감시해 Monitoring DB 장애가 정상 상태처럼 보이지 않도�
 ## 인증된 Runtime Principal이 전역 운영 Metric을 읽는 문제
 
 기본 Prometheus 정책을 단순 `authenticated()`로 두면 `RUNTIME_EXECUTOR`도 전체 Recovery backlog와 Policy drift를 볼 수 있다.
-전역 aggregate 자체가 운영 정보이므로 기본 접근을 `OPERATOR`, `PRIVILEGED_OPERATOR`, `AUDITOR`로 제한했다. 인증 없음은 401,
-인증됐지만 운영 역할이 없으면 403으로 구분하고, 공개 설정은 격리된 로컬 환경의 명시적 opt-in으로만 유지한다.
+또한 `OPERATOR`/`AUDITOR`는 Institution·Workload 범위를 갖지만 Prometheus metric은 전역 aggregate이므로 권한 의미가 맞지 않다.
+기본 접근을 전용 `METRICS_SCRAPER` 역할을 가진 `SERVICE` Principal로 분리하고, 사용자 Principal에 같은 역할이
+잘못 부여되어도 접근을 거부한다. 테넌트 운영자는 SQL scope가 강제된
+`/api/admin/operations/**`만 사용하게 했다. 인증 없음은 401, 잘못된 역할은 403으로 구분하고, 공개 설정은
+격리된 로컬 환경의 명시적 opt-in으로만 유지한다.
 
 ## Monitoring API가 Metric Tag를 대신해 Tenant ID를 노출하는 문제
 

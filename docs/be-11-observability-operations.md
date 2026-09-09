@@ -42,9 +42,9 @@ Gauge는 scrape마다 같은 DB 집계를 반복하지 않도록 짧은 cache sn
 운영 명령은 기본 5분 이상 `IN_PROGRESS`일 때 stale로 관측한다. 이는 Evidence를 자동 변경하는 정책이 아니라 후속 조사를
 발생시키는 신호이며 `ADP_STALE_OPERATION_THRESHOLD`로 조정한다.
 
-`/actuator/prometheus`는 기본적으로 `OPERATOR`, `PRIVILEGED_OPERATOR`, `AUDITOR`만 접근할 수 있다. 전역 운영 상태를
-포함하므로 `RUNTIME_EXECUTOR`를 비롯한 일반 인증 Principal에는 허용하지 않는다. `ADP_PROMETHEUS_PUBLIC=true`는 격리된
-로컬 개발·수집망에서만 사용하는 명시적 opt-in이다.
+`/actuator/prometheus`는 기본적으로 전용 `METRICS_SCRAPER` 역할을 가진 `SERVICE` Principal만 접근할 수 있다. 전역 운영
+상태를 포함하므로 테넌트 범위의 `OPERATOR`, `PRIVILEGED_OPERATOR`, `AUDITOR`와 `RUNTIME_EXECUTOR`에는
+허용하지 않는다. `ADP_PROMETHEUS_PUBLIC=true`는 격리된 로컬 개발·수집망에서만 사용하는 명시적 opt-in이다.
 
 ## Alert Rules
 
@@ -65,7 +65,8 @@ CI는 `prom/prometheus:v3.5.0`의 `/bin/promtool`로 rule syntax와 expression�
 
 Lifecycle/Current Selection counter는 Service method 반환 시점이 아니라 Spring transaction `afterCommit`에서 증가한다.
 DB rollback 또는 commit failure를 성공 metric으로 기록하지 않는다. 기존 append-only DB event가 audit source이며 counter는
-운영 추세 확인용이다.
+운영 추세 확인용이다. Commit 이후 Meter Registry 장애는 구조화 경고로 남기고 업무 API 결과로 전파하지
+않는 best-effort 부수 효과로 격리한다.
 
 ## Deferred NCP Gates
 

@@ -85,8 +85,8 @@ Caller
 - `/api/internal/info`
 - `/`, `/docs`, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`
 
-`/actuator/prometheus`는 기본적으로 OPERATOR, PRIVILEGED_OPERATOR, AUDITOR 역할이 필요하다. 일반 인증 Principal과
-RUNTIME_EXECUTOR는 접근할 수 없다. 로컬 또는 격리된 scrape 환경에서만
+`/actuator/prometheus`는 기본적으로 전용 METRICS_SCRAPER 역할을 가진 SERVICE Principal이 필요하다. 테넌트 범위의
+OPERATOR, PRIVILEGED_OPERATOR, AUDITOR와 RUNTIME_EXECUTOR는 접근할 수 없다. 로컬 또는 격리된 scrape 환경에서만
 `adp.observability.prometheus-public=true`로 명시적으로 공개할 수 있다.
 
 ## Evidence Rules

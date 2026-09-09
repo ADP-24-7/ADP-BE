@@ -15,6 +15,8 @@ import com.adp.gateway.policy.domain.PolicyApprovalEvidenceBinding;
 import com.adp.gateway.policy.domain.PolicyCurrentSelection;
 import com.adp.gateway.observability.GatewayObservability;
 import com.adp.gateway.observability.GatewayObservability.CurrentSelectionOutcome;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -22,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class PolicyLifecycleService {
+    private static final Logger log = LoggerFactory.getLogger(PolicyLifecycleService.class);
     private static final Set<ExecutionPackType> LIFECYCLE_PACKS = Set.of(
         ExecutionPackType.COMMON, ExecutionPackType.AI, ExecutionPackType.DIGITAL_ASSET
     );
@@ -286,15 +289,27 @@ public class PolicyLifecycleService {
 
     private void afterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            action.run();
+            recordObservabilitySafely(action);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                action.run();
+                recordObservabilitySafely(action);
             }
         });
+    }
+
+    private void recordObservabilitySafely(Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException exception) {
+            log.atWarn()
+                .addKeyValue("event", "policy_post_commit_observability")
+                .addKeyValue("outcome", "FAILED")
+                .setCause(exception)
+                .log("Policy operation committed, but observability recording failed");
+        }
     }
 
     private boolean blank(String value) {

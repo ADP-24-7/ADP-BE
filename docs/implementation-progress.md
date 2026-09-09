@@ -155,6 +155,7 @@ BE-10 Skeleton 계약은 [BE-10 Policy Lifecycle Skeleton](be-10-policy-lifecycl
 BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-foundation.md)에서 관리한다.
 
 - [x] Prometheus registry와 `/actuator/prometheus` scrape endpoint
+- [x] `METRICS_SCRAPER` 전용 Service Principal을 통한 전역 Metric 접근 분리
 - [x] Runtime terminal transition metric과 기본 HTTP request metric
 - [x] Idempotency resolution metric
 - [x] Recovery processing outcome metric
@@ -167,6 +168,7 @@ BE-11A 상세 계약은 [BE-11A Observability Foundation](be-11a-observability-f
 - [x] BE-11B V14 검색 인덱스와 권한/검색/export 통합 테스트
 - [x] Artifact Lifecycle·Activation·Rollback Evidence Read Model
 - [x] Policy Lifecycle·Current Selection·Rollback low-cardinality metric
+- [x] Post-commit Metric 장애와 영속 업무 결과 격리
 - [x] Recovery backlog depth·oldest age·manual review·exhausted gauge
 - [x] Stale Recovery Operation count·oldest age gauge와 Alert
 - [x] Security freshness·authorization·destination rejection metric

@@ -6,6 +6,9 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.auth.application.ApiKeyHasher;
 import com.adp.gateway.auth.application.AuthPrincipalLookup;
+import com.adp.gateway.auth.domain.AdpRole;
+import com.adp.gateway.auth.domain.AuthenticatedPrincipal;
+import com.adp.gateway.auth.domain.PrincipalType;
 import com.adp.gateway.common.error.ErrorResponse;
 import com.adp.gateway.common.error.ReasonCode;
 import com.adp.gateway.common.trace.TraceHeaders;
@@ -16,6 +19,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -50,7 +54,13 @@ public class SecurityConfig {
                     auth.requestMatchers("/actuator/prometheus").permitAll();
                 } else {
                     auth.requestMatchers("/actuator/prometheus")
-                        .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR");
+                        .access((authentication, context) -> {
+                            var resolved = authentication.get();
+                            boolean granted = resolved instanceof AuthenticatedPrincipal authenticated
+                                && authenticated.principal().principalType() == PrincipalType.SERVICE
+                                && authenticated.principal().hasRole(AdpRole.METRICS_SCRAPER);
+                            return new AuthorizationDecision(granted);
+                        });
                 }
                 auth.requestMatchers("/api/internal/info").permitAll()
                     .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
