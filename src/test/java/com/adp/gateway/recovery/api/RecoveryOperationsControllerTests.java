@@ -13,6 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
@@ -30,6 +33,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -170,6 +174,50 @@ class RecoveryOperationsControllerTests {
             .query(Integer.class)
             .single();
         assertThat(eventCount).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentPackScopedCommandsReserveOneOperationAndApplyOneRecoveryTransition() throws Exception {
+        Seed seed = seedRecovery("concurrent-command");
+        String operationId = "op_concurrent_" + seed.suffix();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var request = (java.util.concurrent.Callable<MvcResult>) () -> {
+                ready.countDown();
+                start.await();
+                return mockMvc.perform(post("/api/admin/recovery/incidents/{recoveryId}/reconcile", seed.recoveryId())
+                        .header("X-ADP-User-Id", "privileged-local")
+                        .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                        .param("executionPack", "AI")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operationId\":\"" + operationId + "\"}"))
+                    .andReturn();
+            };
+            Future<MvcResult> first = executor.submit(request);
+            Future<MvcResult> second = executor.submit(request);
+            ready.await();
+            start.countDown();
+
+            assertThat(List.of(first.get().getResponse().getStatus(), second.get().getResponse().getStatus()))
+                .contains(200)
+                .allMatch(statusCode -> statusCode == 200 || statusCode == 409);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Integer eventCount = jdbcClient.sql("""
+                select count(*) from runtime.recovery_operation_event
+                where recovery_id = :recoveryId and operation_id = :operationId
+                """)
+            .param("recoveryId", seed.recoveryId())
+            .param("operationId", operationId)
+            .query(Integer.class)
+            .single();
+        assertThat(eventCount).isEqualTo(1);
+        assertThat(recoveryAttempt(seed.recoveryId()))
+            .isEqualTo(new RecoveryAttempt("RETRY_SCHEDULED", 1));
     }
 
     @Test

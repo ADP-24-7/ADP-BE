@@ -39,3 +39,17 @@ Summary나 Incident를 새 Pack 데이터처럼 클릭할 수 있다.
 FE는 전역 Selector를 Summary, Recovery, Policy Event 요청에 모두 전달한다. Pack이 바뀌면 선택된 Incident와
 페이지를 초기화하고, 이전 Pack 목록을 표시하지 않은 상태에서 새 응답을 기다린다. BE 통합 테스트는 동일
 Institution과 Workload에서도 다른 Pack 조회가 0건 또는 404가 되는지 검증한다.
+
+## 저장된 UI 상태와 동시 명령도 같은 경계를 지켜야 한다
+
+### 문제
+
+UI에서 더 이상 제공하지 않는 Pack이 브라우저 저장소에서 복원되면 Summary와 Review Queue가 서로 다른 Pack을
+조회할 수 있다. 또한 같은 `operationId`의 Recovery 명령이 동시에 도착하면 순차 replay 테스트만으로는 외부
+효과의 단일성을 증명할 수 없다.
+
+### 해결
+
+FE는 현재 선택 가능한 AI와 Digital Asset만 복원하고 테스트마다 저장소를 초기화한다. Policy History 페이지도
+Pack 변경 시 첫 페이지로 되돌린다. BE는 `(recovery_id, operation_id)` unique 경계에서 명령을 예약하며, 동시
+통합 테스트로 operation event 1건과 Recovery attempt 1회만 발생하는 것을 검증한다.
