@@ -17,6 +17,7 @@ import com.adp.gateway.policy.domain.PolicyArtifactSummary;
 import com.adp.gateway.policy.domain.PolicyLayer;
 import com.adp.gateway.policy.domain.PolicyLifecycleRecord;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
+import com.adp.gateway.policy.domain.PolicyLifecycleNextAction;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionEvent;
 import com.adp.gateway.policy.domain.PolicyLifecycleTransitionReason;
 import com.adp.gateway.policy.domain.PolicyShadowDiffField;
@@ -28,8 +29,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort {
-    private static final Set<PolicyLifecycleStage> ATTENTION_STAGES = Set.of(
-        PolicyLifecycleStage.SHADOW, PolicyLifecycleStage.APPROVED, PolicyLifecycleStage.REVIEW
+    private static final Set<PolicyLifecycleStage> ACTIONABLE_STAGES = Set.of(
+        PolicyLifecycleStage.DRAFT, PolicyLifecycleStage.VALIDATED,
+        PolicyLifecycleStage.CANDIDATE, PolicyLifecycleStage.REPLAY,
+        PolicyLifecycleStage.SHADOW, PolicyLifecycleStage.APPROVED
     );
     private final JdbcClient jdbcClient;
     private final ObjectMapper objectMapper;
@@ -47,7 +50,7 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
         PolicyLifecycleStage lifecycleStage,
         String workloadId,
         String query,
-        boolean attentionRequired,
+        boolean actionableOnly,
         int limit,
         int offset
     ) {
@@ -85,9 +88,17 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
                 """);
             parameters.put("query", "%" + query.toLowerCase(java.util.Locale.ROOT) + "%");
         }
-        if (attentionRequired) {
-            predicates.append(" and artifact.lifecycle_stage in (:attentionStages)");
-            parameters.put("attentionStages", ATTENTION_STAGES.stream().map(Enum::name).toList());
+        if (actionableOnly) {
+            predicates.append("""
+                 and (
+                    artifact.lifecycle_stage in (:actionableStages)
+                    or (
+                        artifact.lifecycle_stage = 'SUPERSEDED'
+                        and artifact.execution_pack <> 'DIGITAL_ASSET'
+                    )
+                 )
+                """);
+            parameters.put("actionableStages", ACTIONABLE_STAGES.stream().map(Enum::name).toList());
         }
 
         long total = jdbcClient.sql("select count(*) from policy.lifecycle_artifact artifact" + predicates)
@@ -120,7 +131,11 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
     }
 
     @Override
-    public PolicyArtifactHistory history(PolicyLifecycleRecord artifact) {
+    public PolicyArtifactHistory history(
+        PolicyLifecycleRecord artifact,
+        int transitionLimit,
+        int shadowLimit
+    ) {
         Map<String, Object> identity = Map.of(
             "institutionId", artifact.institutionId(),
             "artifactId", artifact.artifactId(),
@@ -134,6 +149,16 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
                       and artifact_version = :artifactVersion
                 )
                 """).params(identity).query(Boolean.class).single());
+        long transitionTotal = jdbcClient.sql("""
+                select count(*)
+                from policy.lifecycle_transition_event
+                where institution_id = :institutionId
+                  and artifact_id = :artifactId
+                  and artifact_version = :artifactVersion
+                """)
+            .params(identity)
+            .query(Long.class)
+            .single();
         List<PolicyLifecycleTransitionEvent> transitions = jdbcClient.sql("""
                 select transition_id, from_stage, to_stage, actor_id, reason_code,
                        artifact_digest, approval_gate_version, shadow_evaluation_id, occurred_at
@@ -142,10 +167,22 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
                   and artifact_id = :artifactId
                   and artifact_version = :artifactVersion
                 order by occurred_at desc, transition_id desc
+                limit :limit
                 """)
             .params(identity)
+            .param("limit", transitionLimit)
             .query((rs, rowNum) -> transition(rs))
             .list();
+        long shadowTotal = jdbcClient.sql("""
+                select count(*)
+                from policy.shadow_evaluation_evidence
+                where institution_id = :institutionId
+                  and candidate_artifact_id = :artifactId
+                  and candidate_artifact_version = :artifactVersion
+                """)
+            .params(identity)
+            .query(Long.class)
+            .single();
         List<PolicyShadowEvidence> shadows = jdbcClient.sql("""
                 select shadow_evaluation_id, institution_id, workload_id, purpose_code,
                        baseline_artifact_id, baseline_artifact_version, baseline_artifact_digest,
@@ -158,23 +195,49 @@ public class JdbcPolicyOperationsReadAdapter implements PolicyOperationsReadPort
                   and candidate_artifact_id = :artifactId
                   and candidate_artifact_version = :artifactVersion
                 order by evaluated_at desc, shadow_evaluation_id desc
+                limit :limit
                 """)
             .params(identity)
+            .param("limit", shadowLimit)
             .query((rs, rowNum) -> shadow(rs))
             .list();
-        return new PolicyArtifactHistory(artifact, currentSelection, transitions, shadows);
+        return new PolicyArtifactHistory(
+            artifact, currentSelection,
+            transitions, transitionTotal, transitionTotal > transitions.size(),
+            shadows, shadowTotal, shadowTotal > shadows.size()
+        );
     }
 
     private PolicyArtifactSummary summary(ResultSet rs) throws SQLException {
+        PolicyLifecycleStage stage = PolicyLifecycleStage.valueOf(rs.getString("lifecycle_stage"));
+        ExecutionPackType pack = ExecutionPackType.valueOf(rs.getString("execution_pack"));
+        PolicyLifecycleNextAction nextAction = nextAction(stage, pack);
         return new PolicyArtifactSummary(
             rs.getString("artifact_id"), rs.getString("artifact_version"), rs.getString("artifact_digest"),
             PolicyLayer.valueOf(rs.getString("policy_layer")),
-            ExecutionPackType.valueOf(rs.getString("execution_pack")), rs.getString("workload_id"),
-            rs.getString("purpose_code"), PolicyLifecycleStage.valueOf(rs.getString("lifecycle_stage")),
+            pack, rs.getString("workload_id"),
+            rs.getString("purpose_code"), stage,
             rs.getString("created_by"), rs.getLong("revision"),
             rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class),
-            rs.getBoolean("current_selection")
+            rs.getBoolean("current_selection"), nextAction != null, nextAction
         );
+    }
+
+    private PolicyLifecycleNextAction nextAction(
+        PolicyLifecycleStage stage,
+        ExecutionPackType pack
+    ) {
+        return switch (stage) {
+            case DRAFT -> PolicyLifecycleNextAction.VALIDATE;
+            case VALIDATED -> PolicyLifecycleNextAction.PROMOTE_CANDIDATE;
+            case CANDIDATE -> PolicyLifecycleNextAction.START_REPLAY;
+            case REPLAY -> PolicyLifecycleNextAction.RUN_SHADOW;
+            case SHADOW -> PolicyLifecycleNextAction.APPROVE;
+            case APPROVED -> PolicyLifecycleNextAction.ACTIVATE;
+            case SUPERSEDED -> pack == ExecutionPackType.DIGITAL_ASSET
+                ? null : PolicyLifecycleNextAction.ROLLBACK;
+            default -> null;
+        };
     }
 
     private PolicyLifecycleTransitionEvent transition(ResultSet rs) throws SQLException {

@@ -33,14 +33,14 @@ public class PolicyOperationsReadController {
         @RequestParam(required = false) PolicyLifecycleStage lifecycleStage,
         @RequestParam(required = false) @Size(max = 120) String workloadId,
         @RequestParam(required = false) @Size(max = 120) String query,
-        @RequestParam(defaultValue = "false") boolean attentionRequired,
+        @RequestParam(defaultValue = "false") boolean actionableOnly,
         @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
         @RequestParam(defaultValue = "0") @Min(0) int offset,
         Authentication authentication
     ) {
         return service.search(
             principal(authentication), executionPack, lifecycleStage, workloadId, query,
-            attentionRequired, limit, offset
+            actionableOnly, limit, offset
         );
     }
 
@@ -48,9 +48,13 @@ public class PolicyOperationsReadController {
     PolicyArtifactHistory history(
         @PathVariable @Size(max = 120) String artifactId,
         @PathVariable @Size(max = 120) String artifactVersion,
+        @RequestParam(defaultValue = "100") @Min(1) @Max(200) int transitionLimit,
+        @RequestParam(defaultValue = "100") @Min(1) @Max(200) int shadowLimit,
         Authentication authentication
     ) {
-        return service.history(principal(authentication), artifactId, artifactVersion);
+        return service.history(
+            principal(authentication), artifactId, artifactVersion, transitionLimit, shadowLimit
+        );
     }
 
     private AuthPrincipal principal(Authentication authentication) {

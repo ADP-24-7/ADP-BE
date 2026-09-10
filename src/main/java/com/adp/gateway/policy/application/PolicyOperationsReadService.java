@@ -33,7 +33,7 @@ public class PolicyOperationsReadService {
         PolicyLifecycleStage lifecycleStage,
         String workloadId,
         String query,
-        boolean attentionRequired,
+        boolean actionableOnly,
         int limit,
         int offset
     ) {
@@ -48,20 +48,25 @@ public class PolicyOperationsReadService {
         }
         return readPort.search(
             principal.institutionId(), principal.workloadIds(), executionPack, lifecycleStage,
-            normalizedWorkload, normalize(query), attentionRequired, limit, offset
+            normalizedWorkload, normalize(query), actionableOnly, limit, offset
         );
     }
 
     public PolicyArtifactHistory history(
         AuthPrincipal principal,
         String artifactId,
-        String artifactVersion
+        String artifactVersion,
+        int transitionLimit,
+        int shadowLimit
     ) {
         requireReader(principal);
+        if (transitionLimit < 1 || transitionLimit > 200 || shadowLimit < 1 || shadowLimit > 200) {
+            throw new PolicyLifecycleException("POLICY_OPERATIONS_SEARCH_INVALID");
+        }
         PolicyLifecycleRecord artifact = lifecyclePersistence.load(
             principal.institutionId(), principal.workloadIds(), artifactId, artifactVersion
         );
-        return readPort.history(artifact);
+        return readPort.history(artifact, transitionLimit, shadowLimit);
     }
 
     private void requireReader(AuthPrincipal principal) {

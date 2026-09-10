@@ -55,28 +55,55 @@ class PolicyOperationsReadControllerTests {
         seedArtifact(candidateId, "institution_local", "customer_summary", "SHADOW", "AI");
         seedArtifact(baselineId, "institution_local", "customer_summary", "ACTIVE", "AI");
         seedTransition(candidateId);
-        seedShadow(candidateId, baselineId, suffix);
+        seedTransition(candidateId);
+        seedShadow(candidateId, baselineId, suffix + "a");
+        seedShadow(candidateId, baselineId, suffix + "b");
 
         mockMvc.perform(get("/api/admin/policy-lifecycle")
                 .header("X-ADP-User-Id", "operations-reader")
                 .header("X-ADP-User-Roles", "OPERATOR")
                 .param("executionPack", "AI")
-                .param("attentionRequired", "true")
+                .param("actionableOnly", "true")
                 .param("query", suffix))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.total").value(1))
             .andExpect(jsonPath("$.items[0].artifactId").value(candidateId))
-            .andExpect(jsonPath("$.items[0].lifecycleStage").value("SHADOW"));
+            .andExpect(jsonPath("$.items[0].lifecycleStage").value("SHADOW"))
+            .andExpect(jsonPath("$.items[0].actionable").value(true))
+            .andExpect(jsonPath("$.items[0].nextAction").value("APPROVE"));
 
         mockMvc.perform(get(
                 "/api/admin/policy-lifecycle/{artifactId}/versions/1.0.0/history", candidateId
             )
                 .header("X-ADP-User-Id", "operations-reader")
-                .header("X-ADP-User-Roles", "AUDITOR"))
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("transitionLimit", "1")
+                .param("shadowLimit", "1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.artifact.artifactId").value(candidateId))
             .andExpect(jsonPath("$.transitions[0].toStage").value("SHADOW"))
-            .andExpect(jsonPath("$.shadowEvaluations[0].candidateArtifactId").value(candidateId));
+            .andExpect(jsonPath("$.transitionTotal").value(2))
+            .andExpect(jsonPath("$.transitionHasMore").value(true))
+            .andExpect(jsonPath("$.shadowEvaluations[0].candidateArtifactId").value(candidateId))
+            .andExpect(jsonPath("$.shadowTotal").value(2))
+            .andExpect(jsonPath("$.shadowHasMore").value(true));
+    }
+
+    @Test
+    void attentionFilterReturnsWorkflowActionsAndExcludesNonActionableStages() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        seedArtifact("draft-" + suffix, "institution_local", "customer_summary", "DRAFT", "AI");
+        seedArtifact("superseded-" + suffix, "institution_local", "customer_summary", "SUPERSEDED", "AI");
+        seedArtifact("review-" + suffix, "institution_local", "customer_summary", "REVIEW", "AI");
+        seedArtifact("digital-superseded-" + suffix, "institution_local", "customer_summary", "SUPERSEDED", "DIGITAL_ASSET");
+
+        var page = service.search(
+            principal("institution_local", Set.of("*")), null, null, null, suffix, true, 20, 0
+        );
+
+        assertThat(page.items()).extracting(item -> item.artifactId())
+            .containsExactlyInAnyOrder("draft-" + suffix, "superseded-" + suffix);
+        assertThat(page.items()).allMatch(item -> item.actionable() && item.nextAction() != null);
     }
 
     @Test
@@ -104,11 +131,11 @@ class PolicyOperationsReadControllerTests {
 
         assertThat(page.items()).extracting(item -> item.artifactId())
             .containsExactly("allowed-" + suffix);
-        assertThatThrownBy(() -> service.history(principal, "other-workload-" + suffix, "1.0.0"))
+        assertThatThrownBy(() -> service.history(principal, "other-workload-" + suffix, "1.0.0", 100, 100))
             .isInstanceOf(PolicyLifecycleException.class)
             .extracting(exception -> ((PolicyLifecycleException) exception).reasonCode())
             .isEqualTo("POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND");
-        assertThatThrownBy(() -> service.history(principal, "other-tenant-" + suffix, "1.0.0"))
+        assertThatThrownBy(() -> service.history(principal, "other-tenant-" + suffix, "1.0.0", 100, 100))
             .isInstanceOf(PolicyLifecycleException.class)
             .extracting(exception -> ((PolicyLifecycleException) exception).reasonCode())
             .isEqualTo("POLICY_LIFECYCLE_ARTIFACT_NOT_FOUND");
@@ -164,7 +191,7 @@ class PolicyOperationsReadControllerTests {
                 ) values (
                     :shadowId, 'institution_local', 'customer_summary', 'CUSTOMER_SUPPORT',
                     :baselineId, '1.0.0', :digest, :candidateId, '1.0.0', :digest,
-                    4, 'GOLDEN_ALLOW', '1.0.0', :inputDigest,
+                    4, :evaluationCaseId, '1.0.0', :inputDigest,
                     :outcomeDigest, :outcomeDigest, '[]'::jsonb, 'MATCH',
                     'operations-evaluator', now()
                 )
@@ -172,6 +199,7 @@ class PolicyOperationsReadControllerTests {
             .param("shadowId", "shadow-" + suffix)
             .param("baselineId", baselineId)
             .param("candidateId", candidateId)
+            .param("evaluationCaseId", "GOLDEN_ALLOW_" + suffix)
             .param("digest", "a".repeat(64))
             .param("inputDigest", "b".repeat(64))
             .param("outcomeDigest", "c".repeat(64))

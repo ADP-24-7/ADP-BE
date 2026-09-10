@@ -33,6 +33,18 @@ Model이 모두 `Authentication required`로 실패했다. 통합 Compose도 FE 
 선택 필터 뒤에 정렬 SQL을 문자열로 결합하면서 공백 경계가 사라져 `:executionPackorder`라는 잘못된 parameter로 해석됐다. SQL
 조각 사이에 명시적인 개행을 추가하고, 실제 PostgreSQL과 Docker API 호출에서 Pack 필터를 포함한 조회를 검증했다.
 
+## Attention 필터와 실제 Command 대상이 달랐던 문제
+
+초기 `attentionRequired`는 `SHADOW`, `APPROVED`, `REVIEW`만 반환해 DRAFT부터 REPLAY까지의 전이 대상과 SUPERSEDED rollback
+대상을 숨겼다. 필터를 `actionableOnly`로 재정의하고 Lifecycle 단계와 Pack으로 typed `nextAction`을 계산해 `actionable`이 참인
+Artifact만 반환하도록 변경했다.
+FE도 이 값을 `조치 가능`으로 표현해 조회 의미와 실제 Command 가능 상태를 맞췄다.
+
+## Artifact History가 무제한으로 누적되던 문제
+
+Transition과 Shadow Evidence를 모두 반환하면 반복 평가가 누적된 Artifact에서 DB load, JSON 직렬화, 브라우저 render가 함께
+증가한다. 컬렉션별 기본 100건·최대 200건 제한과 total/hasMore 계약을 추가해 관리자 조회도 항상 bounded하도록 고정했다.
+
 ## 로컬 Docker DB의 Flyway Checksum 충돌
 
 아직 main에 배포되지 않은 V40/V41 migration을 이전 브랜치에서 적용한 로컬 볼륨은 최종 migration 파일과 checksum이 달라

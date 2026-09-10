@@ -16,10 +16,10 @@ public interface PolicyOperationsReadPort {
         PolicyLifecycleStage lifecycleStage,
         String workloadId,
         String query,
-        boolean attentionRequired,
+        boolean actionableOnly,
         int limit,
         int offset
     );
 
-    PolicyArtifactHistory history(PolicyLifecycleRecord artifact);
+    PolicyArtifactHistory history(PolicyLifecycleRecord artifact, int transitionLimit, int shadowLimit);
 }

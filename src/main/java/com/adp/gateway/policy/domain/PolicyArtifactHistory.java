@@ -6,7 +6,11 @@ public record PolicyArtifactHistory(
     PolicyLifecycleRecord artifact,
     boolean currentSelection,
     List<PolicyLifecycleTransitionEvent> transitions,
-    List<PolicyShadowEvidence> shadowEvaluations
+    long transitionTotal,
+    boolean transitionHasMore,
+    List<PolicyShadowEvidence> shadowEvaluations,
+    long shadowTotal,
+    boolean shadowHasMore
 ) {
     public PolicyArtifactHistory {
         transitions = List.copyOf(transitions);

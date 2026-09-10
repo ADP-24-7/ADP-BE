@@ -14,9 +14,13 @@
 | `GET` | `/api/admin/policy-lifecycle/{artifactId}/versions/{version}` | 현재 Lifecycle 상세 |
 | `GET` | `/api/admin/policy-lifecycle/{artifactId}/versions/{version}/history` | Transition·Shadow Evidence 이력 |
 
-목록은 `executionPack`, `lifecycleStage`, `workloadId`, `query`, `attentionRequired`, `limit`, `offset`을 지원한다. 정렬은
-`updatedAt DESC, artifactId, artifactVersion`으로 고정한다. `attentionRequired=true`는 `SHADOW`, `APPROVED`, `REVIEW` 상태만
-반환한다.
+목록은 `executionPack`, `lifecycleStage`, `workloadId`, `query`, `actionableOnly`, `limit`, `offset`을 지원한다. 정렬은
+`updatedAt DESC, artifactId, artifactVersion`으로 고정한다. `actionableOnly=true`는 Lifecycle Command를 실행할 수 있는
+Artifact만 반환하며 각 항목은 `actionable`과 typed `nextAction`을 제공한다. `SUPERSEDED` rollback은 Generic Selection을 사용하는
+Pack에서만 Action으로 분류한다.
+
+History는 `transitionLimit`, `shadowLimit`을 각각 기본 100, 최대 200으로 제한한다. 응답의 `transitionTotal`, `shadowTotal`과 각
+`hasMore` 필드로 반환 범위 밖의 이력 존재 여부를 표시한다.
 
 ## Security Boundary
 
@@ -41,3 +45,6 @@ AI Context에서도 Read Model을 확인할 수 있도록 `AI-POLICY-LOCAL-VALID
 이번 수직 Slice는 Policy와 Digital Asset Lifecycle 탐색을 닫는다. Security Finding, Admin Identity, Workload/Data Access
 Read Model은 Slice 25의 후속 수직 Slice로 분리한다. Pack별 Operations Summary·Recovery·Policy Event scope는 Slice 26에서
 별도 고정한다.
+
+현재 contains 검색은 `lower(field) like '%query%'`이므로 V41 B-tree index는 Scope 필터와 정렬에 사용되고 검색어 자체를 완전히
+최적화하지 않는다. Artifact 규모가 커지면 `pg_trgm` 기반 GIN 또는 prefix 검색 계약을 별도 성능 측정 후 도입한다.

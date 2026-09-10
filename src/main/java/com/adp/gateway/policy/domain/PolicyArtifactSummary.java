@@ -17,6 +17,8 @@ public record PolicyArtifactSummary(
     long revision,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
-    boolean currentSelection
+    boolean currentSelection,
+    boolean actionable,
+    PolicyLifecycleNextAction nextAction
 ) {
 }
