@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import com.adp.gateway.audit.application.AuditReadPort;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 
 @SpringBootTest(properties = {
@@ -43,14 +44,44 @@ class AuditReadControllerTests {
         mockMvc.perform(get("/api/admin/audit/executions")
                 .header("X-ADP-User-Id", "operator-local")
                 .header("X-ADP-User-Roles", "OPERATOR")
+                .param("executionPack", "AI")
                 .param("workloadId", "customer_summary")
                 .param("status", "COMPLETED")
                 .param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items[0].executionId").value(executionId))
+            .andExpect(jsonPath("$.items[0].executionPack").value("AI"))
             .andExpect(jsonPath("$.items[0].institutionId").value("institution_local"))
             .andExpect(jsonPath("$.items[0].status").value("COMPLETED"))
             .andExpect(jsonPath("$.totalElements").isNumber());
+    }
+
+    @Test
+    void operatorSearchesOnlyTheRequestedExecutionPack() throws Exception {
+        String aiExecutionId = execute("pack-ai");
+        String digitalAssetExecutionId = execute("pack-digital-asset");
+        jdbcClient.sql("update runtime.runtime_execution set execution_pack = 'DIGITAL_ASSET' where execution_id = :executionId")
+            .param("executionId", digitalAssetExecutionId)
+            .update();
+
+        try {
+            mockMvc.perform(get("/api/admin/audit/executions")
+                    .header("X-ADP-User-Id", "operator-local")
+                    .header("X-ADP-User-Roles", "OPERATOR")
+                    .param("executionPack", "DIGITAL_ASSET")
+                    .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].executionId")
+                    .value(org.hamcrest.Matchers.hasItem(digitalAssetExecutionId)))
+                .andExpect(jsonPath("$.items[*].executionId")
+                    .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(aiExecutionId))))
+                .andExpect(jsonPath("$.items[*].executionPack")
+                    .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("DIGITAL_ASSET"))));
+        } finally {
+            jdbcClient.sql("update runtime.runtime_execution set execution_pack = 'AI' where execution_id = :executionId")
+                .param("executionId", digitalAssetExecutionId)
+                .update();
+        }
     }
 
     @Test
@@ -93,10 +124,12 @@ class AuditReadControllerTests {
         String executionId = execute("workload-scope");
 
         var unauthorized = auditReadPort.search(
-            "institution_local", Set.of("fraud_detection"), null, null, null, null, 0, 10
+            "institution_local", Set.of("fraud_detection"), ExecutionPackType.AI,
+            null, null, null, null, 0, 10
         );
         var authorized = auditReadPort.search(
-            "institution_local", Set.of("customer_summary"), null, null, null, null, 0, 10
+            "institution_local", Set.of("customer_summary"), ExecutionPackType.AI,
+            null, null, null, null, 0, 10
         );
 
         assertThat(unauthorized.items()).noneMatch(item -> item.executionId().equals(executionId));

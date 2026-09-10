@@ -10,24 +10,32 @@ import com.adp.gateway.recovery.domain.RecoveryOperationEvent;
 import com.adp.gateway.recovery.domain.RecoveryOperationOutcome;
 import com.adp.gateway.recovery.domain.RecoveryOperationType;
 import com.adp.gateway.recovery.domain.RecoveryStatus;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 
 public interface RecoveryOperationsPersistence {
 
     RecoveryIncidentPage search(
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         RecoveryStatus status,
         int page,
         int size
     );
 
-    RecoveryIncidentDetail load(String recoveryId, String institutionId, Set<String> allowedWorkloads);
+    RecoveryIncidentDetail load(
+        String recoveryId,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        ExecutionPackType executionPack
+    );
 
     Optional<RecoveryOperationEvent> findOperation(
         String recoveryId,
         String operationId,
         String institutionId,
-        Set<String> allowedWorkloads
+        Set<String> allowedWorkloads,
+        ExecutionPackType executionPack
     );
 
     boolean reserveOperation(
@@ -35,6 +43,7 @@ public interface RecoveryOperationsPersistence {
         String operationId,
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         String actorPrincipalId,
         RecoveryOperationType operationType,
         OffsetDateTime now

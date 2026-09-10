@@ -176,6 +176,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         jdbcClient.sql("""
             update runtime.runtime_execution
             set provider_profile_id = :providerProfileId,
+                execution_pack = :executionPack,
                 destination_profile_id = :destinationProfileId,
                 destination_profile_version = :destinationProfileVersion,
                 destination_profile_digest = :destinationProfileDigest,
@@ -188,6 +189,7 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             """)
             .param("executionId", executionId)
             .param("providerProfileId", destinationProfile.providerProfileId())
+            .param("executionPack", destinationProfile.packType().name())
             .param("destinationProfileId", destinationProfile.destinationProfileId())
             .param("destinationProfileVersion", destinationProfile.profileVersion())
             .param("destinationProfileDigest", destinationProfile.profileDigest())

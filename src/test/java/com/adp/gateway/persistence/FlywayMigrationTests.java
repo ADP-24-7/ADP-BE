@@ -2,6 +2,7 @@ package com.adp.gateway.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -22,6 +23,29 @@ class FlywayMigrationTests {
 
     @Autowired
     private Environment environment;
+
+    @Test
+    void v48MigrationCreatesScopedAuditExportJobAndEventContract() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'public'
+                  and table_name in ('audit_export_job', 'audit_export_event')
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'public'
+                  and table_name = 'audit_export_job'
+                  and constraint_name in (
+                    'uq_audit_export_idempotency', 'chk_audit_export_pack',
+                    'chk_audit_export_format', 'chk_audit_export_report_type',
+                    'chk_audit_export_status', 'chk_audit_export_maker_checker',
+                    'chk_audit_export_content'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(2);
+        assertThat(constraintCount).isEqualTo(7);
+    }
 
     @Test
     void v37MigrationCreatesRecoveryOperationEvidence() {
@@ -286,6 +310,86 @@ class FlywayMigrationTests {
 
         assertThat(tableCount).isEqualTo(3);
         assertThat(evidenceColumnCount).isEqualTo(8);
+    }
+
+    @Test
+    void v44MigrationCreatesSecurityFindingReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and indexname in (
+                    'idx_runtime_execution_security_finding_scope',
+                    'idx_response_sensitive_finding_created'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(2);
+
+        var packConstraint = jdbcClient.sql("""
+                select pg_get_constraintdef(oid) as definition, convalidated
+                from pg_constraint
+                where conname = 'chk_runtime_execution_pack'
+                """)
+            .query((rs, rowNum) -> new Object[] {
+                rs.getString("definition"), rs.getBoolean("convalidated")
+            })
+            .single();
+        assertThat((String) packConstraint[0])
+            .contains("status", "REVIEW_REQUIRED", "execution_pack IS NOT NULL");
+        assertThat((boolean) packConstraint[1]).isTrue();
+    }
+
+    @Test
+    void v45MigrationCreatesAdminIdentityReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'public'
+                  and indexname in (
+                    'idx_auth_principal_operations_scope',
+                    'idx_auth_principal_role_operations_search',
+                    'idx_auth_principal_workload_operations_search'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(3);
+    }
+
+    @Test
+    void v46MigrationCreatesDigitalAssetCurrentStateReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname in ('policy', 'runtime')
+                  and indexname in (
+                    'idx_da_artifact_current_state_scope',
+                    'idx_da_runtime_snapshot_artifact_history'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(2);
+    }
+
+    @Test
+    void v47MigrationCreatesPackAwareOperationsWindowIndex() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and indexname = 'idx_runtime_execution_operations_pack_window'
+                  and indexdef like '%institution_id, execution_pack, created_at DESC, workload_id%'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(1);
     }
 
     @Test
@@ -869,10 +973,22 @@ class FlywayMigrationTests {
             where table_schema = 'runtime' and table_name = 'digital_asset_runtime_snapshot'
               and constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
             """).query(Integer.class).single();
+        Integer executionIdentityUnique = jdbcClient.sql("""
+            select count(*)
+            from information_schema.table_constraints constraints
+            join information_schema.constraint_column_usage columns
+              on columns.constraint_schema = constraints.constraint_schema
+             and columns.constraint_name = constraints.constraint_name
+            where constraints.table_schema = 'runtime'
+              and constraints.table_name = 'digital_asset_runtime_snapshot'
+              and constraints.constraint_type = 'UNIQUE'
+              and columns.column_name = 'execution_id'
+            """).query(Integer.class).single();
 
         assertThat(tableCount).isEqualTo(2);
         assertThat(activePrimaryKeyColumns).isEqualTo(2);
         assertThat(snapshotIdentityConstraints).isGreaterThanOrEqualTo(7);
+        assertThat(executionIdentityUnique).isEqualTo(1);
     }
 
     @Test
@@ -1365,6 +1481,167 @@ class FlywayMigrationTests {
                 """).query(Integer.class).single();
 
         assertThat(indexCount).isEqualTo(2);
+    }
+
+    @Test
+    void v43MigrationCreatesRuntimeExecutionPackSnapshotAndReviewQueueIndex() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'execution_pack'
+                """).query(Integer.class).single();
+        String indexDefinition = jdbcClient.sql("""
+                select indexdef from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'idx_runtime_execution_review_queue'
+                """).query(String.class).single();
+
+        assertThat(columnCount).isEqualTo(1);
+        assertThat(indexDefinition)
+            .contains("institution_id")
+            .contains("execution_pack")
+            .contains("REVIEW_REQUIRED");
+    }
+
+    @Test
+    void v43MigrationBackfillsReviewRequiredExecutionPacks() throws Exception {
+        String databaseName = "adp_v43_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("42").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into egress.destination_profile (
+                        destination_profile_id, profile_version, profile_digest, contract_version,
+                        provider_profile_id, pack_type, schema_version, status, effective_at,
+                        allowed_bindings, field_contracts, created_at
+                    ) values
+                        ('dest-v43-ai', '1.0.0', 'digest-ai', '1.0.0', 'provider-ai', 'AI',
+                         'schema-ai', 'ACTIVE', now(), '', '', now()),
+                        ('dest-v43-da', '1.0.0', 'digest-da', '1.0.0', 'provider-da', 'DIGITAL_ASSET',
+                         'schema-da', 'ACTIVE', now(), '', '', now())
+                    """);
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, status, institution_id,
+                        destination_profile_id, destination_profile_version,
+                        idempotency_institution_id, request_hash, created_at, updated_at
+                    ) values
+                        ('exec-v43-ai', 'req-v43-ai', 'trace-v43-ai', 'idem-v43-ai', 'workload-ai',
+                         'CUSTOMER_SUPPORT', repeat('a', 64), 'REVIEW_REQUIRED', 'institution-v43',
+                         'dest-v43-ai', '1.0.0', 'institution-v43', repeat('b', 64), now(), now()),
+                        ('exec-v43-da', 'req-v43-da', 'trace-v43-da', 'idem-v43-da', 'workload-da',
+                         'ASSET_TRANSFER', repeat('c', 64), 'REVIEW_REQUIRED', 'institution-v43',
+                         'dest-v43-da', '1.0.0', 'institution-v43', repeat('d', 64), now(), now())
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select execution_id, execution_pack
+                     from runtime.runtime_execution
+                     where execution_id in ('exec-v43-ai', 'exec-v43-da')
+                     order by execution_id
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("execution_id")).isEqualTo("exec-v43-ai");
+                assertThat(resultSet.getString("execution_pack")).isEqualTo("AI");
+                resultSet.next();
+                assertThat(resultSet.getString("execution_id")).isEqualTo("exec-v43-da");
+                assertThat(resultSet.getString("execution_pack")).isEqualTo("DIGITAL_ASSET");
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
+    }
+
+    @Test
+    void v44MigrationRejectsSecurityFindingWithoutResolvedExecutionPack() throws Exception {
+        String databaseName = "adp_v44_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("43").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, status, institution_id,
+                        idempotency_institution_id, request_hash, created_at, updated_at
+                    ) values (
+                        'exec-v44-unresolved', 'req-v44-unresolved', 'trace-v44-unresolved',
+                        'idem-v44-unresolved', 'legacy-workload', 'LEGACY_PURPOSE', repeat('a', 64),
+                        'COMPLETED', 'institution-v44', 'institution-v44', repeat('b', 64), now(), now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.outbound_candidate (
+                        outbound_payload_id, execution_id, destination_profile_id,
+                        destination_profile_version, destination_profile_digest, pack_type,
+                        schema_version, candidate_payload_digest, field_count,
+                        guard_status, guard_reason_codes, created_at
+                    ) values (
+                        'out-v44-unresolved', 'exec-v44-unresolved', 'deleted-destination',
+                        'legacy', 'legacy-destination-digest', 'AI', 'legacy-schema',
+                        repeat('c', 64), 1, 'PASSED', '', now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.connector_execution (
+                        connector_execution_id, execution_id, outbound_payload_id,
+                        outbound_candidate_digest, connector_id, status,
+                        response_digest, response_schema_version, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'out-v44-unresolved',
+                        repeat('c', 64), 'legacy-connector', 'ACKNOWLEDGED',
+                        repeat('d', 64), 'legacy-response', now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.response_guard_result (
+                        connector_execution_id, execution_id, connector_id, connector_status,
+                        status, leakage_detected, reason_codes, response_digest,
+                        detector_version, finding_count, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'legacy-connector',
+                        'ACKNOWLEDGED', 'REJECTED', true, 'SENSITIVE_RESPONSE', repeat('d', 64),
+                        'legacy-detector', 1, now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.response_sensitive_finding (
+                        connector_execution_id, execution_id, finding_type, location,
+                        start_offset, end_offset, detector_version, evidence_digest, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'PHONE_NUMBER',
+                        '$.response', 0, 13, 'legacy-detector', repeat('e', 64), now()
+                    )
+                    """);
+            }
+
+            assertThatThrownBy(() -> Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate())
+                .hasStackTraceContaining("Security findings require a resolved runtime execution pack");
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
     }
 
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)

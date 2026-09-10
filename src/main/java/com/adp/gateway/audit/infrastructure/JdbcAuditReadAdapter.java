@@ -12,6 +12,7 @@ import com.adp.gateway.audit.application.AuditReadPort;
 import com.adp.gateway.audit.domain.AuditExecutionPage;
 import com.adp.gateway.audit.domain.AuditExecutionSummary;
 import com.adp.gateway.audit.domain.ExecutionEvidencePack;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +33,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     public AuditExecutionPage search(
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         String workloadId,
         String status,
         OffsetDateTime from,
@@ -41,6 +43,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     ) {
         StringBuilder where = new StringBuilder(" where re.institution_id = :institutionId");
         appendWorkloadScope(where, allowedWorkloads);
+        if (executionPack != null) where.append(" and re.execution_pack = :executionPack");
         if (workloadId != null) where.append(" and re.workload_id = :workloadId");
         if (status != null) where.append(" and re.status = :status");
         if (from != null) where.append(" and re.created_at >= :from");
@@ -48,7 +51,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
 
         String select = """
             select re.execution_id, re.request_id, re.trace_id, re.institution_id,
-                   re.workload_id, re.purpose_code, re.status, re.final_action,
+                   re.execution_pack, re.workload_id, re.purpose_code, re.status, re.final_action,
                    re.policy_version, re.snapshot_digest, re.destination_profile_id,
                    re.destination_profile_version, re.connector_status,
                    rr.recovery_status, re.created_at, re.updated_at
@@ -58,12 +61,12 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         String count = "select count(*) from runtime.runtime_execution re" + where;
 
         JdbcClient.StatementSpec selectSpec = bind(
-            jdbcClient.sql(select), institutionId, allowedWorkloads, workloadId, status, from, to
+            jdbcClient.sql(select), institutionId, allowedWorkloads, executionPack, workloadId, status, from, to
         )
             .param("size", size).param("offset", page * size);
         List<AuditExecutionSummary> items = selectSpec.query(AuditExecutionSummary.class).list();
         long total = bind(
-            jdbcClient.sql(count), institutionId, allowedWorkloads, workloadId, status, from, to
+            jdbcClient.sql(count), institutionId, allowedWorkloads, executionPack, workloadId, status, from, to
         )
             .query(Long.class).single();
         return new AuditExecutionPage(items, page, size, total);
@@ -135,6 +138,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         JdbcClient.StatementSpec spec,
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         String workloadId,
         String status,
         OffsetDateTime from,
@@ -142,6 +146,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     ) {
         spec = spec.param("institutionId", institutionId);
         spec = bindWorkloadScope(spec, allowedWorkloads);
+        if (executionPack != null) spec = spec.param("executionPack", executionPack.name());
         if (workloadId != null) spec = spec.param("workloadId", workloadId);
         if (status != null) spec = spec.param("status", status);
         if (from != null) spec = spec.param("from", from);

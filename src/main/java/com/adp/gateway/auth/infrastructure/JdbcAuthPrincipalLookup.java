@@ -40,7 +40,32 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
                 rs.getBoolean("subject_authorization_required")
             ))
             .optional();
-        return principal.map(record -> new AuthPrincipal(
+        return principal.map(this::toPrincipal);
+    }
+
+    @Override
+    public Optional<AuthPrincipal> findByPrincipalId(String principalId) {
+        return jdbcClient.sql("""
+                select principal_id, principal_type, display_name, institution_id,
+                       subject_authorization_required
+                from auth_principal
+                where principal_id = :principalId
+                  and enabled = true
+                """)
+            .param("principalId", principalId)
+            .query((rs, rowNum) -> new PrincipalRecord(
+                rs.getString("principal_id"),
+                PrincipalType.valueOf(rs.getString("principal_type")),
+                rs.getString("display_name"),
+                rs.getString("institution_id"),
+                rs.getBoolean("subject_authorization_required")
+            ))
+            .optional()
+            .map(this::toPrincipal);
+    }
+
+    private AuthPrincipal toPrincipal(PrincipalRecord record) {
+        return new AuthPrincipal(
             record.principalId(),
             record.principalType(),
             record.displayName(),
@@ -48,7 +73,7 @@ public class JdbcAuthPrincipalLookup implements AuthPrincipalLookup {
             record.subjectAuthorizationRequired(),
             workloadIds(record.principalId()),
             roles(record.principalId())
-        ));
+        );
     }
 
     private Set<AdpRole> roles(String principalId) {

@@ -7,4 +7,6 @@ import com.adp.gateway.auth.domain.AuthPrincipal;
 public interface AuthPrincipalLookup {
 
     Optional<AuthPrincipal> findByApiKeyHash(String apiKeyHash);
+
+    Optional<AuthPrincipal> findByPrincipalId(String principalId);
 }

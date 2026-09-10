@@ -39,6 +39,11 @@ public class FakeDigitalAssetStatusQueryAdapter implements ExternalStatusQueryPo
     }
 
     @Override
+    public boolean requiresReconciliationEvidence() {
+        return true;
+    }
+
+    @Override
     public ExternalStatusQueryResult query(ExternalInteractionRecovery recovery) {
         if (!supports(recovery.connectorId())) {
             throw new ExternalStatusQueryPermanentException("Unsupported digital asset connector");

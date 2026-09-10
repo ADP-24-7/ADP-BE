@@ -103,6 +103,11 @@ Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적
 - [x] DA-P0-8 Transaction/Receipt/Finality/Transfer Resolver와 POST_EXECUTION Evidence
 - [x] DA-P0-8 Approved/Requested/Executed digest re-binding과 Runtime Trace 노출
 - [x] DA-P0-8 typed Provider `SENT_UNKNOWN` 및 외부 성공 후 Local 실패 Recovery 연결
+- [x] Digital Asset Local Product 6-Case E2E Closure
+  - Branch: `feature/digital-asset-runtime-6-case-e2e`
+  - DA PR #31의 고정 JSON Fixture를 실제 `/v1/runtime/executions` 경로로 실행
+  - BLOCK 2종 External Effect 0, 실패 receipt, SENT_UNKNOWN reconcile-first, duplicate replay 검증
+  - independent recovered evidence와 PostgreSQL/Runtime Trace 최종 상태 연결
 - [x] DA Industry Analysis to BE Runtime Contract Gap Review
   - Branch: `feature/da-runtime-contract-gap-review`
   - Decision: 현재 P0-3~8 계약 유지, semantic asset classification은 versioned Handoff 전까지 미도입
@@ -493,6 +498,21 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.
 
+## Slice 27 Auth & Maker-Checker Product Closure
+
+상세 원인과 해결 과정은 [Session Authentication and Maker-Checker Closure](troubleshooting/session-auth-maker-checker.md)에서 관리한다.
+
+- [x] Runtime API Key stateless chain과 Browser Admin session chain 분리
+- [x] BCrypt credential persistence와 로그인 실패 잠금 기반 추가
+- [x] `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`, `/api/auth/csrf`
+- [x] 관리자 mutation CSRF 보호
+- [x] Docker 기본 User Header 인증 비활성화
+- [x] FE 로그인 Gate, 로그아웃, returnTo 복귀
+- [x] 로그인/로그아웃 시 Query cache 격리
+- [x] Auditor Session 요청 → Logout → 별도 Checker Session 승인 → 생성/다운로드 통합 E2E
+- [x] Local Header Test Harness 사용 시에도 Admin Session CSRF 보호 유지
+- [x] 5회 로그인 실패 잠금과 만료 후 복구 검증
+
 ## Reference Evidence — Admin Trace Support
 
 상세 계약은 [Reference Evidence — Admin Trace Support](policy-regulation-evidence-plane.md)에서 관리한다.
@@ -516,6 +536,7 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Current Selection 표시
 - [x] Transition·Shadow Evidence History 조회
 - [x] FE 목록→상세→Governance Command 연결
-- [ ] Security Finding 목록·상세
+- [x] Review Queue Institution/Workload scoped 목록·상세와 typed next action
+- [x] Security Finding Institution/Workload scoped 목록·상세와 Execution/Trace 연결
 - [ ] Admin Identity·Role·Permission 조회
 - [ ] Workload Registry·Data Access Decision History 조회

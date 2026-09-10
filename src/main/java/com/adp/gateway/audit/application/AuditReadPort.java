@@ -5,11 +5,13 @@ import java.util.Set;
 
 import com.adp.gateway.audit.domain.AuditExecutionPage;
 import com.adp.gateway.audit.domain.ExecutionEvidencePack;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 
 public interface AuditReadPort {
     AuditExecutionPage search(
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         String workloadId,
         String status,
         OffsetDateTime from,

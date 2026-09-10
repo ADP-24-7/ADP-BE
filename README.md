@@ -57,9 +57,9 @@ make setup
 make docker-up
 ```
 
-로컬 통합 환경은 로그인 화면 대신 Vite 개발 서버가 Admin 요청에 로컬 사용자 Header를 주입합니다. Credential은 브라우저
-번들에 포함되지 않으며 `VITE_LOCAL_BFF_ENABLED=true`인 로컬 Compose에서만 활성화됩니다. 배포 환경에서는 이 경로를
-비활성화하고 실제 관리자 인증 경계를 사용해야 합니다.
+로컬 통합 환경의 관리자 콘솔은 Session 기반 로그인을 사용합니다. `auditor-local`, `privileged-operator-local`,
+`operator-local` 데모 계정은 local fixture가 활성화된 경우에만 제공되며, Runtime API는 별도의 `X-ADP-API-Key`
+stateless 인증 경계를 유지합니다.
 
 ## Docker 파일 기준
 
@@ -127,4 +127,5 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [BE-11 Observability Operations](docs/be-11-observability-operations.md)
 - [Policy · Regulation · Evidence Plane](docs/policy-regulation-evidence-plane.md)
 - [Slice 25 Policy Operations Read Model](docs/slice-25-policy-operations-read-model.md)
+- [Slice 25 Security Finding Read Model](docs/slice-25-security-finding-read-model.md)
 - [Troubleshooting Index](docs/troubleshooting/index.md)

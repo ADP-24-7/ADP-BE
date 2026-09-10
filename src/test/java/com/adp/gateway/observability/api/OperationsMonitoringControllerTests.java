@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.UUID;
 
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.observability.application.OperationsMonitoringPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,11 +74,11 @@ class OperationsMonitoringControllerTests {
                 insert into runtime.runtime_execution (
                     execution_id, request_id, trace_id, idempotency_key, workload_id,
                     idempotency_institution_id, request_hash, purpose_code, input_digest,
-                    institution_id, status, created_at, updated_at
+                    institution_id, execution_pack, status, created_at, updated_at
                 ) values (
                     :executionId, :requestId, :traceId, :idempotencyKey, :workload,
                     'institution_local', :requestHash, 'CUSTOMER_SUPPORT', :inputDigest,
-                    'institution_local', 'EGRESSING', :now, :now
+                    'institution_local', 'AI', 'EGRESSING', :now, :now
                 )
                 """)
             .param("executionId", executionId)
@@ -245,9 +246,15 @@ class OperationsMonitoringControllerTests {
         mockMvc.perform(get("/api/admin/operations/summary")
                 .header("X-ADP-User-Id", "auditor-operations")
                 .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "AI")
                 .param("windowMinutes", "60"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.schemaVersion").value("adp-operations-summary/v1"))
+            .andExpect(jsonPath("$.schemaVersion").value("adp-operations-summary/v2"))
+            .andExpect(jsonPath("$.scope.requestedExecutionPack").value("AI"))
+            .andExpect(jsonPath("$.scope.defaultSemantics").value("REQUESTED_EXECUTION_PACK"))
+            .andExpect(jsonPath("$.scope.packScopedSections[0]").value("RUNTIME"))
+            .andExpect(jsonPath("$.scope.allAuthorizedWorkloadSections[0]").value("SECURITY"))
+            .andExpect(jsonPath("$.runtime.total").isNumber())
             .andExpect(jsonPath("$.policy.currentSelections").isNumber())
             .andExpect(jsonPath("$.policy.activations").isNumber())
             .andExpect(jsonPath("$.security.deniedAttempts").isNumber())
@@ -257,23 +264,56 @@ class OperationsMonitoringControllerTests {
         mockMvc.perform(get("/api/admin/operations/policy-events")
                 .header("X-ADP-User-Id", "auditor-operations")
                 .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "AI")
                 .param("workloadId", workload))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.total").value(2))
             .andExpect(jsonPath("$.items[0].workloadId").value(workload));
+
+        mockMvc.perform(get("/api/admin/operations/policy-events")
+                .header("X-ADP-User-Id", "auditor-operations")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "DIGITAL_ASSET")
+                .param("workloadId", workload))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(0));
+    }
+
+    @Test
+    void omittedPackUsesAllAuthorizedWorkloadsSemantics() throws Exception {
+        mockMvc.perform(get("/api/admin/operations/summary")
+                .header("X-ADP-User-Id", "auditor-operations")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("windowMinutes", "60"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.scope.requestedExecutionPack").isEmpty())
+            .andExpect(jsonPath("$.scope.defaultSemantics").value("ALL_AUTHORIZED_WORKLOADS"))
+            .andExpect(jsonPath("$.scope.packScopedSections").isEmpty())
+            .andExpect(jsonPath("$.scope.allAuthorizedWorkloadSections.length()").value(4));
     }
 
     @Test
     void scopedSummaryDetectsDriftAndRejectsOtherWorkloads() {
         OffsetDateTime now = OffsetDateTime.now();
         var healthy = port.loadSummary(
-            "institution_local", Set.of(workload), now.minusHours(1), now, 60
+            "institution_local", Set.of(workload), ExecutionPackType.AI,
+            now.minusHours(1), now, 60
         );
         assertThat(healthy.policy().currentSelections()).isEqualTo(1);
         assertThat(healthy.policy().driftedSelections()).isZero();
         assertThat(healthy.security().authorizationPolicyDenied()).isEqualTo(1);
         assertThat(healthy.recovery().staleOperations()).isEqualTo(1);
         assertThat(healthy.recovery().oldestStaleOperationAgeSeconds()).isGreaterThanOrEqualTo(600);
+        assertThat(healthy.scope().allAuthorizedWorkloadSections()).containsExactly("SECURITY");
+
+        var otherPack = port.loadSummary(
+            "institution_local", Set.of(workload), ExecutionPackType.DIGITAL_ASSET,
+            now.minusHours(1), now, 60
+        );
+        assertThat(otherPack.runtime().total()).isZero();
+        assertThat(otherPack.recovery().backlog()).isZero();
+        assertThat(otherPack.policy().currentSelections()).isZero();
+        assertThat(otherPack.security().authorizationPolicyDenied()).isEqualTo(1);
 
         jdbcClient.sql("""
                 update policy.lifecycle_artifact set lifecycle_stage = 'REVIEW'
@@ -282,10 +322,12 @@ class OperationsMonitoringControllerTests {
             .param("artifactId", artifactId)
             .update();
         var drifted = port.loadSummary(
-            "institution_local", Set.of(workload), now.minusHours(1), now, 60
+            "institution_local", Set.of(workload), ExecutionPackType.AI,
+            now.minusHours(1), now, 60
         );
         var forbiddenScope = port.loadPolicyEvents(
-            "institution_local", Set.of("another-workload"), null, null, null, null, 0, 10
+            "institution_local", Set.of("another-workload"), ExecutionPackType.AI,
+            null, null, null, null, 0, 10
         );
 
         assertThat(drifted.policy().driftedSelections()).isEqualTo(1);

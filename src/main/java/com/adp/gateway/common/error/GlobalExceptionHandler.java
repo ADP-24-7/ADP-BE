@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
+import com.adp.gateway.auditexport.application.AuditExportException;
 import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
 import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
@@ -21,6 +22,9 @@ import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
 import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
+import com.adp.gateway.operations.application.SecurityFindingNotFoundException;
+import com.adp.gateway.operations.application.InvalidSecurityFindingSearchException;
+import com.adp.gateway.operations.application.AdminIdentityNotFoundException;
 import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -66,6 +71,7 @@ public class GlobalExceptionHandler {
         HttpMessageNotReadableException.class,
         MethodArgumentTypeMismatchException.class,
         InvalidAuditSearchException.class,
+        InvalidSecurityFindingSearchException.class,
         InvalidRuntimeHeaderException.class
     })
     ResponseEntity<ErrorResponse> handleMalformedRequest(Exception exception, HttpServletRequest request) {
@@ -106,6 +112,19 @@ public class GlobalExceptionHandler {
             ReasonCode.AUTHORIZATION_DENIED,
             "Authorization denied",
             HttpStatus.FORBIDDEN,
+            request
+        );
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ErrorResponse> handleAuthenticationFailure(
+        AuthenticationException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.AUTHENTICATION_FAILED,
+            "Authentication failed",
+            HttpStatus.UNAUTHORIZED,
             request
         );
     }
@@ -173,6 +192,54 @@ public class GlobalExceptionHandler {
             HttpStatus.NOT_FOUND,
             request
         );
+    }
+
+    @ExceptionHandler(SecurityFindingNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleSecurityFindingNotFound(
+        SecurityFindingNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.SECURITY_FINDING_NOT_FOUND,
+            "Security finding not found",
+            HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(AdminIdentityNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleAdminIdentityNotFound(
+        AdminIdentityNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.ADMIN_IDENTITY_NOT_FOUND,
+            "Admin identity not found",
+            HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(AuditExportException.class)
+    ResponseEntity<ErrorResponse> handleAuditExport(
+        AuditExportException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case AUDIT_EXPORT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case AUDIT_EXPORT_IDEMPOTENCY_CONFLICT,
+                 AUDIT_EXPORT_STATUS_CONFLICT,
+                 AUDIT_EXPORT_MAKER_CHECKER_VIOLATION,
+                 AUDIT_EXPORT_NOT_READY,
+                 AUDIT_EXPORT_EXPIRED,
+                 AUDIT_EXPORT_DIGEST_MISMATCH -> HttpStatus.CONFLICT;
+            case AUDIT_EXPORT_SCOPE_INVALID,
+                 AUDIT_EXPORT_SIZE_LIMIT_EXCEEDED -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case AUDIT_EXPORT_ACCESS_REVOKED -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;
+        };
+        return errorResponse(reasonCode, "Audit export request rejected", status, request);
     }
 
     @ExceptionHandler(RecoveryOperationException.class)

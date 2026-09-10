@@ -10,7 +10,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.local-fixtures.enabled=true")
+@SpringBootTest(properties = {
+    "adp.local-fixtures.enabled=true",
+    "adp.local-user-auth.enabled=false"
+})
 @AutoConfigureMockMvc
 class LocalUserAuthDisabledTests {
 
