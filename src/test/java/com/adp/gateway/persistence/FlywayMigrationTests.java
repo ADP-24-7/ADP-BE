@@ -1367,6 +1367,90 @@ class FlywayMigrationTests {
         assertThat(indexCount).isEqualTo(2);
     }
 
+    @Test
+    void v43MigrationCreatesRuntimeExecutionPackSnapshotAndReviewQueueIndex() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'execution_pack'
+                """).query(Integer.class).single();
+        String indexDefinition = jdbcClient.sql("""
+                select indexdef from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'idx_runtime_execution_review_queue'
+                """).query(String.class).single();
+
+        assertThat(columnCount).isEqualTo(1);
+        assertThat(indexDefinition)
+            .contains("institution_id")
+            .contains("execution_pack")
+            .contains("REVIEW_REQUIRED");
+    }
+
+    @Test
+    void v43MigrationBackfillsReviewRequiredExecutionPacks() throws Exception {
+        String databaseName = "adp_v43_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("42").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into egress.destination_profile (
+                        destination_profile_id, profile_version, profile_digest, contract_version,
+                        provider_profile_id, pack_type, schema_version, status, effective_at,
+                        allowed_bindings, field_contracts, created_at
+                    ) values
+                        ('dest-v43-ai', '1.0.0', 'digest-ai', '1.0.0', 'provider-ai', 'AI',
+                         'schema-ai', 'ACTIVE', now(), '', '', now()),
+                        ('dest-v43-da', '1.0.0', 'digest-da', '1.0.0', 'provider-da', 'DIGITAL_ASSET',
+                         'schema-da', 'ACTIVE', now(), '', '', now())
+                    """);
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, status, institution_id,
+                        destination_profile_id, destination_profile_version,
+                        idempotency_institution_id, request_hash, created_at, updated_at
+                    ) values
+                        ('exec-v43-ai', 'req-v43-ai', 'trace-v43-ai', 'idem-v43-ai', 'workload-ai',
+                         'CUSTOMER_SUPPORT', repeat('a', 64), 'REVIEW_REQUIRED', 'institution-v43',
+                         'dest-v43-ai', '1.0.0', 'institution-v43', repeat('b', 64), now(), now()),
+                        ('exec-v43-da', 'req-v43-da', 'trace-v43-da', 'idem-v43-da', 'workload-da',
+                         'ASSET_TRANSFER', repeat('c', 64), 'REVIEW_REQUIRED', 'institution-v43',
+                         'dest-v43-da', '1.0.0', 'institution-v43', repeat('d', 64), now(), now())
+                    """);
+            }
+
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement();
+                 var resultSet = statement.executeQuery("""
+                     select execution_id, execution_pack
+                     from runtime.runtime_execution
+                     where execution_id in ('exec-v43-ai', 'exec-v43-da')
+                     order by execution_id
+                     """)) {
+                resultSet.next();
+                assertThat(resultSet.getString("execution_id")).isEqualTo("exec-v43-ai");
+                assertThat(resultSet.getString("execution_pack")).isEqualTo("AI");
+                resultSet.next();
+                assertThat(resultSet.getString("execution_id")).isEqualTo("exec-v43-da");
+                assertThat(resultSet.getString("execution_pack")).isEqualTo("DIGITAL_ASSET");
+            }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);

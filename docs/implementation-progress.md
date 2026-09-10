@@ -521,6 +521,7 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Current Selection 표시
 - [x] Transition·Shadow Evidence History 조회
 - [x] FE 목록→상세→Governance Command 연결
+- [x] Review Queue Institution/Workload scoped 목록·상세와 typed next action
 - [ ] Security Finding 목록·상세
 - [ ] Admin Identity·Role·Permission 조회
 - [ ] Workload Registry·Data Access Decision History 조회
