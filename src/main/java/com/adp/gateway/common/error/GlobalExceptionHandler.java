@@ -16,6 +16,7 @@ import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
 import com.adp.gateway.egress.application.OutboundGuardException;
+import com.adp.gateway.evidence.application.ReferenceEvidenceException;
 import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
 import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
@@ -337,6 +338,21 @@ public class GlobalExceptionHandler {
             default -> HttpStatus.UNPROCESSABLE_ENTITY;
         };
         return errorResponse(reasonCode, "Digital Asset runtime snapshot rejected", status, request);
+    }
+
+    @ExceptionHandler(ReferenceEvidenceException.class)
+    ResponseEntity<ErrorResponse> handleReferenceEvidence(
+        ReferenceEvidenceException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case REFERENCE_EVIDENCE_FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case REFERENCE_EVIDENCE_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case REFERENCE_EVIDENCE_CONFLICT -> HttpStatus.CONFLICT;
+            default -> HttpStatus.UNPROCESSABLE_ENTITY;
+        };
+        return errorResponse(reasonCode, "Reference Evidence operation rejected", status, request);
     }
 
     @ExceptionHandler(OutboundGuardException.class)

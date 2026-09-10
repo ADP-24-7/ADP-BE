@@ -1,3 +1,4 @@
+-- Applied after the policy operations read indexes introduced on main.
 create table runtime.ai_evaluation_contract (
     evaluation_run_id varchar(120) primary key,
     fixed_conditions_digest varchar(71) not null check (fixed_conditions_digest ~ '^sha256:[0-9a-f]{64}$'),

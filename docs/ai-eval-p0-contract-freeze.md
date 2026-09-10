@@ -39,8 +39,8 @@ Snapshot은 `fixed_conditions`, `fixed_conditions_digest`, `model_profiles`로 �
 `destination_profile_digest`를 재사용하고 `destination_profile_id`, `provider`를 노출한다.
 provider model version은 기존 catalog 등록값이며 hosted revision의 실측 확인값은 아니다.
 
-V41 migration은 immutable contract, case provider-input pin, execution binding을 저장한다.
-main의 V40 reference evidence registry migration과 충돌하지 않도록 P0 migration 번호를 V41로 고정한다.
+V42 migration은 immutable contract, case provider-input pin, execution binding을 저장한다.
+main의 V40 reference evidence registry와 V41 policy operations read index migration 이후에 적용되도록 P0 migration 번호를 V42로 고정한다.
 run/case/fixed digest/model digest/decision/transform/outbound/provider request를 FK와 서버
 검증으로 연결한다. Export SQL은 runtime의 decision, transform, outbound ID, PASSED guard,
 provider request digest와 model evidence를 join하여 불완전한 binding의 export를 거부한다.
@@ -141,7 +141,7 @@ src/main/java/com/adp/gateway/ai/application/AiEvaluationContractService.java
 src/main/java/com/adp/gateway/ai/application/AiEvaluationPrompt.java
 src/main/java/com/adp/gateway/ai/domain/AiEvaluationContractSnapshot.java
 src/main/java/com/adp/gateway/ai/infrastructure/JdbcAiEvaluationContractAdapter.java
-src/main/resources/db/migration/V41__freeze_ai_evaluation_contract.sql
+src/main/resources/db/migration/V42__freeze_ai_evaluation_contract.sql
 src/test/java/com/adp/gateway/ai/application/AiEvaluationContractServiceTests.java
 ```
 
@@ -156,4 +156,3 @@ src/test/java/com/adp/gateway/ai/application/AiEvaluationContractServiceTests.ja
 02_ai/tests/contract_fixture_factory.py
 02_ai/tests/test_evaluation_contract.py
 ```
-
