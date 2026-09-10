@@ -190,6 +190,10 @@ class ExternalInteractionRecoveryServiceTests {
     ) {
         return new ExternalInteractionRecoveryService(
             persistence, statusResolver, retryResolver,
+            new RecoveryReconciliationCoordinator(
+                persistence,
+                new ExternalReconciliationEvidenceResolver(java.util.List.of(), statusResolver)
+            ),
             new RecoveryBackoffPolicy(Duration.ofMinutes(1), Duration.ofMinutes(15)),
             Duration.ofSeconds(30),
             CLOCK, observability

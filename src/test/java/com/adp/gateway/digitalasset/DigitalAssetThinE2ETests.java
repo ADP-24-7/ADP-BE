@@ -1,11 +1,15 @@
 package com.adp.gateway.digitalasset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,7 +21,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.adp.gateway.recovery.application.ExternalInteractionRecoveryService;
+import com.adp.gateway.recovery.application.ExternalInteractionRecoveryPersistence;
+import com.adp.gateway.recovery.application.ExternalStatusQueryPermanentException;
+import com.adp.gateway.recovery.application.RecoveryReconciliationCoordinator;
+import com.adp.gateway.recovery.application.StaleRecoveryLeaseException;
+import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
+import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.audit.application.AuditReadPort;
+import com.adp.gateway.digitalasset.infrastructure.FakeDigitalAssetPlatformStateStore;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -38,7 +49,16 @@ class DigitalAssetThinE2ETests {
     private ExternalInteractionRecoveryService recoveryService;
 
     @Autowired
+    private ExternalInteractionRecoveryPersistence recoveryPersistence;
+
+    @Autowired
+    private RecoveryReconciliationCoordinator reconciliationCoordinator;
+
+    @Autowired
     private AuditReadPort auditReadPort;
+
+    @Autowired
+    private FakeDigitalAssetPlatformStateStore platformStateStore;
 
     @Test
     void executesTokenizedAssetPurchaseWithSettlementAndReconciliationEvidence() throws Exception {
@@ -423,14 +443,106 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId)
             .query(SettlementState.class)
             .single();
-        assertThat(settlement.settlementStatus()).isEqualTo("SENT_UNKNOWN");
-        assertThat(settlement.reconciliationResult()).isEqualTo("WAIT");
+        assertThat(settlement.settlementStatus()).isEqualTo("SETTLED");
+        assertThat(settlement.reconciliationResult()).isEqualTo("RECOVERED");
+        Integer recoveredEvidence = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId and status = 'VERIFIED'
+                  and evidence_source_type = 'INDEPENDENT_EXTERNAL'
+                  and external_status = 'SETTLED' and receipt_status = 'SUCCESS'
+                  and finality_status = 'FINALIZED'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(recoveredEvidence).isEqualTo(1);
+        assertThat(platformStateStore.externalEffectCount(providerRequestId(executionId))).isEqualTo(1);
         String recoveredSnapshotDigest = jdbcClient.sql("""
                 select snapshot_digest from runtime.digital_asset_runtime_snapshot
                 where execution_id = :executionId
                 """)
             .param("executionId", executionId).query(String.class).single();
         assertThat(recoveredSnapshotDigest).isEqualTo(pinnedSnapshotDigest);
+    }
+
+    @Test
+    void rejectsStaleLeaseBeforeDigitalAssetEvidenceIsWritten() throws Exception {
+        String executionId = submitSentUnknownExecution();
+        String recoveryId = recoveryId(executionId);
+        String workerId = "stale-evidence-worker";
+        OffsetDateTime claimedAt = OffsetDateTime.now();
+        var recovery = recoveryPersistence.claimById(
+            recoveryId, workerId, "institution_local", Set.of("tokenized_asset_purchase"),
+            claimedAt, Duration.ofMinutes(1)
+        ).orElseThrow();
+        jdbcClient.sql("""
+                update runtime.external_interaction_recovery
+                set lease_owner = 'replacement-worker'
+                where recovery_id = :recoveryId
+                """)
+            .param("recoveryId", recoveryId)
+            .update();
+
+        assertThatThrownBy(() -> reconciliationCoordinator.commit(
+            recovery, workerId, acknowledgedStatus(), claimedAt.plusSeconds(1)
+        )).isInstanceOf(StaleRecoveryLeaseException.class);
+
+        assertRecoveryWritesWereNotCommitted(executionId, "replacement-worker");
+    }
+
+    @Test
+    void rollsBackRecoveryStateWhenDigitalAssetEvidenceWriteFails() throws Exception {
+        String executionId = submitSentUnknownExecution();
+        String recoveryId = recoveryId(executionId);
+        String workerId = "rollback-evidence-worker";
+        OffsetDateTime claimedAt = OffsetDateTime.now();
+        var recovery = recoveryPersistence.claimById(
+            recoveryId, workerId, "institution_local", Set.of("tokenized_asset_purchase"),
+            claimedAt, Duration.ofMinutes(1)
+        ).orElseThrow();
+        platformStateStore.removeRecoveryObservation(providerRequestId(executionId));
+
+        assertThatThrownBy(() -> reconciliationCoordinator.commit(
+            recovery, workerId, acknowledgedStatus(), claimedAt.plusSeconds(1)
+        )).isInstanceOf(ExternalStatusQueryPermanentException.class);
+
+        assertRecoveryWritesWereNotCommitted(executionId, workerId);
+    }
+
+    @Test
+    void failsWhenIndependentReceiptConfirmsExecutionFailure() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-execution-failed")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("FAILED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        Integer failedTransaction = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_transaction
+                where execution_id = :executionId and settlement_status = 'FAILED'
+                  and reconciliation_result = 'WAIT' and external_transaction_id is not null
+                  and provider_response_digest is not null
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        Integer failedEvidence = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId and status = 'FAILED'
+                  and evidence_source_type = 'INDEPENDENT_EXTERNAL'
+                  and external_status = 'FAILED' and receipt_status = 'FAILED'
+                  and finality_status = 'FINALIZED'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(failedTransaction).isEqualTo(1);
+        assertThat(failedEvidence).isEqualTo(1);
+        assertThat(platformStateStore.externalEffectCount(providerRequestId(executionId))).isEqualTo(1);
+
+        mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("FAILED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.status").value("FAILED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.evidenceSourceType")
+                .value("INDEPENDENT_EXTERNAL"));
     }
 
     @Test
@@ -591,6 +703,15 @@ class DigitalAssetThinE2ETests {
             .single();
     }
 
+    private String providerRequestId(String executionId) {
+        return jdbcClient.sql("""
+                select provider_request_id from runtime.provider_request where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(String.class)
+            .single();
+    }
+
     private boolean isRecoveryReconciled(String executionId) {
         return jdbcClient.sql("""
                 select recovery_status = 'RECONCILED'
@@ -641,6 +762,52 @@ class DigitalAssetThinE2ETests {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 
+    private String submitSentUnknownExecution() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-sent-unknown")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("EGRESSING"))
+            .andReturn().getResponse().getContentAsString();
+        return response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+    }
+
+    private String recoveryId(String executionId) {
+        return jdbcClient.sql("""
+                select recovery_id from runtime.external_interaction_recovery
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(String.class)
+            .single();
+    }
+
+    private ExternalStatusQueryResult acknowledgedStatus() {
+        return new ExternalStatusQueryResult(ConnectorStatus.ACKNOWLEDGED, "a".repeat(64));
+    }
+
+    private void assertRecoveryWritesWereNotCommitted(String executionId, String expectedLeaseOwner) {
+        RecoveryAtomicState state = jdbcClient.sql("""
+                select re.status as runtime_status, re.connector_status,
+                       rr.recovery_status, rr.lease_owner,
+                       dat.settlement_status, dat.reconciliation_result,
+                       (select count(*) from runtime.digital_asset_post_execution_evidence pe
+                        where pe.execution_id = re.execution_id) as post_evidence_count
+                from runtime.runtime_execution re
+                join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
+                join runtime.digital_asset_transaction dat on dat.execution_id = re.execution_id
+                where re.execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(RecoveryAtomicState.class)
+            .single();
+        assertThat(state.runtimeStatus()).isEqualTo("EGRESSING");
+        assertThat(state.connectorStatus()).isEqualTo("SENT_UNKNOWN");
+        assertThat(state.recoveryStatus()).isEqualTo("CLAIMED");
+        assertThat(state.leaseOwner()).isEqualTo(expectedLeaseOwner);
+        assertThat(state.settlementStatus()).isEqualTo("SENT_UNKNOWN");
+        assertThat(state.reconciliationResult()).isEqualTo("WAIT");
+        assertThat(state.postEvidenceCount()).isZero();
+    }
+
     private record ReconciledState(
         String runtimeStatus,
         String connectorStatus,
@@ -651,6 +818,17 @@ class DigitalAssetThinE2ETests {
     }
 
     private record SettlementState(String settlementStatus, String reconciliationResult) {
+    }
+
+    private record RecoveryAtomicState(
+        String runtimeStatus,
+        String connectorStatus,
+        String recoveryStatus,
+        String leaseOwner,
+        String settlementStatus,
+        String reconciliationResult,
+        int postEvidenceCount
+    ) {
     }
 
     private record MismatchCase(

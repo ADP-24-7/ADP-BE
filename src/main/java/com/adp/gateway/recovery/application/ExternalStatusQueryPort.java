@@ -11,5 +11,9 @@ public interface ExternalStatusQueryPort {
         return false;
     }
 
+    default boolean requiresReconciliationEvidence() {
+        return false;
+    }
+
     ExternalStatusQueryResult query(ExternalInteractionRecovery recovery);
 }

@@ -2,6 +2,7 @@ SHELL := /bin/sh
 
 GRADLE_IMAGE ?= gradle:8.14.3-jdk21
 COMPOSE ?= docker compose
+ADP_DA_ROOT ?= $(CURDIR)/../ADP-DA
 DOCKER_RUN_GRADLE := docker run --rm \
 	-v "$(CURDIR)":/workspace \
 	-v adp-be-gradle-cache:/home/gradle/.gradle \
@@ -17,7 +18,9 @@ DOCKER_RUN_GRADLE_TEST := docker run --rm --network adp-local \
 	-e ADP_MOCK_RUNTIME_ENABLED=true \
 	-e ADP_DATA_ACCESS_PREVIEW_ENABLED=true \
 	-e ADP_CONTEXT_PREVIEW_ENABLED=true \
+	-e ADP_DA_ROOT=/adp-da \
 	-v "$(CURDIR)":/workspace \
+	-v "$(ADP_DA_ROOT)":/adp-da:ro \
 	-v adp-be-gradle-cache:/home/gradle/.gradle \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/test-project-cache
@@ -34,7 +37,7 @@ DOCKER_RUN_GRADLE_DEV := docker run --rm --network adp-local \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/dev-run-project-cache
 
-.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e ncp-artifact-ingest-e2e
+.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e digital-asset-e2e ncp-artifact-ingest-e2e
 
 help:
 	@printf "%s\n" \
@@ -53,6 +56,7 @@ help:
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
 		"  make ai-eval-e2e Run the explicitly confirmed real three-model Evaluation and export the DA Bundle" \
+		"  make digital-asset-e2e Run DA PR #31 six-case fixtures through the real local Runtime path" \
 		"  make ncp-artifact-ingest-e2e Read the DA Bundle from NCP and ingest it through the BE API" \
 		"  make docker-down Stop full dev stack"
 
@@ -74,6 +78,8 @@ test-postgres-up: docker-network
 	$(COMPOSE) up -d postgres-test
 
 test: test-postgres-up
+	@test -d "$(ADP_DA_ROOT)/03_digital_asset/artifacts/local_product_e2e_v1" || \
+		{ printf '%s\n' "ADP-DA PR #31 fixtures were not found under $(ADP_DA_ROOT)" >&2; exit 1; }
 	$(DOCKER_RUN_GRADLE_TEST) test; status=$$?; $(COMPOSE) rm -sf postgres-test; exit $$status
 
 package:
@@ -102,6 +108,12 @@ docker-ps:
 
 ai-eval-e2e:
 	./scripts/run-ai-evaluation-e2e.sh
+
+digital-asset-e2e: test-postgres-up
+	@test -d "$(ADP_DA_ROOT)/03_digital_asset/artifacts/local_product_e2e_v1" || \
+		{ printf '%s\n' "ADP-DA PR #31 fixtures were not found under $(ADP_DA_ROOT)" >&2; exit 1; }
+	$(DOCKER_RUN_GRADLE_TEST) test --tests com.adp.gateway.digitalasset.DigitalAssetLocalProductE2ETests; \
+		status=$$?; $(COMPOSE) rm -sf postgres-test; exit $$status
 
 ncp-artifact-ingest-e2e: docker-network
 	./scripts/run-ncp-artifact-ingest-e2e.sh

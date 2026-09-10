@@ -19,6 +19,7 @@ import com.adp.gateway.digitalasset.domain.DigitalAssetFinalityStatus;
 import com.adp.gateway.digitalasset.domain.DigitalAssetKind;
 import com.adp.gateway.digitalasset.domain.DigitalAssetOperation;
 import com.adp.gateway.digitalasset.domain.DigitalAssetReceiptStatus;
+import com.adp.gateway.digitalasset.domain.ExternalExecutionResult;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
@@ -56,14 +57,12 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         String transactionHash = "0x" + UUID.randomUUID().toString().replace("-", "");
         Map<String, Object> expected = transaction(request.payload());
         String assetSymbol = String.valueOf(expected.get("assetSymbol"));
-        if ("asset-sent-unknown".equals(assetSymbol)) {
-            stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
-            return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
-                ConnectorStatus.SENT_UNKNOWN, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
-                null, null, null);
-        }
+        stateStore.recordExternalEffect(request.providerCorrelationKey());
         stateStore.record(request.providerCorrelationKey(), ConnectorStatus.ACKNOWLEDGED);
-        String externalStatus = "asset-settling".equals(assetSymbol) ? "SETTLING"
+        boolean sentUnknown = "asset-sent-unknown".equals(assetSymbol);
+        boolean executionFailed = "asset-execution-failed".equals(assetSymbol);
+        String externalStatus = executionFailed ? "FAILED"
+            : "asset-settling".equals(assetSymbol) ? "SETTLING"
             : "asset-provider-sent-unknown".equals(assetSymbol) ? "SENT_UNKNOWN" : "SETTLED";
         Map<String, Object> actual = new TreeMap<>(expected);
         if ("asset-critical-mismatch".equals(assetSymbol)) {
@@ -80,9 +79,11 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         response.put("transactionHash", transactionHash);
         response.put("externalStatus", externalStatus);
         response.put("providerStatus", "ACKNOWLEDGED");
-        response.put("receiptStatus", "SETTLED".equals(externalStatus) ? "SUCCESS"
+        response.put("receiptStatus", executionFailed ? "FAILED"
+            : "SETTLED".equals(externalStatus) ? "SUCCESS"
             : "SENT_UNKNOWN".equals(externalStatus) ? "NOT_AVAILABLE" : "PENDING");
-        response.put("finalityStatus", "SETTLED".equals(externalStatus) ? "FINALIZED" : "UNCONFIRMED");
+        response.put("finalityStatus", executionFailed || "SETTLED".equals(externalStatus)
+            ? "FINALIZED" : "UNCONFIRMED");
         response.put("executedChainId", actual.get("chainId"));
         response.put("executedRecipientAddress", actual.get("recipientAddress"));
         response.put("executedAssetKind", actual.get("assetKind"));
@@ -96,7 +97,8 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
         response.put("internalTraceEvidenceRef", null);
         OffsetDateTime executedAt = OffsetDateTime.parse("2026-09-08T00:00:00Z");
         response.put("executedAt", executedAt.toString());
-        response.put("finalizedAt", "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1).toString() : null);
+        response.put("finalizedAt", executionFailed || "SETTLED".equals(externalStatus)
+            ? executedAt.plusMinutes(1).toString() : null);
         var asset = new DigitalAssetDescriptor(
             String.valueOf(actual.get("chainId")), DigitalAssetKind.valueOf(String.valueOf(actual.get("assetKind"))),
             String.valueOf(actual.get("assetSymbol")), nullable(actual.get("assetContractAddress")),
@@ -108,12 +110,21 @@ public class FakeDigitalAssetConnector implements RuntimeConnectorPort {
             DigitalAssetReceiptStatus.valueOf(String.valueOf(response.get("receiptStatus"))),
             DigitalAssetFinalityStatus.valueOf(String.valueOf(response.get("finalityStatus"))),
             "token-transfer:" + externalReference, null, executedAt,
-            "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1) : null
+            executionFailed || "SETTLED".equals(externalStatus) ? executedAt.plusMinutes(1) : null
         ));
         if ("asset-unexpected-field".equals(assetSymbol)) {
             response.put("customer-100-sensitive-value", "unexpected");
         }
         String responseDigest = hasher.hash(json(response));
+        if (sentUnknown) {
+            stateStore.recordRecoveryObservation(
+                request.providerCorrelationKey(), request.payload(),
+                ExternalExecutionResult.from(response, responseDigest)
+            );
+            return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
+                ConnectorStatus.SENT_UNKNOWN, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
+                null, null, null);
+        }
         return new ConnectorResult("con_" + UUID.randomUUID(), "fake-digital-asset-platform",
             ConnectorStatus.ACKNOWLEDGED, outbound.outboundPayloadId(), outbound.candidatePayloadDigest(),
             responseDigest, DigitalAssetCanonicalContract.EXTERNAL_RESULT_SCHEMA_VERSION, response);
