@@ -2,6 +2,7 @@ package com.adp.gateway.recovery.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,9 +13,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.recovery.application.ExternalInteractionRecoveryPersistence;
 import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.recovery.application.RecoveryOperationsPersistence;
@@ -28,6 +33,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -80,15 +86,59 @@ class RecoveryOperationsControllerTests {
 
         String response = mockMvc.perform(get("/api/admin/recovery/incidents/{recoveryId}", seed.recoveryId())
                 .header("X-ADP-User-Id", "auditor-local")
-                .header("X-ADP-User-Roles", "AUDITOR"))
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "AI"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.recoveryId").value(seed.recoveryId()))
             .andExpect(jsonPath("$.executionId").value(seed.executionId()))
             .andExpect(jsonPath("$.institutionId").value("institution_local"))
+            .andExpect(jsonPath("$.executionPack").value("AI"))
             .andExpect(jsonPath("$.recoveryStatus").value("PENDING"))
             .andReturn().getResponse().getContentAsString();
 
         assertThat(response).doesNotContain(seed.providerRequestId());
+    }
+
+    @Test
+    void incidentListAndDetailUseTheSameServerOwnedPackScope() throws Exception {
+        Seed seed = seedRecovery("pack-scope");
+
+        mockMvc.perform(get("/api/admin/recovery/incidents")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "AI"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[?(@.recoveryId == '%s')].executionPack"
+                .formatted(seed.recoveryId())).value(hasItem("AI")));
+
+        mockMvc.perform(get("/api/admin/recovery/incidents/{recoveryId}", seed.recoveryId())
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("executionPack", "DIGITAL_ASSET"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void commandCannotCrossTheRequestedPackBoundary() throws Exception {
+        Seed seed = seedRecovery("command-pack-scope");
+
+        mockMvc.perform(post("/api/admin/recovery/incidents/{recoveryId}/review", seed.recoveryId())
+                .header("X-ADP-User-Id", "privileged-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .param("executionPack", "DIGITAL_ASSET")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"operationId\":\"op_wrong_pack_" + seed.suffix() + "\"}"))
+            .andExpect(status().isNotFound());
+
+        Integer operationCount = jdbcClient.sql("""
+                select count(*) from runtime.recovery_operation_event
+                where recovery_id = :recoveryId and operation_id = :operationId
+                """)
+            .param("recoveryId", seed.recoveryId())
+            .param("operationId", "op_wrong_pack_" + seed.suffix())
+            .query(Integer.class)
+            .single();
+        assertThat(operationCount).isZero();
     }
 
     @Test
@@ -124,6 +174,50 @@ class RecoveryOperationsControllerTests {
             .query(Integer.class)
             .single();
         assertThat(eventCount).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentPackScopedCommandsReserveOneOperationAndApplyOneRecoveryTransition() throws Exception {
+        Seed seed = seedRecovery("concurrent-command");
+        String operationId = "op_concurrent_" + seed.suffix();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var request = (java.util.concurrent.Callable<MvcResult>) () -> {
+                ready.countDown();
+                start.await();
+                return mockMvc.perform(post("/api/admin/recovery/incidents/{recoveryId}/reconcile", seed.recoveryId())
+                        .header("X-ADP-User-Id", "privileged-local")
+                        .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                        .param("executionPack", "AI")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operationId\":\"" + operationId + "\"}"))
+                    .andReturn();
+            };
+            Future<MvcResult> first = executor.submit(request);
+            Future<MvcResult> second = executor.submit(request);
+            ready.await();
+            start.countDown();
+
+            assertThat(List.of(first.get().getResponse().getStatus(), second.get().getResponse().getStatus()))
+                .contains(200)
+                .allMatch(statusCode -> statusCode == 200 || statusCode == 409);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        Integer eventCount = jdbcClient.sql("""
+                select count(*) from runtime.recovery_operation_event
+                where recovery_id = :recoveryId and operation_id = :operationId
+                """)
+            .param("recoveryId", seed.recoveryId())
+            .param("operationId", operationId)
+            .query(Integer.class)
+            .single();
+        assertThat(eventCount).isEqualTo(1);
+        assertThat(recoveryAttempt(seed.recoveryId()))
+            .isEqualTo(new RecoveryAttempt("RETRY_SCHEDULED", 1));
     }
 
     @Test
@@ -190,10 +284,19 @@ class RecoveryOperationsControllerTests {
         Seed seed = seedRecovery("scope");
 
         assertThat(operationsPersistence.search(
-            "institution_local", Set.of("fraud_detection"), null, 0, 10
+            "institution_local", Set.of("fraud_detection"), ExecutionPackType.AI, null, 0, 10
         ).items()).noneMatch(item -> item.recoveryId().equals(seed.recoveryId()));
         assertThatThrownBy(() -> operationsPersistence.load(
-            seed.recoveryId(), "institution_other", Set.of("customer_summary")
+            seed.recoveryId(), "institution_other", Set.of("customer_summary"), ExecutionPackType.AI
+        )).isInstanceOf(RecoveryOperationException.class)
+            .hasMessage("RECOVERY_INCIDENT_NOT_FOUND");
+
+        assertThat(operationsPersistence.search(
+            "institution_local", Set.of("customer_summary"), ExecutionPackType.DIGITAL_ASSET, null, 0, 10
+        ).items()).noneMatch(item -> item.recoveryId().equals(seed.recoveryId()));
+        assertThatThrownBy(() -> operationsPersistence.load(
+            seed.recoveryId(), "institution_local", Set.of("customer_summary"),
+            ExecutionPackType.DIGITAL_ASSET
         )).isInstanceOf(RecoveryOperationException.class)
             .hasMessage("RECOVERY_INCIDENT_NOT_FOUND");
     }

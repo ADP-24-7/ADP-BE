@@ -355,6 +355,21 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v47MigrationCreatesPackAwareOperationsWindowIndex() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and indexname = 'idx_runtime_execution_operations_pack_window'
+                  and indexdef like '%institution_id, execution_pack, created_at DESC, workload_id%'
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(1);
+    }
+
+    @Test
     void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
         Integer principalColumnCount = jdbcClient.sql("""
                 select count(*) from information_schema.columns

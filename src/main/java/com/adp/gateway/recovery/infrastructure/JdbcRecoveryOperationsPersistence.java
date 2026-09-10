@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.adp.gateway.connector.domain.ConnectorStatus;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.recovery.application.RecoveryOperationsPersistence;
 import com.adp.gateway.recovery.domain.RecoveryIncidentDetail;
@@ -45,12 +46,14 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
     public RecoveryIncidentPage search(
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         RecoveryStatus status,
         int page,
         int size
     ) {
         StringBuilder where = new StringBuilder(" where re.institution_id = :institutionId");
         appendWorkloadScope(where, allowedWorkloads);
+        appendPackScope(where, executionPack, "re");
         if (status != null) {
             where.append(" and r.recovery_status = :status");
         }
@@ -59,7 +62,8 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
             join runtime.runtime_execution re on re.execution_id = r.execution_id
             """;
         JdbcClient.StatementSpec select = bindScope(jdbcClient.sql("""
-            select r.recovery_id, r.execution_id, re.institution_id, re.workload_id, re.purpose_code,
+            select r.recovery_id, r.execution_id, re.institution_id, re.execution_pack,
+                   re.workload_id, re.purpose_code,
                    r.connector_id, r.observed_status, r.last_observed_external_status,
                    r.recovery_status, r.retry_disposition, r.attempt_count, r.max_attempts,
                    r.next_attempt_at, r.last_error_code, r.created_at, r.updated_at
@@ -70,12 +74,15 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         JdbcClient.StatementSpec count = bindScope(
             jdbcClient.sql("select count(*) " + from + where), institutionId, allowedWorkloads
         );
+        select = bindPack(select, executionPack);
+        count = bindPack(count, executionPack);
         if (status != null) {
             select = select.param("status", status.name());
             count = count.param("status", status.name());
         }
         List<RecoveryIncidentSummary> items = select.query((rs, rowNum) -> new RecoveryIncidentSummary(
             rs.getString("recovery_id"), rs.getString("execution_id"), rs.getString("institution_id"),
+            nullableExecutionPack(rs.getString("execution_pack")),
             rs.getString("workload_id"), rs.getString("purpose_code"), rs.getString("connector_id"),
             ConnectorStatus.valueOf(rs.getString("observed_status")),
             nullableConnectorStatus(rs.getString("last_observed_external_status")),
@@ -92,12 +99,15 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
     public RecoveryIncidentDetail load(
         String recoveryId,
         String institutionId,
-        Set<String> allowedWorkloads
+        Set<String> allowedWorkloads,
+        ExecutionPackType executionPack
     ) {
         StringBuilder scope = new StringBuilder(" and re.institution_id = :institutionId");
         appendWorkloadScope(scope, allowedWorkloads);
+        appendPackScope(scope, executionPack, "re");
         JdbcClient.StatementSpec statement = bindScope(jdbcClient.sql("""
-            select r.recovery_id, r.execution_id, re.institution_id, re.workload_id, re.purpose_code,
+            select r.recovery_id, r.execution_id, re.institution_id, re.execution_pack,
+                   re.workload_id, re.purpose_code,
                    r.connector_execution_id, r.connector_id, r.observed_status,
                    r.last_observed_external_status, r.recovery_status, r.retry_disposition,
                    r.attempt_count, r.max_attempts, r.next_attempt_at, r.lease_until,
@@ -107,8 +117,10 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
             join runtime.runtime_execution re on re.execution_id = r.execution_id
             where r.recovery_id = :recoveryId
             """ + scope), institutionId, allowedWorkloads).param("recoveryId", recoveryId);
+        statement = bindPack(statement, executionPack);
         RecoveryIncidentRow row = statement.query((rs, rowNum) -> new RecoveryIncidentRow(
             rs.getString("recovery_id"), rs.getString("execution_id"), rs.getString("institution_id"),
+            nullableExecutionPack(rs.getString("execution_pack")),
             rs.getString("workload_id"), rs.getString("purpose_code"),
             rs.getString("connector_execution_id"), rs.getString("connector_id"),
             ConnectorStatus.valueOf(rs.getString("observed_status")),
@@ -130,18 +142,22 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         String recoveryId,
         String operationId,
         String institutionId,
-        Set<String> allowedWorkloads
+        Set<String> allowedWorkloads,
+        ExecutionPackType executionPack
     ) {
         StringBuilder scope = new StringBuilder(" and e.institution_id = :institutionId");
         appendOperationWorkloadScope(scope, allowedWorkloads);
-        return bindScope(jdbcClient.sql("""
+        appendPackScope(scope, executionPack, "re");
+        JdbcClient.StatementSpec statement = bindScope(jdbcClient.sql("""
             select e.operation_id, e.actor_principal_id, e.operation_type, e.outcome,
                    e.reason_code, e.evidence_digest, e.created_at, e.completed_at
             from runtime.recovery_operation_event e
+            join runtime.runtime_execution re on re.execution_id = e.execution_id
             where e.recovery_id = :recoveryId and e.operation_id = :operationId
             """ + scope), institutionId, allowedWorkloads)
             .param("recoveryId", recoveryId)
-            .param("operationId", operationId)
+            .param("operationId", operationId);
+        return bindPack(statement, executionPack)
             .query(OPERATION_MAPPER)
             .optional();
     }
@@ -152,6 +168,7 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         String operationId,
         String institutionId,
         Set<String> allowedWorkloads,
+        ExecutionPackType executionPack,
         String actorPrincipalId,
         RecoveryOperationType operationType,
         OffsetDateTime now
@@ -159,6 +176,7 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         String workloadScope = allowedWorkloads.contains("*")
             ? ""
             : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and re.workload_id in (:allowedWorkloads)";
+        String packScope = executionPack == null ? "" : " and re.execution_pack = :executionPack";
         JdbcClient.StatementSpec statement = jdbcClient.sql("""
             insert into runtime.recovery_operation_event (
                 event_id, operation_id, recovery_id, execution_id, institution_id, workload_id,
@@ -169,7 +187,7 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
             from runtime.external_interaction_recovery r
             join runtime.runtime_execution re on re.execution_id = r.execution_id
             where r.recovery_id = :recoveryId and re.institution_id = :institutionId
-            """ + workloadScope + " on conflict (recovery_id, operation_id) do nothing")
+            """ + workloadScope + packScope + " on conflict (recovery_id, operation_id) do nothing")
             .param("eventId", "rope_" + java.util.UUID.randomUUID())
             .param("operationId", operationId)
             .param("recoveryId", recoveryId)
@@ -180,6 +198,7 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
             statement = statement.param("allowedWorkloads", allowedWorkloads);
         }
+        statement = bindPack(statement, executionPack);
         return statement.update() == 1;
     }
 
@@ -250,14 +269,36 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
         sql.append(allowedWorkloads.isEmpty() ? " and 1 = 0" : " and e.workload_id in (:allowedWorkloads)");
     }
 
+    private void appendPackScope(
+        StringBuilder sql,
+        ExecutionPackType executionPack,
+        String alias
+    ) {
+        if (executionPack != null) {
+            sql.append(" and ").append(alias).append(".execution_pack = :executionPack");
+        }
+    }
+
+    private JdbcClient.StatementSpec bindPack(
+        JdbcClient.StatementSpec statement,
+        ExecutionPackType executionPack
+    ) {
+        return executionPack == null ? statement : statement.param("executionPack", executionPack.name());
+    }
+
     private static ConnectorStatus nullableConnectorStatus(String value) {
         return value == null ? null : ConnectorStatus.valueOf(value);
+    }
+
+    private static ExecutionPackType nullableExecutionPack(String value) {
+        return value == null ? null : ExecutionPackType.valueOf(value);
     }
 
     private record RecoveryIncidentRow(
         String recoveryId,
         String executionId,
         String institutionId,
+        ExecutionPackType executionPack,
         String workloadId,
         String purposeCode,
         String connectorExecutionId,
@@ -278,7 +319,7 @@ public class JdbcRecoveryOperationsPersistence implements RecoveryOperationsPers
     ) {
         RecoveryIncidentDetail toDetail(List<RecoveryOperationEvent> operations) {
             return new RecoveryIncidentDetail(
-                recoveryId, executionId, institutionId, workloadId, purposeCode,
+                recoveryId, executionId, institutionId, executionPack, workloadId, purposeCode,
                 connectorExecutionId, connectorId, observedStatus, lastObservedExternalStatus,
                 recoveryStatus, retryDisposition, attemptCount, maxAttempts, nextAttemptAt,
                 leaseUntil, lastErrorCode, lastStatusQueriedAt, statusQueryEvidenceDigest,
