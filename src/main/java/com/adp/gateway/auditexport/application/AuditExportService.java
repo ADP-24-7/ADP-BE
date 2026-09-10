@@ -60,12 +60,13 @@ public class AuditExportService {
         AuditExportScope scope = persistence.resolveExecutionScope(
             executionId, principal.institutionId(), principal.workloadIds()
         );
-        String scopeJson = scopeJson(scope, reportType, format);
+        String normalizedReason = reason.trim();
+        String scopeJson = scopeJson(scope, reportType, format, normalizedReason);
         String scopeDigest = sha256(scopeJson);
         return persistence.reserve(new AuditExportReservation(
             "exp_" + UUID.randomUUID(), principal.institutionId(), evidence.workloadId(),
             scope.executionPack(), executionId, reportType.name(), format, scopeDigest, scopeJson,
-            principal.principalId(), reason.trim(), idempotencyKey.trim(), requestId, traceId,
+            principal.principalId(), normalizedReason, idempotencyKey.trim(), requestId, traceId,
             OffsetDateTime.now(clock)
         ));
     }
@@ -142,7 +143,8 @@ public class AuditExportService {
     private String scopeJson(
         AuditExportScope scope,
         AuditExportReportType reportType,
-        AuditExportFormat format
+        AuditExportFormat format,
+        String requestReason
     ) {
         try {
             Map<String, String> values = new TreeMap<>();
@@ -151,6 +153,7 @@ public class AuditExportService {
             values.put("format", format.name());
             values.put("institutionId", scope.institutionId());
             values.put("reportType", reportType.name());
+            values.put("requestReason", requestReason);
             values.put("workloadId", scope.workloadId());
             return objectMapper.writeValueAsString(values);
         } catch (JsonProcessingException exception) {

@@ -120,6 +120,14 @@ class AuditExportControllerTests {
                 .content(exportRequest(executionId, "PDF", key)))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.reasonCode").value("AUDIT_EXPORT_IDEMPOTENCY_CONFLICT"));
+
+        mockMvc.perform(post("/api/v1/audit-exports")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(exportRequest(executionId, "CSV", key, "외부 검사기관 제출")))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.reasonCode").value("AUDIT_EXPORT_IDEMPOTENCY_CONFLICT"));
     }
 
     @Test
@@ -222,10 +230,14 @@ class AuditExportControllerTests {
     }
 
     private String exportRequest(String executionId, String format, String key) {
+        return exportRequest(executionId, format, key, "내부 감사 증적 제출");
+    }
+
+    private String exportRequest(String executionId, String format, String key, String reason) {
         return """
             {"executionId":"%s","reportType":"EXECUTION_EVIDENCE","format":"%s",
-             "reason":"내부 감사 증적 제출","idempotencyKey":"%s"}
-            """.formatted(executionId, format, key);
+             "reason":"%s","idempotencyKey":"%s"}
+            """.formatted(executionId, format, reason, key);
     }
 
     private String execute(String marker, String prompt) throws Exception {

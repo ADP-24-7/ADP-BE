@@ -56,3 +56,14 @@ bounded DB bytea를 사용하며, Object Storage Signed URL은 Production Refere
 전체 서비스는 기존 `postgres`를 유지하고, 검증은 `postgres-test` Profile의 빈 DB를 사용한다. 컨테이너 내부 테스트에는
 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=3`, `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`을 적용한다. 이 방식으로
 개발 데이터는 보존하면서 512개 전체 테스트와 Security Negative Matrix를 독립적으로 검증할 수 있다.
+
+CI에서도 전체 `gradle test`와 Negative Matrix를 같은 PostgreSQL에서 연속 실행하면 deterministic Digital Asset
+Idempotency fixture가 두 번째 JVM에서 DB replay되고 process-local 외부 효과 카운터와 어긋난다. 따라서 두 검증은 각각
+fresh PostgreSQL service를 갖는 독립 Job으로 실행하고, 두 Job이 모두 성공한 뒤에만 Package Job을 실행한다.
+
+## 승인 대기 중 Evidence 변경 가능성
+
+현재 Job은 요청 시점의 서버 Scope를 고정하지만 파일 내용은 생성 직전에 최신 privacy-safe Evidence를 다시 조회한다.
+승인 대기 중 Recovery 상태가 바뀌면 고정 Allowlist 범위는 유지되지만 요청 당시 화면과 파일의 상태 값은 달라질 수 있다.
+향후 외부 규제기관 제출처럼 snapshot 일치가 필요한 Report Type을 추가할 때는 요청 시 `sourceEvidenceDigest`를 저장하고,
+생성 시 digest가 달라지면 재승인을 요구해야 한다.
