@@ -25,6 +25,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [Policy Shadow Approval Gate 트러블슈팅](policy-shadow-approval-gate.md)
 - [Policy Current Selection / Rollback 트러블슈팅](policy-current-selection-rollback.md)
 - [Security Hardening 트러블슈팅](security-hardening.md)
+- [Security Negative Matrix와 Evidence Export 트러블슈팅](security-evidence-export.md)
 - [NCP Artifact ContentStore 트러블슈팅](ncp-artifact-content-store.md)
 - [DA Analysis to BE Contract Gap Review 트러블슈팅](da-runtime-contract-gap-review.md)
 - [Recovery Operations 트러블슈팅](recovery-operations.md)

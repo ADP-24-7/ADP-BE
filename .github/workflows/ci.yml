@@ -77,5 +77,10 @@ jobs:
           ADP_DA_ROOT: ${{ github.workspace }}/contract-sources/ADP-DA
         run: gradle --no-daemon test
 
+      - name: Gateway security negative matrix
+        env:
+          ADP_DA_ROOT: ${{ github.workspace }}/contract-sources/ADP-DA
+        run: scripts/run-security-negative-matrix.sh
+
       - name: Package
         run: gradle --no-daemon bootJar

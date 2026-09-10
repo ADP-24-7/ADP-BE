@@ -23,7 +23,8 @@ public class UserHeaderAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/admin/");
+        return !request.getRequestURI().startsWith("/api/admin/")
+            && !request.getRequestURI().startsWith("/api/v1/audit-exports");
     }
 
     @Override

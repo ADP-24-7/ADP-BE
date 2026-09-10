@@ -15,6 +15,13 @@ spring:
       add-mappings: false
 
 adp:
+  audit-export:
+    retention: ${ADP_AUDIT_EXPORT_RETENTION:1h}
+    lease-duration: ${ADP_AUDIT_EXPORT_LEASE_DURATION:30s}
+    max-file-size: ${ADP_AUDIT_EXPORT_MAX_FILE_SIZE:2MB}
+    scheduler:
+      enabled: ${ADP_AUDIT_EXPORT_SCHEDULER_ENABLED:false}
+      fixed-delay: ${ADP_AUDIT_EXPORT_SCHEDULER_FIXED_DELAY:2s}
   recovery:
     lease-duration: ${ADP_RECOVERY_LEASE_DURATION:30s}
     initial-backoff: ${ADP_RECOVERY_INITIAL_BACKOFF:1m}

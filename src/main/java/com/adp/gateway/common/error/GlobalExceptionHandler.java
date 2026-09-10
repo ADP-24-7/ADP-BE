@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
+import com.adp.gateway.auditexport.application.AuditExportException;
 import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
 import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
 import com.adp.gateway.context.application.ExecutionPackInputRejectedException;
@@ -203,6 +204,28 @@ public class GlobalExceptionHandler {
             HttpStatus.NOT_FOUND,
             request
         );
+    }
+
+    @ExceptionHandler(AuditExportException.class)
+    ResponseEntity<ErrorResponse> handleAuditExport(
+        AuditExportException exception,
+        HttpServletRequest request
+    ) {
+        ReasonCode reasonCode = ReasonCode.valueOf(exception.reasonCode());
+        HttpStatus status = switch (reasonCode) {
+            case AUDIT_EXPORT_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case AUDIT_EXPORT_IDEMPOTENCY_CONFLICT,
+                 AUDIT_EXPORT_STATUS_CONFLICT,
+                 AUDIT_EXPORT_MAKER_CHECKER_VIOLATION,
+                 AUDIT_EXPORT_NOT_READY,
+                 AUDIT_EXPORT_EXPIRED,
+                 AUDIT_EXPORT_DIGEST_MISMATCH -> HttpStatus.CONFLICT;
+            case AUDIT_EXPORT_SCOPE_INVALID,
+                 AUDIT_EXPORT_SIZE_LIMIT_EXCEEDED -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case AUDIT_EXPORT_ACCESS_REVOKED -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;
+        };
+        return errorResponse(reasonCode, "Audit export request rejected", status, request);
     }
 
     @ExceptionHandler(RecoveryOperationException.class)

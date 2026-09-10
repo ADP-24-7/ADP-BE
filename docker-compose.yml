@@ -84,10 +84,14 @@ services:
       ADP_NCP_OBJECT_STORAGE_CONNECT_TIMEOUT: "${ADP_NCP_OBJECT_STORAGE_CONNECT_TIMEOUT:-5s}"
       ADP_NCP_OBJECT_STORAGE_READ_TIMEOUT: "${ADP_NCP_OBJECT_STORAGE_READ_TIMEOUT:-30s}"
       ADP_IDEMPOTENCY_RETENTION: "${ADP_IDEMPOTENCY_RETENTION:-72h}"
+      ADP_AUDIT_EXPORT_SCHEDULER_ENABLED: "${ADP_AUDIT_EXPORT_SCHEDULER_ENABLED:-true}"
+      ADP_AUDIT_EXPORT_RETENTION: "${ADP_AUDIT_EXPORT_RETENTION:-1h}"
+      ADP_DA_ROOT: "${ADP_DA_ROOT:-/contracts/ADP-DA}"
     ports:
       - "${ADP_BE_PORT:-8080}:8080"
     volumes:
       - .:/workspace
+      - ../ADP-DA:/contracts/ADP-DA:ro
       - adp-be-gradle-cache:/home/gradle/.gradle
     depends_on:
       postgres:
