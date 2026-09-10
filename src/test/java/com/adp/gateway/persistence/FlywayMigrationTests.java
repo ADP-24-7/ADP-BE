@@ -338,6 +338,23 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v46MigrationCreatesDigitalAssetCurrentStateReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname in ('policy', 'runtime')
+                  and indexname in (
+                    'idx_da_artifact_current_state_scope',
+                    'idx_da_runtime_snapshot_artifact_history'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(2);
+    }
+
+    @Test
     void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
         Integer principalColumnCount = jdbcClient.sql("""
                 select count(*) from information_schema.columns
