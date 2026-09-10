@@ -33,6 +33,11 @@ primary source/action은 정렬 호환성을 위해 유지하되, 전체 `review
 reason은 Policy, Decision, Recovery 값을 모두 합쳐 중복을 제거한다. 분류 단위 테스트에서 세 원인이 동시에
 존재하는 경우의 우선순위와 정보 보존을 고정한다.
 
+Reason 컬럼은 JSON/JSONB가 아니다. `runtime_decision.reason_codes`와
+`execution_pack_policy_evaluation.reason_codes`는 Producer가 comma-separated `varchar`로 저장하고,
+Recovery는 단일 error code를 저장한다. JSON parser를 적용하지 않고 실제 Runtime 저장 후 목록·상세 API가
+`POLICY_INCOMPLETE`를 그대로 반환하는 통합 테스트로 이 표현을 고정한다.
+
 ## 목록 권한과 상세 권한이 달라지는 문제
 
 목록에만 Institution·Workload 조건을 적용하면 추측한 `executionId`로 상세 조회가 가능해질 수 있다. 목록과 상세

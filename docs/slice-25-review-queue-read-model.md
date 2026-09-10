@@ -33,5 +33,8 @@
 `nextActions`가 `RECOVERY -> POST_EXECUTION -> POLICY` 우선순위로 모든 원인과 조사 경로를 보존한다.
 `reasonCodes`도 Policy, Decision, Recovery reason의 중복 제거 합집합이다.
 
+기존 Runtime 저장 계약에 따라 Policy Evaluation과 Runtime Decision reason은 comma-separated `varchar`이고,
+Recovery error는 단일 `varchar`다. Read Model은 이 저장 표현을 typed 문자열 목록으로 변환한다.
+
 응답에는 reason code, digest, typed status와 Trace/Evidence API 경로만 포함하며 prompt, subject, provider
 payload 같은 원문은 포함하지 않는다.

@@ -51,6 +51,7 @@ class ReviewQueueControllerTests {
             .andExpect(jsonPath("$.items[0].reviewSources[0]").value("POLICY"))
             .andExpect(jsonPath("$.items[0].nextAction").value("INSPECT_TRACE"))
             .andExpect(jsonPath("$.items[0].nextActions[0]").value("INSPECT_TRACE"))
+            .andExpect(jsonPath("$.items[0].reasonCodes[0]").value("POLICY_INCOMPLETE"))
             .andExpect(jsonPath("$.totalElements").isNumber());
 
         mockMvc.perform(get("/api/admin/review-queue/{executionId}", executionId)
@@ -59,6 +60,7 @@ class ReviewQueueControllerTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.executionId").value(executionId))
             .andExpect(jsonPath("$.executionPack").value("AI"))
+            .andExpect(jsonPath("$.reasonCodes[0]").value("POLICY_INCOMPLETE"))
             .andExpect(jsonPath("$.tracePath").value("/v1/runtime/executions/" + executionId + "/trace"))
             .andExpect(jsonPath("$.evidencePath")
                 .value("/api/admin/audit/executions/" + executionId + "/evidence"));
