@@ -505,3 +505,17 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Policy Artifact mapping과 Evidence lifecycle을 v1 범위에서 제거
 - [x] Digest tampering, replay, 권한, cross-tenant, Runtime/Current Selection no-change 통합 테스트
 - [ ] FE 관리자 Source/Analysis/Workload drill-down 연결
+
+## Slice 25 Policy Operations Read Model
+
+상세 계약은 [Slice 25 Policy Operations Read Model](slice-25-policy-operations-read-model.md)에서 관리한다.
+
+- [x] Policy Artifact Institution/Workload scoped 목록·검색
+- [x] Execution Pack·Lifecycle Stage·Attention 필터
+- [x] Stable sort와 offset pagination
+- [x] Current Selection 표시
+- [x] Transition·Shadow Evidence History 조회
+- [x] FE 목록→상세→Governance Command 연결
+- [ ] Security Finding 목록·상세
+- [ ] Admin Identity·Role·Permission 조회
+- [ ] Workload Registry·Data Access Decision History 조회
