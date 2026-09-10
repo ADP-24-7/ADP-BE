@@ -1367,6 +1367,28 @@ class FlywayMigrationTests {
         assertThat(indexCount).isEqualTo(2);
     }
 
+    @Test
+    void v43MigrationCreatesRuntimeExecutionPackSnapshotAndReviewQueueIndex() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'execution_pack'
+                """).query(Integer.class).single();
+        String indexDefinition = jdbcClient.sql("""
+                select indexdef from pg_indexes
+                where schemaname = 'runtime'
+                  and tablename = 'runtime_execution'
+                  and indexname = 'idx_runtime_execution_review_queue'
+                """).query(String.class).single();
+
+        assertThat(columnCount).isEqualTo(1);
+        assertThat(indexDefinition)
+            .contains("institution_id")
+            .contains("execution_pack")
+            .contains("REVIEW_REQUIRED");
+    }
+
     private void createDatabase(String sourceUrl, String username, String password, String databaseName)
         throws SQLException {
         try (var connection = DriverManager.getConnection(databaseUrl(sourceUrl, "postgres"), username, password);
