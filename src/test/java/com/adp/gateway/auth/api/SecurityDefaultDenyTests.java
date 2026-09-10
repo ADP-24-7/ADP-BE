@@ -43,11 +43,11 @@ class SecurityDefaultDenyTests {
     }
 
     @Test
-    void deniesUnmatchedEndpointToAuthenticatedServicePrincipal() throws Exception {
+    void doesNotAcceptServiceCredentialOutsideTheStatelessServiceBoundary() throws Exception {
         mockMvc.perform(get("/not-explicitly-matched")
                 .header("X-ADP-API-Key", "local-dev-api-key"))
-            .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_DENIED"));
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.reasonCode").value("AUTHENTICATION_FAILED"));
     }
 
     @Test

@@ -498,6 +498,21 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.
 
+## Slice 27 Auth & Maker-Checker Product Closure
+
+상세 원인과 해결 과정은 [Session Authentication and Maker-Checker Closure](troubleshooting/session-auth-maker-checker.md)에서 관리한다.
+
+- [x] Runtime API Key stateless chain과 Browser Admin session chain 분리
+- [x] BCrypt credential persistence와 로그인 실패 잠금 기반 추가
+- [x] `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`, `/api/auth/csrf`
+- [x] 관리자 mutation CSRF 보호
+- [x] Docker 기본 User Header 인증 비활성화
+- [x] FE 로그인 Gate, 로그아웃, returnTo 복귀
+- [x] 로그인/로그아웃 시 Query cache 격리
+- [x] Auditor Session 요청 → Logout → 별도 Checker Session 승인 → 생성/다운로드 통합 E2E
+- [x] Local Header Test Harness 사용 시에도 Admin Session CSRF 보호 유지
+- [x] 5회 로그인 실패 잠금과 만료 후 복구 검증
+
 ## Reference Evidence — Admin Trace Support
 
 상세 계약은 [Reference Evidence — Admin Trace Support](policy-regulation-evidence-plane.md)에서 관리한다.

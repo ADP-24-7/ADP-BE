@@ -2,6 +2,7 @@ package com.adp.gateway.evidence.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,6 +61,7 @@ class ReferenceEvidenceControllerTests {
         long runtimeCountBefore = count("runtime.runtime_execution");
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
@@ -70,6 +72,7 @@ class ReferenceEvidenceControllerTests {
             .andExpect(jsonPath("$.replayed").value(false));
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
@@ -109,6 +112,7 @@ class ReferenceEvidenceControllerTests {
         ((ObjectNode) tampered.path("evidence").get(0)).put("claim_summary", "tampered");
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
@@ -124,6 +128,7 @@ class ReferenceEvidenceControllerTests {
         bound.put("content_digest", bundleDigest(bound));
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
@@ -139,6 +144,7 @@ class ReferenceEvidenceControllerTests {
         verified.put("content_digest", bundleDigest(verified));
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
@@ -154,6 +160,7 @@ class ReferenceEvidenceControllerTests {
         ObjectNode bundle = bundle("REF-SCOPE-" + suffix, "other-workload");
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "operator", "institution-a", Set.of("other-workload"), AdpRole.OPERATOR
                 )))
@@ -162,6 +169,7 @@ class ReferenceEvidenceControllerTests {
             .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf())
                 .with(authentication(principal(
                     "writer", "institution-a", Set.of("customer_summary"), AdpRole.PRIVILEGED_OPERATOR
                 )))
