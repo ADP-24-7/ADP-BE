@@ -15,6 +15,7 @@ import com.adp.gateway.operations.domain.AdminIdentityDetail;
 import com.adp.gateway.operations.domain.AdminIdentityItem;
 import com.adp.gateway.operations.domain.AdminIdentityPage;
 import com.adp.gateway.operations.domain.AdminIdentityPermission;
+import com.adp.gateway.operations.domain.WorkloadRegistryStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +42,7 @@ public class JdbcAdminIdentityReadAdapter implements AdminIdentityReadPort {
         int size
     ) {
         StringBuilder where = new StringBuilder(" where p.institution_id = :institutionId");
+        appendPrincipalWorkloadScope(where, allowedWorkloads);
         if (principalType != null) where.append(" and p.principal_type = :principalType");
         if (role != null) {
             where.append(" and exists (select 1 from auth_principal_role rf where rf.principal_id = p.principal_id and rf.role_name = :role)");
@@ -104,6 +106,7 @@ public class JdbcAdminIdentityReadAdapter implements AdminIdentityReadPort {
             from auth_principal p
             where p.principal_id = :principalId
               and p.institution_id = :institutionId
+            """ + principalWorkloadScope(allowedWorkloads) + """
             """)
             .param("principalId", principalId)
             .param("institutionId", institutionId);
@@ -113,13 +116,19 @@ public class JdbcAdminIdentityReadAdapter implements AdminIdentityReadPort {
 
         JdbcClient.StatementSpec permissionStatement = jdbcClient.sql("""
             select g.workload_id, coalesce(w.display_name, g.workload_id) as workload_name,
-                   coalesce(w.enabled, false) as workload_enabled, g.action_name, g.purpose,
+                   case
+                       when w.workload_id is null then 'UNRESOLVED'
+                       when w.enabled then 'ENABLED'
+                       else 'DISABLED'
+                   end as workload_registry_status,
+                   g.action_name, g.purpose,
                    g.subject_type, count(distinct g.subject_id) as subject_grant_count
             from auth_subject_grant g
             left join workload_registry w on w.workload_id = g.workload_id
             where g.principal_id = :principalId
             """ + visibleWorkloadClause(allowedWorkloads, "g.workload_id") + """
-            group by g.workload_id, w.display_name, w.enabled, g.action_name, g.purpose, g.subject_type
+            group by g.workload_id, w.workload_id, w.display_name, w.enabled,
+                     g.action_name, g.purpose, g.subject_type
             order by g.workload_id, g.action_name, g.purpose, g.subject_type
             """)
             .param("principalId", principalId);
@@ -127,7 +136,8 @@ public class JdbcAdminIdentityReadAdapter implements AdminIdentityReadPort {
         List<AdminIdentityPermission> permissions = permissionStatement.query((rs, rowNum) ->
             new AdminIdentityPermission(
                 rs.getString("workload_id"), rs.getString("workload_name"),
-                rs.getBoolean("workload_enabled"), rs.getString("action_name"),
+                WorkloadRegistryStatus.valueOf(rs.getString("workload_registry_status")),
+                rs.getString("action_name"),
                 rs.getString("purpose"), rs.getString("subject_type"),
                 rs.getInt("subject_grant_count")
             )
@@ -158,8 +168,25 @@ public class JdbcAdminIdentityReadAdapter implements AdminIdentityReadPort {
     private String visibleWorkloadClause(Set<String> allowedWorkloads, String column) {
         if (allowedWorkloads.contains("*")) return "";
         return allowedWorkloads.isEmpty()
-            ? " and " + column + " = '*'"
-            : " and (" + column + " = '*' or " + column + " in (:allowedWorkloads))";
+            ? " and 1 = 0\n"
+            : " and (" + column + " = '*' or " + column + " in (:allowedWorkloads))\n";
+    }
+
+    private void appendPrincipalWorkloadScope(StringBuilder sql, Set<String> allowedWorkloads) {
+        sql.append(principalWorkloadScope(allowedWorkloads));
+    }
+
+    private String principalWorkloadScope(Set<String> allowedWorkloads) {
+        if (allowedWorkloads.contains("*")) return "";
+        if (allowedWorkloads.isEmpty()) return " and 1 = 0";
+        return """
+             and exists (
+                 select 1
+                 from auth_principal_workload visibility
+                 where visibility.principal_id = p.principal_id
+                   and (visibility.workload_id = '*' or visibility.workload_id in (:allowedWorkloads))
+             )
+            """;
     }
 
     private JdbcClient.StatementSpec bindAllowedWorkloads(

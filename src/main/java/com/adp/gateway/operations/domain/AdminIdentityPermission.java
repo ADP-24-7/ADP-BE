@@ -3,7 +3,7 @@ package com.adp.gateway.operations.domain;
 public record AdminIdentityPermission(
     String workloadId,
     String workloadName,
-    boolean workloadEnabled,
+    WorkloadRegistryStatus workloadRegistryStatus,
     String actionName,
     String purpose,
     String subjectType,

@@ -43,6 +43,23 @@ Principal 목록과 상세는 `institution_id`를 SQL 조건으로 사용한다.
 호출 Principal의 허용 Workload 조건을 SQL에 포함하며, 범위 밖 상세는 `ADMIN_IDENTITY_NOT_FOUND` 404로
 처리한다. API Key 원문 저장 정책과 기존 Runtime Authorization 경로는 변경하지 않는다.
 
+Identity row 자체도 대상 Principal의 Workload mapping과 호출자의 허용 Workload가 교차할 때만 조회한다.
+이 predicate는 목록 select와 count, 상세에 동일하게 적용한다. 호출자가 `*`이면 Institution 범위를 사용하고,
+제한된 집합이면 대상의 `*` 또는 교집합을 요구하며, 빈 Workload 집합이면 목록 0건과 상세 404로 fail-closed한다.
+반환 배열만 잘라내고 Identity 메타데이터를 남기는 방식은 사용하지 않는다.
+
+## Workload 비활성과 Registry 미등록을 구분한다
+
+### 문제
+
+`left join workload_registry` 결과에 `coalesce(enabled, false)`를 적용하면 실제 `enabled=false`인 Workload와
+Registry row가 없는 역사적 Workload를 구분할 수 없다. FE가 둘을 모두 미등록으로 표시하면 운영 판단이 틀어진다.
+
+### 해결
+
+BE가 `workloadRegistryStatus`를 `ENABLED`, `DISABLED`, `UNRESOLVED` 중 하나로 계산해 반환한다. FE는 이 값을
+추측하지 않고 각각 활성, 비활성, Registry 미등록 상태로 표시한다.
+
 ## Fixture grant 개수를 단일 값으로 가정하지 않는다
 
 ### 문제
