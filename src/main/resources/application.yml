@@ -1,6 +1,8 @@
 spring:
   application:
     name: adp-be
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/adp}
     username: ${SPRING_DATASOURCE_USERNAME:adp}
@@ -79,6 +81,13 @@ adp:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  servlet:
+    session:
+      timeout: ${ADP_ADMIN_SESSION_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${ADP_ADMIN_SESSION_COOKIE_SECURE:false}
 
 springdoc:
   swagger-ui:

@@ -1,6 +1,5 @@
 package com.adp.gateway.auth.api;
 
-import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -16,14 +15,6 @@ public class AuthContextController {
     public ResponseEntity<AuthContextResponse> context(Authentication authentication) {
         AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
 
-        return ResponseEntity.ok(new AuthContextResponse(
-            principal.principalId(),
-            principal.principalType().name(),
-            principal.displayName(),
-            principal.institutionId(),
-            principal.roles().stream().map(AdpRole::name).collect(java.util.stream.Collectors.toSet()),
-            principal.workloadIds(),
-            principal.subjectAuthorizationRequired()
-        ));
+        return ResponseEntity.ok(AuthContextResponse.from(principal));
     }
 }
