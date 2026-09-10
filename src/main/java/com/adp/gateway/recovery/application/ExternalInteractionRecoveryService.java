@@ -25,6 +25,7 @@ public class ExternalInteractionRecoveryService {
     private final ExternalInteractionRecoveryPersistence persistence;
     private final ExternalStatusQueryResolver statusQueryResolver;
     private final ExternalRetryResolver retryResolver;
+    private final ExternalReconciliationEvidenceResolver reconciliationEvidenceResolver;
     private final RecoveryBackoffPolicy backoffPolicy;
     private final Duration leaseDuration;
     private final Clock clock;
@@ -34,6 +35,7 @@ public class ExternalInteractionRecoveryService {
         ExternalInteractionRecoveryPersistence persistence,
         ExternalStatusQueryResolver statusQueryResolver,
         ExternalRetryResolver retryResolver,
+        ExternalReconciliationEvidenceResolver reconciliationEvidenceResolver,
         RecoveryBackoffPolicy backoffPolicy,
         @Value("${adp.recovery.lease-duration:30s}") Duration leaseDuration,
         Clock clock,
@@ -42,6 +44,7 @@ public class ExternalInteractionRecoveryService {
         this.persistence = persistence;
         this.statusQueryResolver = statusQueryResolver;
         this.retryResolver = retryResolver;
+        this.reconciliationEvidenceResolver = reconciliationEvidenceResolver;
         this.backoffPolicy = backoffPolicy;
         if (leaseDuration.isNegative() || leaseDuration.isZero()) {
             throw new IllegalArgumentException("Recovery lease duration must be positive");
@@ -166,6 +169,7 @@ public class ExternalInteractionRecoveryService {
         ExternalStatusQueryResult result,
         OffsetDateTime now
     ) {
+        reconciliationEvidenceResolver.reconcile(recovery, result);
         requireLease(persistence.reconcile(recovery.recoveryId(), workerId, result, now));
         observability.runtimeExecution(RuntimeExecutionStatus.EXTERNALLY_RECONCILED);
         record(RecoveryOutcome.RECONCILED);

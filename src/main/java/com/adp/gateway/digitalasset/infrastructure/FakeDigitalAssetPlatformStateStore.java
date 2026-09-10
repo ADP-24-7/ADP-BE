@@ -17,6 +17,8 @@ public class FakeDigitalAssetPlatformStateStore {
 
     private final ConcurrentMap<String, ConnectorStatus> states = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, FakeDigitalAssetExecutionObservation> executions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, FakeDigitalAssetRecoveryObservation> recoveries = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Integer> externalEffectCounts = new ConcurrentHashMap<>();
 
     public void record(String providerCorrelationKey, ConnectorStatus status) {
         states.put(providerCorrelationKey, status);
@@ -54,5 +56,25 @@ public class FakeDigitalAssetPlatformStateStore {
 
     public Optional<FakeDigitalAssetExecutionObservation> findExecution(String externalReference) {
         return Optional.ofNullable(executions.get(externalReference));
+    }
+
+    public void recordExternalEffect(String providerCorrelationKey) {
+        externalEffectCounts.merge(providerCorrelationKey, 1, Integer::sum);
+    }
+
+    public int externalEffectCount(String providerCorrelationKey) {
+        return externalEffectCounts.getOrDefault(providerCorrelationKey, 0);
+    }
+
+    public void recordRecoveryObservation(
+        String providerCorrelationKey,
+        java.util.Map<String, Object> requestPayload,
+        ExternalExecutionResult result
+    ) {
+        recoveries.put(providerCorrelationKey, new FakeDigitalAssetRecoveryObservation(requestPayload, result));
+    }
+
+    Optional<FakeDigitalAssetRecoveryObservation> findRecoveryObservation(String providerCorrelationKey) {
+        return Optional.ofNullable(recoveries.get(providerCorrelationKey));
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.adp.gateway.recovery.application.ExternalInteractionRecoveryService;
 import com.adp.gateway.audit.application.AuditReadPort;
+import com.adp.gateway.digitalasset.infrastructure.FakeDigitalAssetPlatformStateStore;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -39,6 +40,9 @@ class DigitalAssetThinE2ETests {
 
     @Autowired
     private AuditReadPort auditReadPort;
+
+    @Autowired
+    private FakeDigitalAssetPlatformStateStore platformStateStore;
 
     @Test
     void executesTokenizedAssetPurchaseWithSettlementAndReconciliationEvidence() throws Exception {
@@ -423,14 +427,62 @@ class DigitalAssetThinE2ETests {
             .param("executionId", executionId)
             .query(SettlementState.class)
             .single();
-        assertThat(settlement.settlementStatus()).isEqualTo("SENT_UNKNOWN");
-        assertThat(settlement.reconciliationResult()).isEqualTo("WAIT");
+        assertThat(settlement.settlementStatus()).isEqualTo("SETTLED");
+        assertThat(settlement.reconciliationResult()).isEqualTo("RECOVERED");
+        Integer recoveredEvidence = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId and status = 'VERIFIED'
+                  and evidence_source_type = 'INDEPENDENT_EXTERNAL'
+                  and external_status = 'SETTLED' and receipt_status = 'SUCCESS'
+                  and finality_status = 'FINALIZED'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(recoveredEvidence).isEqualTo(1);
+        assertThat(platformStateStore.externalEffectCount(providerRequestId(executionId))).isEqualTo(1);
         String recoveredSnapshotDigest = jdbcClient.sql("""
                 select snapshot_digest from runtime.digital_asset_runtime_snapshot
                 where execution_id = :executionId
                 """)
             .param("executionId", executionId).query(String.class).single();
         assertThat(recoveredSnapshotDigest).isEqualTo(pinnedSnapshotDigest);
+    }
+
+    @Test
+    void failsWhenIndependentReceiptConfirmsExecutionFailure() throws Exception {
+        String response = assetRequest(token(), "customer-100", "asset-execution-failed")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("FAILED"))
+            .andExpect(jsonPath("$.connectorStatus").value("ACKNOWLEDGED"))
+            .andExpect(jsonPath("$.output.deliveryStatus").value("WITHHELD"))
+            .andReturn().getResponse().getContentAsString();
+        String executionId = response.replaceAll(".*\\\"executionId\\\":\\\"([^\\\"]+)\\\".*", "$1");
+
+        Integer failedTransaction = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_transaction
+                where execution_id = :executionId and settlement_status = 'FAILED'
+                  and reconciliation_result = 'WAIT' and external_transaction_id is not null
+                  and provider_response_digest is not null
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        Integer failedEvidence = jdbcClient.sql("""
+                select count(*) from runtime.digital_asset_post_execution_evidence
+                where execution_id = :executionId and status = 'FAILED'
+                  and evidence_source_type = 'INDEPENDENT_EXTERNAL'
+                  and external_status = 'FAILED' and receipt_status = 'FAILED'
+                  and finality_status = 'FINALIZED'
+                """)
+            .param("executionId", executionId).query(Integer.class).single();
+        assertThat(failedTransaction).isEqualTo(1);
+        assertThat(failedEvidence).isEqualTo(1);
+        assertThat(platformStateStore.externalEffectCount(providerRequestId(executionId))).isEqualTo(1);
+
+        mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
+                .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("FAILED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.status").value("FAILED"))
+            .andExpect(jsonPath("$.digitalAssetPostExecutionEvidence.evidenceSourceType")
+                .value("INDEPENDENT_EXTERNAL"));
     }
 
     @Test
@@ -588,6 +640,15 @@ class DigitalAssetThinE2ETests {
                 """)
             .param("requestId", requestId)
             .query(Integer.class)
+            .single();
+    }
+
+    private String providerRequestId(String executionId) {
+        return jdbcClient.sql("""
+                select provider_request_id from runtime.provider_request where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(String.class)
             .single();
     }
 

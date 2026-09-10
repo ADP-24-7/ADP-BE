@@ -103,6 +103,11 @@ Source of Truth로 사용한다. 아래 완료 항목은 PR #14~#17의 역사적
 - [x] DA-P0-8 Transaction/Receipt/Finality/Transfer Resolver와 POST_EXECUTION Evidence
 - [x] DA-P0-8 Approved/Requested/Executed digest re-binding과 Runtime Trace 노출
 - [x] DA-P0-8 typed Provider `SENT_UNKNOWN` 및 외부 성공 후 Local 실패 Recovery 연결
+- [x] Digital Asset Local Product 6-Case E2E Closure
+  - Branch: `feature/digital-asset-runtime-6-case-e2e`
+  - DA PR #31의 고정 JSON Fixture를 실제 `/v1/runtime/executions` 경로로 실행
+  - BLOCK 2종 External Effect 0, 실패 receipt, SENT_UNKNOWN reconcile-first, duplicate replay 검증
+  - independent recovered evidence와 PostgreSQL/Runtime Trace 최종 상태 연결
 - [x] DA Industry Analysis to BE Runtime Contract Gap Review
   - Branch: `feature/da-runtime-contract-gap-review`
   - Decision: 현재 P0-3~8 계약 유지, semantic asset classification은 versioned Handoff 전까지 미도입
