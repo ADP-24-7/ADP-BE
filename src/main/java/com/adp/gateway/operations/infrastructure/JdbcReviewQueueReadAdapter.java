@@ -1,17 +1,14 @@
 package com.adp.gateway.operations.infrastructure;
 
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.operations.application.ReviewQueueReadPort;
-import com.adp.gateway.operations.domain.ReviewNextAction;
 import com.adp.gateway.operations.domain.ReviewQueueDetail;
 import com.adp.gateway.operations.domain.ReviewQueueItem;
 import com.adp.gateway.operations.domain.ReviewQueuePage;
-import com.adp.gateway.operations.domain.ReviewSource;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -48,7 +45,7 @@ public class JdbcReviewQueueReadAdapter implements ReviewQueueReadPort {
         String from = fromClause();
         JdbcClient.StatementSpec select = bind(jdbcClient.sql("""
             select re.execution_id, re.request_id, re.trace_id, re.institution_id,
-                   coalesce(re.execution_pack, 'COMMON') as execution_pack,
+                   re.execution_pack,
                    re.workload_id, re.purpose_code, re.status as runtime_status, re.final_action,
                    pe.reason_codes as policy_reason_codes, rd.reason_codes as decision_reason_codes,
                    rr.recovery_id, rr.recovery_status, rr.last_error_code,
@@ -59,16 +56,17 @@ public class JdbcReviewQueueReadAdapter implements ReviewQueueReadPort {
             .param("size", size)
             .param("offset", page * size);
         List<ReviewQueueItem> items = select.query((rs, rowNum) -> {
-            ReviewSource source = source(
-                rs.getString("recovery_status"), rs.getString("post_execution_evidence_status")
+            var classification = ReviewQueueClassifier.classify(
+                rs.getString("recovery_status"), rs.getString("post_execution_evidence_status"),
+                rs.getString("policy_reason_codes"), rs.getString("decision_reason_codes"),
+                rs.getString("last_error_code")
             );
             return new ReviewQueueItem(
                 rs.getString("execution_id"), rs.getString("request_id"), rs.getString("trace_id"),
                 rs.getString("institution_id"), ExecutionPackType.valueOf(rs.getString("execution_pack")),
                 rs.getString("workload_id"), rs.getString("purpose_code"), rs.getString("runtime_status"),
-                rs.getString("final_action"), source, nextAction(source),
-                reasonCodes(rs.getString("policy_reason_codes"), rs.getString("decision_reason_codes"),
-                    rs.getString("last_error_code")),
+                rs.getString("final_action"), classification.primarySource(), classification.sources(),
+                classification.primaryAction(), classification.actions(), classification.reasonCodes(),
                 rs.getString("recovery_id"), rs.getString("recovery_status"),
                 rs.getObject("created_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class)
@@ -88,7 +86,7 @@ public class JdbcReviewQueueReadAdapter implements ReviewQueueReadPort {
         appendWorkloadScope(scope, allowedWorkloads);
         JdbcClient.StatementSpec statement = jdbcClient.sql("""
             select re.execution_id, re.request_id, re.trace_id, re.institution_id,
-                   coalesce(re.execution_pack, 'COMMON') as execution_pack,
+                   re.execution_pack,
                    re.workload_id, re.purpose_code, re.status as runtime_status, re.final_action,
                    pe.reason_codes as policy_reason_codes, rd.reason_codes as decision_reason_codes,
                    pe.profile_id, pe.profile_version, pe.profile_digest,
@@ -102,16 +100,17 @@ public class JdbcReviewQueueReadAdapter implements ReviewQueueReadPort {
             .param("institutionId", institutionId);
         statement = bindWorkloads(statement, allowedWorkloads);
         return statement.query((rs, rowNum) -> {
-            ReviewSource source = source(
-                rs.getString("recovery_status"), rs.getString("post_execution_evidence_status")
+            var classification = ReviewQueueClassifier.classify(
+                rs.getString("recovery_status"), rs.getString("post_execution_evidence_status"),
+                rs.getString("policy_reason_codes"), rs.getString("decision_reason_codes"),
+                rs.getString("last_error_code")
             );
             return new ReviewQueueDetail(
                 rs.getString("execution_id"), rs.getString("request_id"), rs.getString("trace_id"),
                 rs.getString("institution_id"), ExecutionPackType.valueOf(rs.getString("execution_pack")),
                 rs.getString("workload_id"), rs.getString("purpose_code"), rs.getString("runtime_status"),
-                rs.getString("final_action"), source, nextAction(source),
-                reasonCodes(rs.getString("policy_reason_codes"), rs.getString("decision_reason_codes"),
-                    rs.getString("last_error_code")),
+                rs.getString("final_action"), classification.primarySource(), classification.sources(),
+                classification.primaryAction(), classification.actions(), classification.reasonCodes(),
                 rs.getString("profile_id"), rs.getString("profile_version"), rs.getString("profile_digest"),
                 rs.getString("connector_status"), rs.getString("response_guard_status"),
                 rs.getString("controlled_delivery_status"), rs.getString("recovery_id"),
@@ -163,36 +162,6 @@ public class JdbcReviewQueueReadAdapter implements ReviewQueueReadPort {
             return statement.param("allowedWorkloads", allowedWorkloads);
         }
         return statement;
-    }
-
-    private ReviewSource source(String recoveryStatus, String postExecutionStatus) {
-        if ("MANUAL_REVIEW".equals(recoveryStatus) || "EXHAUSTED".equals(recoveryStatus)) {
-            return ReviewSource.RECOVERY;
-        }
-        if ("REVIEW_REQUIRED".equals(postExecutionStatus)) return ReviewSource.POST_EXECUTION;
-        return ReviewSource.POLICY;
-    }
-
-    private ReviewNextAction nextAction(ReviewSource source) {
-        return switch (source) {
-            case RECOVERY -> ReviewNextAction.RECONCILE_EXTERNAL_STATUS;
-            case POST_EXECUTION -> ReviewNextAction.INSPECT_POST_EXECUTION_EVIDENCE;
-            case POLICY -> ReviewNextAction.INSPECT_TRACE;
-        };
-    }
-
-    private List<String> reasonCodes(String policyReasons, String decisionReasons, String recoveryError) {
-        String selected = firstNonBlank(policyReasons, decisionReasons, recoveryError);
-        if (selected == null) return List.of();
-        return Arrays.stream(selected.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isBlank())
-            .distinct()
-            .toList();
-    }
-
-    private String firstNonBlank(String... values) {
-        return Arrays.stream(values).filter(value -> value != null && !value.isBlank()).findFirst().orElse(null);
     }
 
     private List<String> jsonList(String value) {

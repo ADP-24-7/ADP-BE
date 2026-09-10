@@ -21,6 +21,17 @@ V43에서 `runtime_execution.execution_pack` snapshot을 추가하고 Destinatio
 고정된 Destination Profile을 기준으로 backfill하며, caller가 전달한 값으로 저장 상태를 재해석하지 않는다.
 
 통합 테스트는 Pack Policy Evaluation 전에 종료되는 민감 AI 입력도 `executionPack=AI`로 검색되는지 검증한다.
+V43은 과거 `REVIEW_REQUIRED` 실행의 Pack을 backfill하지 못하면 CHECK 생성 단계에서 실패한다. `NULL`을
+`COMMON`으로 바꾸지 않으며, upgrade test에서 AI와 Digital Asset 과거 실행의 backfill을 검증한다.
+
+## 복수 Review 원인이 단일 원인으로 축약된 문제
+
+초기 projection은 Recovery, Post-execution, Policy 순서로 첫 원인만 선택하고 reason도 첫 non-blank 값만
+반환했다. 복구와 실행 결과 검토가 동시에 필요한 실행에서 운영자가 일부 조사 경로를 놓칠 수 있었다.
+
+primary source/action은 정렬 호환성을 위해 유지하되, 전체 `reviewSources`와 `nextActions`를 추가했다.
+reason은 Policy, Decision, Recovery 값을 모두 합쳐 중복을 제거한다. 분류 단위 테스트에서 세 원인이 동시에
+존재하는 경우의 우선순위와 정보 보존을 고정한다.
 
 ## 목록 권한과 상세 권한이 달라지는 문제
 

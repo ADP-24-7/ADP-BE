@@ -48,7 +48,9 @@ class ReviewQueueControllerTests {
             .andExpect(jsonPath("$.items[0].executionPack").value("AI"))
             .andExpect(jsonPath("$.items[0].runtimeStatus").value("REVIEW_REQUIRED"))
             .andExpect(jsonPath("$.items[0].reviewSource").value("POLICY"))
+            .andExpect(jsonPath("$.items[0].reviewSources[0]").value("POLICY"))
             .andExpect(jsonPath("$.items[0].nextAction").value("INSPECT_TRACE"))
+            .andExpect(jsonPath("$.items[0].nextActions[0]").value("INSPECT_TRACE"))
             .andExpect(jsonPath("$.totalElements").isNumber());
 
         mockMvc.perform(get("/api/admin/review-queue/{executionId}", executionId)

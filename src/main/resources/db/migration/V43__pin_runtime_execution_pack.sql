@@ -10,7 +10,10 @@ where execution.destination_profile_id = profile.destination_profile_id
 
 alter table runtime.runtime_execution
     add constraint chk_runtime_execution_pack
-    check (execution_pack is null or execution_pack in ('COMMON', 'AI', 'DIGITAL_ASSET', 'SAAS'));
+    check (
+        (execution_pack is null or execution_pack in ('COMMON', 'AI', 'DIGITAL_ASSET', 'SAAS'))
+        and (status <> 'REVIEW_REQUIRED' or execution_pack is not null)
+    );
 
 create index idx_runtime_execution_review_queue
     on runtime.runtime_execution (institution_id, execution_pack, updated_at desc, execution_id desc)

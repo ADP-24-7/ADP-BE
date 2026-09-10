@@ -29,5 +29,9 @@
 - `RECOVERY`: `MANUAL_REVIEW` 또는 `EXHAUSTED` Recovery
 - `POST_EXECUTION`: Digital Asset 결과 Evidence 검토 필요
 
+`reviewSource`와 `nextAction`은 정렬을 위한 primary 값이다. 동일 실행에 원인이 겹치면 `reviewSources`와
+`nextActions`가 `RECOVERY -> POST_EXECUTION -> POLICY` 우선순위로 모든 원인과 조사 경로를 보존한다.
+`reasonCodes`도 Policy, Decision, Recovery reason의 중복 제거 합집합이다.
+
 응답에는 reason code, digest, typed status와 Trace/Evidence API 경로만 포함하며 prompt, subject, provider
 payload 같은 원문은 포함하지 않는다.

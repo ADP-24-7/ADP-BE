@@ -16,7 +16,9 @@ public record ReviewQueueDetail(
     String runtimeStatus,
     String finalAction,
     ReviewSource reviewSource,
+    List<ReviewSource> reviewSources,
     ReviewNextAction nextAction,
+    List<ReviewNextAction> nextActions,
     List<String> reasonCodes,
     String policyProfileId,
     String policyProfileVersion,
@@ -36,6 +38,8 @@ public record ReviewQueueDetail(
     OffsetDateTime updatedAt
 ) {
     public ReviewQueueDetail {
+        reviewSources = List.copyOf(reviewSources);
+        nextActions = List.copyOf(nextActions);
         reasonCodes = List.copyOf(reasonCodes);
         mismatchedFields = List.copyOf(mismatchedFields);
     }

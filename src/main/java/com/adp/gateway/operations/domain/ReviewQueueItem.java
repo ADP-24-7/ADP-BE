@@ -16,7 +16,9 @@ public record ReviewQueueItem(
     String runtimeStatus,
     String finalAction,
     ReviewSource reviewSource,
+    List<ReviewSource> reviewSources,
     ReviewNextAction nextAction,
+    List<ReviewNextAction> nextActions,
     List<String> reasonCodes,
     String recoveryId,
     String recoveryStatus,
@@ -24,6 +26,8 @@ public record ReviewQueueItem(
     OffsetDateTime updatedAt
 ) {
     public ReviewQueueItem {
+        reviewSources = List.copyOf(reviewSources);
+        nextActions = List.copyOf(nextActions);
         reasonCodes = List.copyOf(reasonCodes);
     }
 }
