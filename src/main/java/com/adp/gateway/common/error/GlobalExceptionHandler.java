@@ -21,6 +21,8 @@ import com.adp.gateway.runtime.application.DuplicateRuntimeExecutionException;
 import com.adp.gateway.runtime.application.IdempotencyKeyConflictException;
 import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
+import com.adp.gateway.operations.application.SecurityFindingNotFoundException;
+import com.adp.gateway.operations.application.InvalidSecurityFindingSearchException;
 import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -66,6 +68,7 @@ public class GlobalExceptionHandler {
         HttpMessageNotReadableException.class,
         MethodArgumentTypeMismatchException.class,
         InvalidAuditSearchException.class,
+        InvalidSecurityFindingSearchException.class,
         InvalidRuntimeHeaderException.class
     })
     ResponseEntity<ErrorResponse> handleMalformedRequest(Exception exception, HttpServletRequest request) {
@@ -170,6 +173,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.RUNTIME_EXECUTION_NOT_FOUND,
             "Runtime execution not found",
+            HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(SecurityFindingNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleSecurityFindingNotFound(
+        SecurityFindingNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.SECURITY_FINDING_NOT_FOUND,
+            "Security finding not found",
             HttpStatus.NOT_FOUND,
             request
         );

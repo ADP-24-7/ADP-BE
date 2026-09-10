@@ -289,6 +289,36 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v44MigrationCreatesSecurityFindingReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'runtime'
+                  and indexname in (
+                    'idx_runtime_execution_security_finding_scope',
+                    'idx_response_sensitive_finding_created'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(2);
+
+        var packConstraint = jdbcClient.sql("""
+                select pg_get_constraintdef(oid) as definition, convalidated
+                from pg_constraint
+                where conname = 'chk_runtime_execution_pack'
+                """)
+            .query((rs, rowNum) -> new Object[] {
+                rs.getString("definition"), rs.getBoolean("convalidated")
+            })
+            .single();
+        assertThat((String) packConstraint[0])
+            .contains("status", "REVIEW_REQUIRED", "execution_pack IS NOT NULL");
+        assertThat((boolean) packConstraint[1]).isTrue();
+    }
+
+    @Test
     void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
         Integer principalColumnCount = jdbcClient.sql("""
                 select count(*) from information_schema.columns

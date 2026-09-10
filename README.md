@@ -127,4 +127,5 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [BE-11 Observability Operations](docs/be-11-observability-operations.md)
 - [Policy · Regulation · Evidence Plane](docs/policy-regulation-evidence-plane.md)
 - [Slice 25 Policy Operations Read Model](docs/slice-25-policy-operations-read-model.md)
+- [Slice 25 Security Finding Read Model](docs/slice-25-security-finding-read-model.md)
 - [Troubleshooting Index](docs/troubleshooting/index.md)
