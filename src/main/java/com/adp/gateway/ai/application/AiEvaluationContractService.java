@@ -68,12 +68,13 @@ public class AiEvaluationContractService {
     public AiEvaluationContractSnapshot freeze(AuthPrincipal principal, String runId) {
         authorize(principal);
         var run = run(runId);
+        LocalDate retrievalAsOfDate = LocalDate.now(clock);
         // The current freezer prepares one case per immutable run. Never silently ignore new cases.
         require(run.cases().size() == 1, "AI_CASE_SET_NOT_SUPPORTED");
         var evaluationCase = run.cases().values().iterator().next();
         var retrieved = retrieval.retrieve(new DataAccessRequest("evaluation-contract-freeze",
             "evaluation-contract-freeze", "customer_summary", "CUSTOMER_SUPPORT",
-            new SubjectRef("customer", subjectId(evaluationCase.datasetRowRef()))));
+            new SubjectRef("customer", subjectId(evaluationCase.datasetRowRef())), retrievalAsOfDate));
         var context = prompts.merge(contexts.build(retrieved), Map.of("prompt", AiEvaluationPrompt.TEXT), null);
         AiEvaluationContractSnapshot candidate = null;
         for (var model : models.profiles()) {
@@ -82,7 +83,7 @@ public class AiEvaluationContractService {
             var policy = policies.load(new PolicySelectionContext(context.workloadId(), context.purpose(),
                 model.profileId(), policyContext.processingContexts(), policyContext.runtimeDataClasses(),
                 principal.institutionId(), destination.packType()));
-            var current = snapshot(run, model, retrieved, context, policy, destination);
+            var current = snapshot(run, model, retrieved, context, policy, destination, retrievalAsOfDate);
             if (candidate != null) require(candidate.equals(current), "AI_CROSS_MODEL_CONDITIONS_MISMATCH");
             candidate = current;
         }
@@ -105,11 +106,20 @@ public class AiEvaluationContractService {
     public void validateAndBind(String executionId, AiEvaluationReference reference, RetrievalResult retrieved,
         CanonicalContext context, PolicySnapshot policy, RuntimeDecision decision, TransformResult transformed,
         DestinationProfile destination, ProviderRequestPayload request) {
+        validateAndBind(executionId, reference, retrieved, context, policy, decision, transformed,
+            destination, request, retrievalAsOfDate(reference.evaluationRunId()));
+    }
+
+    public void validateAndBind(String executionId, AiEvaluationReference reference, RetrievalResult retrieved,
+        CanonicalContext context, PolicySnapshot policy, RuntimeDecision decision, TransformResult transformed,
+        DestinationProfile destination, ProviderRequestPayload request, LocalDate retrievalAsOfDate) {
         var run = run(reference.evaluationRunId());
         var frozen = required(run.evaluationRunId());
+        require(frozenRetrievalAsOfDate(frozen).equals(retrievalAsOfDate),
+            "AI_RETRIEVAL_AS_OF_DATE_MISMATCH");
         var model = models.findByProfileId(destination.providerProfileId())
             .orElseThrow(() -> mismatch("AI_MODEL_NOT_APPROVED"));
-        var live = snapshot(run, model, retrieved, context, policy, destination);
+        var live = snapshot(run, model, retrieved, context, policy, destination, retrievalAsOfDate);
         require(frozen.equals(live), "AI_FIXED_CONDITIONS_MISMATCH");
         require(run.cases().containsKey(reference.evalCaseId())
             && run.contractDigest().equals(reference.evaluationContractDigest())
@@ -151,6 +161,12 @@ public class AiEvaluationContractService {
 
     public AiEvaluationContractSnapshot snapshot(AiEvaluationRunDefinition run, AiModelProfile model,
         RetrievalResult retrieved, CanonicalContext context, PolicySnapshot policy, DestinationProfile destination) {
+        return snapshot(run, model, retrieved, context, policy, destination, LocalDate.now(clock));
+    }
+
+    AiEvaluationContractSnapshot snapshot(AiEvaluationRunDefinition run, AiModelProfile model,
+        RetrievalResult retrieved, CanonicalContext context, PolicySnapshot policy, DestinationProfile destination,
+        LocalDate retrievalAsOfDate) {
         require(run.modelProfileIds().contains(model.profileId())
             && models.findByProfileId(model.profileId()).filter(model::equals).isPresent(), "AI_MODEL_NOT_APPROVED");
         var registered = run(run.evaluationRunId());
@@ -169,7 +185,7 @@ public class AiEvaluationContractService {
         }).toList();
         var retrievalConfig = Map.of("adapter_version", "jdbc-customer-summary/v1",
             "profile_id", retrieved.profileId(), "scopes", retrieved.datasetScopes(),
-            "fields", retrieved.selectedFields(), "as_of_date", LocalDate.now(clock).toString());
+            "fields", retrieved.selectedFields(), "as_of_date", retrievalAsOfDate.toString());
         Map<String, Object> fixed = new TreeMap<>();
         fixed.put("evaluation_run_id", run.evaluationRunId());
         fixed.put("evaluation_contract_version", VERSION);
@@ -196,6 +212,19 @@ public class AiEvaluationContractService {
             "fields", destination.fieldContracts(), "bindings", destination.allowedBindings())));
         var tree = mapper.valueToTree(fixed);
         return new AiEvaluationContractSnapshot(tree, canonical.digest(tree), modelSnapshots());
+    }
+
+    public LocalDate retrievalAsOfDate(String runId) {
+        return frozenRetrievalAsOfDate(required(runId));
+    }
+
+    private LocalDate frozenRetrievalAsOfDate(AiEvaluationContractSnapshot frozen) {
+        String value = frozen.fixedConditions().path("retrieval_config").path("as_of_date").asText();
+        try {
+            return LocalDate.parse(value);
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw mismatch("AI_RETRIEVAL_AS_OF_DATE_INVALID");
+        }
     }
 
     private List<AiEvaluationBundle.ModelConfig> modelSnapshots() {

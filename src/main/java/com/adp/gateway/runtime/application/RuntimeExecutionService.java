@@ -282,12 +282,16 @@ public class RuntimeExecutionService {
             var responseGuard = responseGuardResolver.resolve(destinationProfile.packType());
             packContextBuilder.validate(input);
 
+            java.time.LocalDate retrievalAsOfDate = resolvedEvaluation == null
+                ? null
+                : evaluationContracts.retrievalAsOfDate(resolvedEvaluation.evaluationRunId());
             RetrievalResult retrieval = retrievalService.retrieve(new DataAccessRequest(
                 requestContext.requestId(),
                 requestContext.traceId(),
                 requestContext.workloadId(),
                 requestContext.purpose(),
-                subject
+                subject,
+                retrievalAsOfDate
             ));
             CanonicalContext canonicalContext = contextBuilder.build(retrieval);
             ExecutionPackRequestScope packRequestScope = new ExecutionPackRequestScope(
@@ -506,7 +510,7 @@ public class RuntimeExecutionService {
             persistence.recordProviderRequest(executionId, destinationProfile, providerRequest);
             if (resolvedEvaluation != null) {
                 evaluationContracts.validateAndBind(executionId, resolvedEvaluation, retrieval, canonicalContext,
-                    snapshot, decision, transformResult, destinationProfile, providerRequest);
+                    snapshot, decision, transformResult, destinationProfile, providerRequest, retrievalAsOfDate);
             }
             if (destinationProfile.packType() == ExecutionPackType.DIGITAL_ASSET) {
                 OffsetDateTime guardEvaluatedAt = OffsetDateTime.now(clock);

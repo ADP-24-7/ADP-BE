@@ -86,10 +86,11 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
 
     @Override
     public RetrievalResult retrieve(DataAccessRequest request, RetrievalProfile profile) {
+        LocalDate asOfDate = request.asOfDate() == null ? LocalDate.now(clock) : request.asOfDate();
         List<RetrievalRecord> records = new ArrayList<>();
         customerRecord(request, profile).ifPresent(records::add);
         records.addAll(accountRecords(request, profile));
-        records.addAll(transactionRecords(request, profile));
+        records.addAll(transactionRecords(request, profile, asOfDate));
 
         return new RetrievalResult(
             null,
@@ -148,7 +149,11 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
             .list();
     }
 
-    private List<RetrievalRecord> transactionRecords(DataAccessRequest request, RetrievalProfile profile) {
+    private List<RetrievalRecord> transactionRecords(
+        DataAccessRequest request,
+        RetrievalProfile profile,
+        LocalDate asOfDate
+    ) {
         List<String> fields = allowedFields(profile, "transaction");
         Optional<RetrievalDatasetScope> scope = profile.scopeFor("transaction");
         if (fields.isEmpty() || scope.isEmpty()) {
@@ -167,7 +172,7 @@ public class JdbcCustomerSummaryRetrievalAdapter implements PredefinedRetrievalA
 
         return jdbcClient.sql(sql)
             .param("customerId", request.subject().subjectId())
-            .param("since", LocalDate.now(clock).minusDays(scope.orElseThrow().timeWindowDays()))
+            .param("since", asOfDate.minusDays(scope.orElseThrow().timeWindowDays()))
             .param("rowLimit", scope.orElseThrow().rowLimit())
             .query((rs, rowNum) -> new RetrievalRecord("transaction", row("transaction", fields, rs)))
             .list();

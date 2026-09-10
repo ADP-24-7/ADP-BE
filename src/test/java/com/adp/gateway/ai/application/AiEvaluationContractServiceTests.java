@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,37 @@ class AiEvaluationContractServiceTests {
     }
     AiEvaluationContractSnapshot snapshot(AiModelProfile model) {
         return service.snapshot(run, model, retrieved, context, policy(), destination(model));
+    }
+
+    @Test void frozenRetrievalDateIsReusedWhenExecutionDateChanges() {
+        var model = models.profiles().getFirst();
+        var frozenDate = LocalDate.of(2026, 9, 9);
+        var frozen = service.snapshot(run, model, retrieved, context, policy(), destination(model), frozenDate);
+        when(port.load(run.evaluationRunId())).thenReturn(Optional.of(frozen));
+
+        assertThat(service.retrievalAsOfDate(run.evaluationRunId())).isEqualTo(frozenDate);
+        assertThat(service.snapshot(run, model, retrieved, context, policy(), destination(model), frozenDate))
+            .isEqualTo(frozen);
+        assertThat(service.snapshot(run, model, retrieved, context, policy(), destination(model)))
+            .isNotEqualTo(frozen);
+    }
+
+    @Test void differentRuntimeRetrievalDateFailsClosed() {
+        var model = models.profiles().getFirst();
+        var frozen = service.snapshot(run, model, retrieved, context, policy(), destination(model),
+            LocalDate.of(2026, 9, 9));
+        when(port.load(run.evaluationRunId())).thenReturn(Optional.of(frozen));
+        var reference = new AiEvaluationReference(run.evaluationRunId(), AiEvaluationRunCatalog.BASELINE_CASE_ID,
+            null, null, null, null);
+
+        assertThatThrownBy(() -> service.validateAndBind(
+            "test-date-drift", reference, null, null, null, null, null, null, null,
+            LocalDate.of(2026, 9, 10)
+        )).isInstanceOfSatisfying(AiEvaluationRunMismatchException.class, exception ->
+            assertThat(exception.reasonCode()).isEqualTo("AI_RETRIEVAL_AS_OF_DATE_MISMATCH")
+        );
+        verify(port, never()).bind(anyString(), anyString(), anyString(), anyString(), anyString(),
+            anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test void allThreeModelsShareFixedConditionsButHaveDistinctProfiles() throws Exception {
