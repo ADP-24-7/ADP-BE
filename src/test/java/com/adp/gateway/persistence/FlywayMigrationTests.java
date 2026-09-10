@@ -935,10 +935,22 @@ class FlywayMigrationTests {
             where table_schema = 'runtime' and table_name = 'digital_asset_runtime_snapshot'
               and constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
             """).query(Integer.class).single();
+        Integer executionIdentityUnique = jdbcClient.sql("""
+            select count(*)
+            from information_schema.table_constraints constraints
+            join information_schema.constraint_column_usage columns
+              on columns.constraint_schema = constraints.constraint_schema
+             and columns.constraint_name = constraints.constraint_name
+            where constraints.table_schema = 'runtime'
+              and constraints.table_name = 'digital_asset_runtime_snapshot'
+              and constraints.constraint_type = 'UNIQUE'
+              and columns.column_name = 'execution_id'
+            """).query(Integer.class).single();
 
         assertThat(tableCount).isEqualTo(2);
         assertThat(activePrimaryKeyColumns).isEqualTo(2);
         assertThat(snapshotIdentityConstraints).isGreaterThanOrEqualTo(7);
+        assertThat(executionIdentityUnique).isEqualTo(1);
     }
 
     @Test

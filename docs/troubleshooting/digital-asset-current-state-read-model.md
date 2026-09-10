@@ -59,6 +59,14 @@ Read Model은 다음 조건이 모두 일치할 때만 `CURRENT`를 반환한다
 Institution과 호출 Principal의 `allowedWorkloads` 조건을 목록 SELECT, count, 상세에 동일하게 적용한다.
 빈 Workload Scope는 목록 0건과 상세 404로 fail-closed한다. FE는 이 서버 소유 Scope 결과만 표시한다.
 
+Count 쿼리는 Scope와 Current Selection 판정에 필요한 Ingestion, Lifecycle, Active Selection만 결합한다.
+최신 Runtime Snapshot과 Post-execution Evidence를 찾는 LATERAL JOIN은 실제 목록과 상세 조회에만 적용해,
+페이지 개수 계산이 Artifact별 Runtime 이력 탐색 비용을 발생시키지 않도록 한다.
+
+`runtimeExecutionCount`는 Snapshot row 개수를 사용한다. V28의 `UNIQUE(execution_id)`가 실행 한 건당 Runtime
+Snapshot 한 건만 허용하므로 이 값은 Artifact를 사용한 실행 건수와 동일하며, Flyway 테스트에서 해당 제약을
+명시적으로 검증한다.
+
 ## 통합 테스트 Snapshot Digest는 실행별로 고유해야 한다
 
 ### 문제

@@ -85,8 +85,7 @@ public class JdbcDigitalAssetArtifactCurrentStateReadAdapter
             where.append(" and (").append(CURRENT_SELECTION_EXPRESSION).append(") = 'CURRENT'");
         }
 
-        String from = fromClause();
-        long total = jdbcClient.sql("select count(*) " + from + where)
+        long total = jdbcClient.sql("select count(*) " + baseFromClause() + where)
             .params(parameters)
             .query(Long.class)
             .single();
@@ -108,7 +107,7 @@ public class JdbcDigitalAssetArtifactCurrentStateReadAdapter
                        latest.execution_id as latest_execution_id,
                        latest.runtime_status as latest_runtime_status,
                        active.activated_at, ingestion.ingested_at, lifecycle.updated_at
-                """ + from + where + """
+                """ + listFromClause() + where + """
                 order by
                     case when active.artifact_id is not null then 0 else 1 end,
                     lifecycle.updated_at desc, ingestion.artifact_id, ingestion.artifact_version
@@ -170,14 +169,14 @@ public class JdbcDigitalAssetArtifactCurrentStateReadAdapter
                        latest.selected_at, latest.post_execution_status, latest.external_status,
                        latest.provider_status, latest.receipt_status, latest.finality_status,
                        latest.observed_at
-                """ + fromClause() + scope)
+                """ + listFromClause() + scope)
             .params(parameters)
             .query((rs, rowNum) -> detail(rs))
             .optional()
             .orElseThrow(this::notFound);
     }
 
-    private String fromClause() {
+    private String baseFromClause() {
         return """
             from policy.digital_asset_artifact_ingestion ingestion
             join policy.lifecycle_artifact lifecycle
@@ -190,6 +189,11 @@ public class JdbcDigitalAssetArtifactCurrentStateReadAdapter
              and active.workload_id = ingestion.workload_id
              and active.artifact_id = ingestion.artifact_id
              and active.artifact_version = ingestion.artifact_version
+            """;
+    }
+
+    private String listFromClause() {
+        return baseFromClause() + """
             left join lateral (
                 select snapshot.execution_id, execution.request_id, execution.trace_id,
                        execution.status as runtime_status, execution.final_action,
