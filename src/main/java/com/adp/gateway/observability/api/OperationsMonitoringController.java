@@ -3,6 +3,7 @@ package com.adp.gateway.observability.api;
 import java.time.OffsetDateTime;
 
 import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.observability.application.OperationsMonitoringService;
 import com.adp.gateway.observability.domain.OperationsSummary;
 import com.adp.gateway.observability.domain.PolicyOperationEvent.PolicyEventCategory;
@@ -10,6 +11,7 @@ import com.adp.gateway.observability.domain.PolicyOperationEventPage;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -31,14 +33,18 @@ public class OperationsMonitoringController {
 
     @GetMapping("/summary")
     OperationsSummary summary(
+        @Parameter(description = "생략 시 전체 허용 Workload를 집계합니다.")
+        @RequestParam(required = false) ExecutionPackType executionPack,
         @RequestParam(defaultValue = "60") @Min(5) @Max(1440) int windowMinutes,
         Authentication authentication
     ) {
-        return service.summary(principal(authentication), windowMinutes);
+        return service.summary(principal(authentication), executionPack, windowMinutes);
     }
 
     @GetMapping("/policy-events")
     PolicyOperationEventPage policyEvents(
+        @Parameter(description = "생략 시 전체 허용 Workload의 모든 Pack을 조회합니다.")
+        @RequestParam(required = false) ExecutionPackType executionPack,
         @RequestParam(required = false) @Size(max = 120) String workloadId,
         @RequestParam(required = false) PolicyEventCategory category,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -50,7 +56,7 @@ public class OperationsMonitoringController {
         Authentication authentication
     ) {
         return service.policyEvents(
-            principal(authentication), blankToNull(workloadId), category, from, to, page, size
+            principal(authentication), executionPack, blankToNull(workloadId), category, from, to, page, size
         );
     }
 

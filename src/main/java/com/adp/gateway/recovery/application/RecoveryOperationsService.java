@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.recovery.domain.RecoveryCommandResult;
 import com.adp.gateway.recovery.domain.RecoveryIncidentDetail;
 import com.adp.gateway.recovery.domain.RecoveryIncidentPage;
@@ -42,22 +43,32 @@ public class RecoveryOperationsService {
 
     public RecoveryIncidentPage search(
         AuthPrincipal principal,
+        ExecutionPackType executionPack,
         RecoveryStatus status,
         int page,
         int size
     ) {
         requireReader(principal);
-        return operations.search(principal.institutionId(), principal.workloadIds(), status, page, size);
+        return operations.search(
+            principal.institutionId(), principal.workloadIds(), executionPack, status, page, size
+        );
     }
 
-    public RecoveryIncidentDetail load(AuthPrincipal principal, String recoveryId) {
+    public RecoveryIncidentDetail load(
+        AuthPrincipal principal,
+        String recoveryId,
+        ExecutionPackType executionPack
+    ) {
         requireReader(principal);
-        return operations.load(recoveryId, principal.institutionId(), principal.workloadIds());
+        return operations.load(
+            recoveryId, principal.institutionId(), principal.workloadIds(), executionPack
+        );
     }
 
     public RecoveryCommandResult command(
         AuthPrincipal principal,
         String recoveryId,
+        ExecutionPackType executionPack,
         String operationId,
         RecoveryOperationType type
     ) {
@@ -66,20 +77,20 @@ public class RecoveryOperationsService {
         validateIdentifier(operationId, "RECOVERY_COMMAND_INVALID");
         OffsetDateTime now = OffsetDateTime.now(clock);
         var existing = operations.findOperation(
-            recoveryId, operationId, principal.institutionId(), principal.workloadIds()
+            recoveryId, operationId, principal.institutionId(), principal.workloadIds(), executionPack
         );
         if (existing.isPresent()) {
-            return replay(existing.get(), recoveryId, type, principal);
+            return replay(existing.get(), recoveryId, executionPack, type, principal);
         }
         boolean reserved = operations.reserveOperation(
-            recoveryId, operationId, principal.institutionId(), principal.workloadIds(),
+            recoveryId, operationId, principal.institutionId(), principal.workloadIds(), executionPack,
             principal.principalId(), type, now
         );
         if (!reserved) {
             return operations.findOperation(
-                    recoveryId, operationId, principal.institutionId(), principal.workloadIds()
+                    recoveryId, operationId, principal.institutionId(), principal.workloadIds(), executionPack
                 )
-                .map(event -> replay(event, recoveryId, type, principal))
+                .map(event -> replay(event, recoveryId, executionPack, type, principal))
                 .orElseThrow(() -> new RecoveryOperationException("RECOVERY_INCIDENT_NOT_FOUND"));
         }
 
@@ -120,6 +131,7 @@ public class RecoveryOperationsService {
     private RecoveryCommandResult replay(
         RecoveryOperationEvent event,
         String recoveryId,
+        ExecutionPackType executionPack,
         RecoveryOperationType requestedType,
         AuthPrincipal principal
     ) {
@@ -130,7 +142,7 @@ public class RecoveryOperationsService {
             throw new RecoveryOperationException("RECOVERY_COMMAND_IN_PROGRESS");
         }
         RecoveryIncidentDetail incident = operations.load(
-            recoveryId, principal.institutionId(), principal.workloadIds()
+            recoveryId, principal.institutionId(), principal.workloadIds(), executionPack
         );
         return new RecoveryCommandResult(
             recoveryId, event.operationId(), event.operationType(), event.outcome(),
