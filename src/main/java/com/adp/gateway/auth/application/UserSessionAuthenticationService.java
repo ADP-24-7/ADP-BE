@@ -61,6 +61,7 @@ public class UserSessionAuthenticationService {
             throw invalidCredentials();
         }
         if (!credential.enabled() || isLocked(credential, now)) {
+            passwordEncoder.matches(password, DUMMY_PASSWORD_HASH);
             throw invalidCredentials();
         }
         if (!passwordEncoder.matches(password, credential.passwordHash())) {

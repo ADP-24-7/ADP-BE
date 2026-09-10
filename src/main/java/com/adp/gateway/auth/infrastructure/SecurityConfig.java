@@ -102,11 +102,24 @@ public class SecurityConfig {
         SecurityContextRepository securityContextRepository,
         @Value("${adp.local-user-auth.enabled:false}") boolean localUserAuthEnabled
     ) throws Exception {
+        CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfRepository.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Lax"));
+
         http
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .securityContext(context -> context
                 .securityContextRepository(securityContextRepository)
                 .requireExplicitSave(true))
+            .csrf(csrf -> {
+                csrf.csrfTokenRepository(csrfRepository);
+                if (localUserAuthEnabled) {
+                    // The local harness supplies credentials explicitly on each request and never uses a browser session.
+                    csrf.ignoringRequestMatchers(request ->
+                        hasText(request.getHeader(UserHeaderAuthenticationFilter.USER_ID_HEADER))
+                            && hasText(request.getHeader(UserHeaderAuthenticationFilter.USER_ROLES_HEADER))
+                    );
+                }
+            })
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/", "/docs", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
@@ -156,12 +169,7 @@ public class SecurityConfig {
                     response.setStatus(HttpStatus.NO_CONTENT.value())));
 
         if (localUserAuthEnabled) {
-            http.csrf(AbstractHttpConfigurer::disable)
-                .addFilterBefore(new UserHeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-        } else {
-            CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-            csrfRepository.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Lax"));
-            http.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository));
+            http.addFilterBefore(new UserHeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
         }
 
         return http.build();
@@ -204,5 +212,9 @@ public class SecurityConfig {
     private String attribute(HttpServletRequest request, String name) {
         Object value = request.getAttribute(name);
         return value == null ? null : value.toString();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

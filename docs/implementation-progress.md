@@ -509,7 +509,9 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Docker 기본 User Header 인증 비활성화
 - [x] FE 로그인 Gate, 로그아웃, returnTo 복귀
 - [x] 로그인/로그아웃 시 Query cache 격리
-- [ ] Auditor 요청 → 별도 Checker 승인 → 생성/다운로드 Docker E2E
+- [x] Auditor Session 요청 → Logout → 별도 Checker Session 승인 → 생성/다운로드 통합 E2E
+- [x] Local Header Test Harness 사용 시에도 Admin Session CSRF 보호 유지
+- [x] 5회 로그인 실패 잠금과 만료 후 복구 검증
 
 ## Reference Evidence — Admin Trace Support
 
