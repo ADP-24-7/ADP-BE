@@ -25,6 +25,29 @@ class FlywayMigrationTests {
     private Environment environment;
 
     @Test
+    void v48MigrationCreatesScopedAuditExportJobAndEventContract() {
+        Integer tableCount = jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'public'
+                  and table_name in ('audit_export_job', 'audit_export_event')
+                """).query(Integer.class).single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'public'
+                  and table_name = 'audit_export_job'
+                  and constraint_name in (
+                    'uq_audit_export_idempotency', 'chk_audit_export_pack',
+                    'chk_audit_export_format', 'chk_audit_export_report_type',
+                    'chk_audit_export_status', 'chk_audit_export_maker_checker',
+                    'chk_audit_export_content'
+                  )
+                """).query(Integer.class).single();
+
+        assertThat(tableCount).isEqualTo(2);
+        assertThat(constraintCount).isEqualTo(7);
+    }
+
+    @Test
     void v37MigrationCreatesRecoveryOperationEvidence() {
         Integer tableCount = jdbcClient.sql("""
                 select count(*) from information_schema.tables
