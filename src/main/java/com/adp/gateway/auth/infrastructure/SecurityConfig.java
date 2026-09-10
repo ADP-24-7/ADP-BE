@@ -84,6 +84,8 @@ public class SecurityConfig {
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers(HttpMethod.GET, "/api/admin/security-findings/**")
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
+                    .requestMatchers(HttpMethod.GET, "/api/admin/identities/**")
+                    .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                     .requestMatchers(HttpMethod.POST, "/api/admin/reference-evidence/bundles")
                     .hasRole("PRIVILEGED_OPERATOR")
                     .requestMatchers(HttpMethod.GET, "/api/admin/reference-evidence/**")

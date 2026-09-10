@@ -23,6 +23,7 @@ import com.adp.gateway.runtime.application.IdempotencyRequestInProgressException
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.operations.application.SecurityFindingNotFoundException;
 import com.adp.gateway.operations.application.InvalidSecurityFindingSearchException;
+import com.adp.gateway.operations.application.AdminIdentityNotFoundException;
 import com.adp.gateway.recovery.application.RecoveryOperationException;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -186,6 +187,19 @@ public class GlobalExceptionHandler {
         return errorResponse(
             ReasonCode.SECURITY_FINDING_NOT_FOUND,
             "Security finding not found",
+            HttpStatus.NOT_FOUND,
+            request
+        );
+    }
+
+    @ExceptionHandler(AdminIdentityNotFoundException.class)
+    ResponseEntity<ErrorResponse> handleAdminIdentityNotFound(
+        AdminIdentityNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return errorResponse(
+            ReasonCode.ADMIN_IDENTITY_NOT_FOUND,
+            "Admin identity not found",
             HttpStatus.NOT_FOUND,
             request
         );

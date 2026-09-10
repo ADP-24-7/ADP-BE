@@ -19,15 +19,46 @@ insert into auth_principal (
     subject_authorization_required = excluded.subject_authorization_required,
     enabled = excluded.enabled;
 
+insert into auth_principal (
+    principal_id,
+    principal_type,
+    display_name,
+    institution_id,
+    subject_authorization_required,
+    enabled
+) values
+    ('operator-local', 'USER', 'Local Operations User', 'institution_local', false, true),
+    ('privileged-operator-local', 'USER', 'Local Privileged Operator', 'institution_local', false, true),
+    ('auditor-local', 'USER', 'Local Audit User', 'institution_local', false, true),
+    ('developer-local', 'USER', 'Local Developer User', 'institution_local', false, true)
+on conflict (principal_id) do update set
+    principal_type = excluded.principal_type,
+    display_name = excluded.display_name,
+    institution_id = excluded.institution_id,
+    subject_authorization_required = excluded.subject_authorization_required,
+    enabled = excluded.enabled;
+
 insert into auth_principal_role (principal_id, role_name) values
     ('svc_local_runtime', 'RUNTIME_EXECUTOR'),
-    ('svc_local_runtime', 'OPERATOR')
+    ('svc_local_runtime', 'OPERATOR'),
+    ('operator-local', 'OPERATOR'),
+    ('operator-local', 'PRIVILEGED_OPERATOR'),
+    ('privileged-operator-local', 'PRIVILEGED_OPERATOR'),
+    ('auditor-local', 'AUDITOR'),
+    ('developer-local', 'DEVELOPER')
 on conflict (principal_id, role_name) do nothing;
 
 insert into auth_principal_workload (principal_id, workload_id) values
     ('svc_local_runtime', 'workload_be0'),
     ('svc_local_runtime', 'workload_local'),
-    ('svc_local_runtime', 'customer_summary')
+    ('svc_local_runtime', 'customer_summary'),
+    ('operator-local', 'customer_summary'),
+    ('operator-local', 'tokenized_asset_purchase'),
+    ('privileged-operator-local', 'customer_summary'),
+    ('privileged-operator-local', 'tokenized_asset_purchase'),
+    ('auditor-local', 'customer_summary'),
+    ('auditor-local', 'tokenized_asset_purchase'),
+    ('developer-local', 'customer_summary')
 on conflict (principal_id, workload_id) do nothing;
 
 insert into auth_subject_grant (

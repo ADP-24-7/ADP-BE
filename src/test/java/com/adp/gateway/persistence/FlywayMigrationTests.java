@@ -320,6 +320,24 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v45MigrationCreatesAdminIdentityReadIndexes() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*)
+                from pg_indexes
+                where schemaname = 'public'
+                  and indexname in (
+                    'idx_auth_principal_operations_scope',
+                    'idx_auth_principal_role_operations_search',
+                    'idx_auth_principal_workload_operations_search'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(indexCount).isEqualTo(3);
+    }
+
+    @Test
     void v10MigrationCreatesPrincipalInstitutionAndAuthorizationEvidence() {
         Integer principalColumnCount = jdbcClient.sql("""
                 select count(*) from information_schema.columns
