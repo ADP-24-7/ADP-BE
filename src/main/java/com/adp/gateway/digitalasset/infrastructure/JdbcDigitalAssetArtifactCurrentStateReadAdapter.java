@@ -108,6 +108,7 @@ public class JdbcDigitalAssetArtifactCurrentStateReadAdapter
                        latest.runtime_status as latest_runtime_status,
                        active.activated_at, ingestion.ingested_at, lifecycle.updated_at
                 """ + listFromClause() + where + """
+
                 order by
                     case when active.artifact_id is not null then 0 else 1 end,
                     lifecycle.updated_at desc, ingestion.artifact_id, ingestion.artifact_version

@@ -36,6 +36,18 @@ class DigitalAssetArtifactCurrentStateControllerTests {
     private DigitalAssetArtifactCurrentStateReadPort readPort;
 
     @Test
+    void operatorListsArtifactsWithoutOptionalSearchFilters() throws Exception {
+        mockMvc.perform(get("/api/admin/digital-assets/artifacts")
+                .header("X-ADP-User-Id", "operator-local")
+                .header("X-ADP-User-Roles", "OPERATOR")
+                .param("page", "0")
+                .param("size", "10")
+                .param("currentOnly", "false"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items").isArray());
+    }
+
+    @Test
     void operatorDiscoversCurrentArtifactWithoutProvidingItsIdentity() throws Exception {
         mockMvc.perform(get("/api/admin/digital-assets/artifacts")
                 .header("X-ADP-User-Id", "operator-local")

@@ -78,3 +78,18 @@ Digest를 사용하면 개별 테스트는 통과해도 전체 Suite에서 fixtu
 
 테스트마다 64자리 고유 SHA-256 형식 Digest를 생성한다. 이를 통해 테스트 순서와 기존 fixture 존재 여부에 영향을
 받지 않고 Current State와 Runtime Evidence 연결을 검증한다.
+
+## 동적 SQL 조각 경계는 명시적인 공백으로 고정한다
+
+### 문제
+
+Current State 목록 SQL은 기본 `WHERE` 절 뒤에 선택 검색 조건을 붙이고 마지막에 `ORDER BY`를 결합한다.
+선택 조건이 하나도 없는 기본 조회에서는 `:institutionId`와 `order`가 공백 없이 이어져
+`:institutionIdorder`라는 Named Parameter로 해석됐고, 관리자 화면이 `INTERNAL_ERROR`를 표시했다.
+Workload, Query 또는 Current-only 조건을 넣던 기존 테스트는 각 조건이 앞뒤 공백을 제공해 이 경로를 놓쳤다.
+
+### 해결
+
+`WHERE` 조각과 `ORDER BY` 조각 사이에 명시적인 줄바꿈을 두고, FE의 최초 요청과 동일하게 선택 필터 없이
+`page`, `size`, `currentOnly=false`만 전달하는 Controller 통합 테스트를 추가했다. 동적 SQL은 개별 조각의
+우연한 선행·후행 공백에 의존하지 않도록 경계 문자와 최소 조건 요청을 함께 검증한다.
