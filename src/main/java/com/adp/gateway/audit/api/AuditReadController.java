@@ -6,6 +6,7 @@ import com.adp.gateway.audit.application.AuditReadService;
 import com.adp.gateway.audit.domain.AuditExecutionPage;
 import com.adp.gateway.audit.domain.ExecutionEvidencePack;
 import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -30,6 +31,7 @@ public class AuditReadController {
 
     @GetMapping
     AuditExecutionPage search(
+        @RequestParam(required = false) ExecutionPackType executionPack,
         @RequestParam(required = false) @Size(max = 120) String workloadId,
         @RequestParam(required = false) @Size(max = 40) String status,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
@@ -38,7 +40,7 @@ public class AuditReadController {
         @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
         Authentication authentication
     ) {
-        return auditReadService.search(principal(authentication), blankToNull(workloadId),
+        return auditReadService.search(principal(authentication), executionPack, blankToNull(workloadId),
             blankToNull(status), from, to, page, size);
     }
 

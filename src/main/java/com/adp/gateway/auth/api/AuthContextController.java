@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/internal/auth")
+@RequestMapping({"/api/internal/auth", "/api/admin/auth"})
 public class AuthContextController {
 
     @GetMapping("/context")
@@ -19,6 +19,8 @@ public class AuthContextController {
         return ResponseEntity.ok(new AuthContextResponse(
             principal.principalId(),
             principal.principalType().name(),
+            principal.displayName(),
+            principal.institutionId(),
             principal.roles().stream().map(AdpRole::name).collect(java.util.stream.Collectors.toSet()),
             principal.workloadIds(),
             principal.subjectAuthorizationRequired()

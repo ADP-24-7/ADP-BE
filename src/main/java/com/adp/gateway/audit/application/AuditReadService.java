@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import com.adp.gateway.audit.domain.AuditExecutionPage;
 import com.adp.gateway.audit.domain.ExecutionEvidencePack;
 import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.runtime.application.RuntimeExecutionNotFoundException;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -20,6 +21,7 @@ public class AuditReadService {
 
     public AuditExecutionPage search(
         AuthPrincipal principal,
+        ExecutionPackType executionPack,
         String workloadId,
         String status,
         OffsetDateTime from,
@@ -35,7 +37,7 @@ public class AuditReadService {
             throw new InvalidAuditSearchException("from must not be after to");
         }
         return auditReadPort.search(
-            principal.institutionId(), principal.workloadIds(), workloadId,
+            principal.institutionId(), principal.workloadIds(), executionPack, workloadId,
             validatedStatus(status), from, to, page, size
         );
     }

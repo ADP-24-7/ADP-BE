@@ -53,3 +53,17 @@ UI에서 더 이상 제공하지 않는 Pack이 브라우저 저장소에서 복
 FE는 현재 선택 가능한 AI와 Digital Asset만 복원하고 테스트마다 저장소를 초기화한다. Policy History 페이지도
 Pack 변경 시 첫 페이지로 되돌린다. BE는 `(recovery_id, operation_id)` unique 경계에서 명령을 예약하며, 동시
 통합 테스트로 operation event 1건과 Recovery attempt 1회만 발생하는 것을 검증한다.
+
+## Decision Trace도 전역 Pack Scope를 따라야 한다
+
+### 문제
+
+FE의 Decision Trace는 선택한 Pack을 화면에 표시했지만 Audit 목록 API에는 Pack 조건을 전달하지 않았다.
+그 결과 Digital Asset 화면에서 AI 실행이 함께 노출되고, 선택한 실행의 실제 도메인과 상세 제목이 달라질 수 있었다.
+
+### 해결
+
+Audit 목록 API에 `executionPack`을 추가하고 Institution·Workload 인가 조건과 함께
+`runtime_execution.execution_pack`을 SQL에서 강제한다. 목록 응답에도 `executionPack`을 포함해 조회 결과의
+도메인을 명시한다. 통합 테스트는 AI와 Digital Asset 실행을 함께 준비한 뒤 요청 Pack 이외의 실행이 반환되지
+않는지 검증한다. FE는 Pack 변경 시 기존 선택과 Workload 검색을 초기화해 다른 Pack의 상세 증적이 남지 않게 한다.

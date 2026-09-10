@@ -12,7 +12,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "adp.local-fixtures.enabled=true")
+@SpringBootTest(properties = {
+    "adp.local-fixtures.enabled=true",
+    "adp.local-user-auth.enabled=true"
+})
 @AutoConfigureMockMvc
 class AuthContextControllerTests {
 
@@ -32,9 +35,36 @@ class AuthContextControllerTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.principalId").value("svc_local_runtime"))
             .andExpect(jsonPath("$.principalType").value("SERVICE"))
+            .andExpect(jsonPath("$.displayName").isNotEmpty())
+            .andExpect(jsonPath("$.institutionId").value("institution_local"))
             .andExpect(jsonPath("$.roles").isArray())
             .andExpect(jsonPath("$.workloadIds").isArray())
             .andExpect(jsonPath("$.subjectAuthorizationRequired").value(true));
+    }
+
+    @Test
+    void returnsAdminUserContextThroughAdminAuthenticationBoundary() throws Exception {
+        mockMvc.perform(get("/api/admin/auth/context")
+                .header("X-ADP-User-Id", "operator-local")
+                .header("X-ADP-User-Roles", "OPERATOR,PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.principalId").value("operator-local"))
+            .andExpect(jsonPath("$.principalType").value("USER"))
+            .andExpect(jsonPath("$.displayName").value("operator-local"))
+            .andExpect(jsonPath("$.institutionId").value("institution_local"))
+            .andExpect(jsonPath("$.roles").isArray())
+            .andExpect(jsonPath("$.workloadIds[0]").value("*"));
+    }
+
+    @Test
+    void rejectsMissingAdminIdentityWithCommonErrorResponse() throws Exception {
+        mockMvc.perform(get("/api/admin/auth/context")
+                .header("X-Request-Id", "req_missing_admin_auth")
+                .header("X-Trace-Id", "trace_missing_admin_auth"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_FAILED"))
+            .andExpect(jsonPath("$.requestId").value("req_missing_admin_auth"))
+            .andExpect(jsonPath("$.traceId").value("trace_missing_admin_auth"));
     }
 
     @Test

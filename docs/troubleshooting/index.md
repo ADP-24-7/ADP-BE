@@ -4,6 +4,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 
 ## 문서
 
+- [Admin Console 인증 컨텍스트 경계](admin-console-auth-context.md)
 - [BE 리뷰 및 CI 트러블슈팅](be-review-and-ci.md)
 - [BE-5 Deep Dives](be-5-deep-dives.md)
 - [BE-6 이후 플랫폼 트러블슈팅](be-6-and-platform-evolution.md)
