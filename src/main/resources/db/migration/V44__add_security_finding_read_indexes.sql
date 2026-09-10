@@ -31,6 +31,21 @@ where execution.execution_pack is null
       where transaction_evidence.execution_id = execution.execution_id
   );
 
+do $$
+begin
+    if exists (
+        select 1
+        from runtime.response_sensitive_finding finding
+        join runtime.runtime_execution execution
+          on execution.execution_id = finding.execution_id
+        where execution.execution_pack is null
+    ) then
+        raise exception
+            'Security findings require a resolved runtime execution pack';
+    end if;
+end
+$$;
+
 alter table runtime.runtime_execution
     add constraint chk_runtime_execution_pack
     check (

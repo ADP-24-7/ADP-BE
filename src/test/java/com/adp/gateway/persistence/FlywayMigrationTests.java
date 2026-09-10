@@ -2,6 +2,7 @@ package com.adp.gateway.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -1476,6 +1477,83 @@ class FlywayMigrationTests {
                 assertThat(resultSet.getString("execution_id")).isEqualTo("exec-v43-da");
                 assertThat(resultSet.getString("execution_pack")).isEqualTo("DIGITAL_ASSET");
             }
+        } finally {
+            dropDatabase(sourceUrl, username, password, databaseName);
+        }
+    }
+
+    @Test
+    void v44MigrationRejectsSecurityFindingWithoutResolvedExecutionPack() throws Exception {
+        String databaseName = "adp_v44_upgrade_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String sourceUrl = environment.getRequiredProperty("spring.datasource.url");
+        String username = environment.getRequiredProperty("spring.datasource.username");
+        String password = environment.getRequiredProperty("spring.datasource.password");
+        String upgradeUrl = databaseUrl(sourceUrl, databaseName);
+        createDatabase(sourceUrl, username, password, databaseName);
+        try {
+            Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").target("43").load().migrate();
+            try (var connection = DriverManager.getConnection(upgradeUrl, username, password);
+                 var statement = connection.createStatement()) {
+                statement.execute("""
+                    insert into runtime.runtime_execution (
+                        execution_id, request_id, trace_id, idempotency_key, workload_id,
+                        purpose_code, input_digest, status, institution_id,
+                        idempotency_institution_id, request_hash, created_at, updated_at
+                    ) values (
+                        'exec-v44-unresolved', 'req-v44-unresolved', 'trace-v44-unresolved',
+                        'idem-v44-unresolved', 'legacy-workload', 'LEGACY_PURPOSE', repeat('a', 64),
+                        'COMPLETED', 'institution-v44', 'institution-v44', repeat('b', 64), now(), now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.outbound_candidate (
+                        outbound_payload_id, execution_id, destination_profile_id,
+                        destination_profile_version, destination_profile_digest, pack_type,
+                        schema_version, candidate_payload_digest, field_count,
+                        guard_status, guard_reason_codes, created_at
+                    ) values (
+                        'out-v44-unresolved', 'exec-v44-unresolved', 'deleted-destination',
+                        'legacy', 'legacy-destination-digest', 'AI', 'legacy-schema',
+                        repeat('c', 64), 1, 'PASSED', '', now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.connector_execution (
+                        connector_execution_id, execution_id, outbound_payload_id,
+                        outbound_candidate_digest, connector_id, status,
+                        response_digest, response_schema_version, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'out-v44-unresolved',
+                        repeat('c', 64), 'legacy-connector', 'ACKNOWLEDGED',
+                        repeat('d', 64), 'legacy-response', now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.response_guard_result (
+                        connector_execution_id, execution_id, connector_id, connector_status,
+                        status, leakage_detected, reason_codes, response_digest,
+                        detector_version, finding_count, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'legacy-connector',
+                        'ACKNOWLEDGED', 'REJECTED', true, 'SENSITIVE_RESPONSE', repeat('d', 64),
+                        'legacy-detector', 1, now()
+                    )
+                    """);
+                statement.execute("""
+                    insert into runtime.response_sensitive_finding (
+                        connector_execution_id, execution_id, finding_type, location,
+                        start_offset, end_offset, detector_version, evidence_digest, created_at
+                    ) values (
+                        'connector-v44-unresolved', 'exec-v44-unresolved', 'PHONE_NUMBER',
+                        '$.response', 0, 13, 'legacy-detector', repeat('e', 64), now()
+                    )
+                    """);
+            }
+
+            assertThatThrownBy(() -> Flyway.configure().dataSource(upgradeUrl, username, password)
+                .locations("classpath:db/migration").load().migrate())
+                .hasStackTraceContaining("Security findings require a resolved runtime execution pack");
         } finally {
             dropDatabase(sourceUrl, username, password, databaseName);
         }

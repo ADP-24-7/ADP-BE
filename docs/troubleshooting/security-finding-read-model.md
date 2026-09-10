@@ -50,3 +50,7 @@ AI Model Execution, Digital Asset Transaction Evidence로 증명 가능한 row�
 임의 Pack으로 변환하지 않고 `NOT VALID` constraint 아래 보존하되, PostgreSQL이 신규 위반 row는 계속 차단한다.
 Fresh DB는 위반 row가 없으므로 같은 migration 안에서 constraint를 validate한다. 이미 적용된 개발 DB는 실제 V43
 index/constraint를 확인한 뒤 schema history checksum을 최신 source와 정렬하고 V44로 upgrade한다.
+
+Security Finding Read Model은 Pack 기반 탐색 계약이므로 Finding이 연결된 실행만큼은 NULL Pack을 허용하지 않는다.
+결정적 backfill 이후에도 `response_sensitive_finding`과 연결된 NULL Pack 실행이 남으면 V44가 fail-closed하며,
+upgrade test가 이 조건을 고정한다. 따라서 Adapter의 `ExecutionPackType` 변환까지 NULL이 유입되지 않는다.

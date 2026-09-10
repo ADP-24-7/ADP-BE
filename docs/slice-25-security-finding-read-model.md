@@ -20,6 +20,7 @@
 - Principal 범위 밖의 명시적 `workloadId` 검색은 `403`으로 거부한다.
 - 다른 Institution 또는 Workload의 상세 요청은 존재 여부를 노출하지 않고 `404`로 처리한다.
 - Pack은 요청값을 신뢰하지 않고 Runtime 시작 시 고정된 `runtime_execution.execution_pack`으로 필터링한다.
+- Security Finding이 존재하는 legacy 실행의 Pack을 결정적으로 복구하지 못하면 V44 migration을 중단한다.
 
 ## Privacy-safe Projection
 
