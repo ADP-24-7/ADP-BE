@@ -77,4 +77,15 @@ public class FakeDigitalAssetPlatformStateStore {
     Optional<FakeDigitalAssetRecoveryObservation> findRecoveryObservation(String providerCorrelationKey) {
         return Optional.ofNullable(recoveries.get(providerCorrelationKey));
     }
+
+    public void removeRecoveryObservation(String providerCorrelationKey) {
+        recoveries.remove(providerCorrelationKey);
+    }
+
+    public void reset() {
+        states.clear();
+        executions.clear();
+        recoveries.clear();
+        externalEffectCounts.clear();
+    }
 }

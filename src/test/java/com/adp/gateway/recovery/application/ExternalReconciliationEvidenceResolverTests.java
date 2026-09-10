@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class ExternalReconciliationEvidenceResolverTests {
     @Test
     void allowsConnectorsWithoutDomainEvidenceAdapter() {
-        var resolver = new ExternalReconciliationEvidenceResolver(List.of());
+        var resolver = resolver(List.of(), false);
 
         assertThatCode(() -> resolver.reconcile(recovery(), status())).doesNotThrowAnyException();
     }
@@ -24,7 +24,7 @@ class ExternalReconciliationEvidenceResolverTests {
     void invokesTheSingleMatchingDomainEvidenceAdapter() {
         ExternalReconciliationEvidencePort port = mock(ExternalReconciliationEvidencePort.class);
         when(port.supports("connector-1")).thenReturn(true);
-        var resolver = new ExternalReconciliationEvidenceResolver(List.of(port));
+        var resolver = resolver(List.of(port), true);
 
         resolver.reconcile(recovery(), status());
 
@@ -37,10 +37,29 @@ class ExternalReconciliationEvidenceResolverTests {
         ExternalReconciliationEvidencePort second = mock(ExternalReconciliationEvidencePort.class);
         when(first.supports("connector-1")).thenReturn(true);
         when(second.supports("connector-1")).thenReturn(true);
-        var resolver = new ExternalReconciliationEvidenceResolver(List.of(first, second));
+        var resolver = resolver(List.of(first, second), true);
 
         assertThatThrownBy(() -> resolver.reconcile(recovery(), status()))
             .isInstanceOf(AmbiguousExternalStatusQueryAdapterException.class);
+    }
+
+    @Test
+    void failsClosedWhenRequiredDomainEvidenceAdapterIsMissing() {
+        var resolver = resolver(List.of(), true);
+
+        assertThatThrownBy(() -> resolver.reconcile(recovery(), status()))
+            .isInstanceOf(ExternalStatusQueryPermanentException.class);
+    }
+
+    private ExternalReconciliationEvidenceResolver resolver(
+        List<ExternalReconciliationEvidencePort> ports,
+        boolean evidenceRequired
+    ) {
+        ExternalStatusQueryPort statusPort = mock(ExternalStatusQueryPort.class);
+        when(statusPort.requiresReconciliationEvidence()).thenReturn(evidenceRequired);
+        ExternalStatusQueryResolver statusResolver = mock(ExternalStatusQueryResolver.class);
+        when(statusResolver.resolve("connector-1")).thenReturn(statusPort);
+        return new ExternalReconciliationEvidenceResolver(ports, statusResolver);
     }
 
     private ExternalInteractionRecovery recovery() {

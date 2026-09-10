@@ -39,12 +39,14 @@ Policy reason, Digital Asset Evidence, Recovery row와 최종 PostgreSQL 상태�
 
 ## Recovery Evidence 경계
 
-공통 Recovery Service는 Digital Asset 타입을 직접 알지 않는다. `ExternalReconciliationEvidencePort`를 통해
-connector별 독립 Evidence 복원을 먼저 수행한 뒤 generic recovery 상태를 `RECONCILED`로 전환한다.
+공통 Recovery Service는 Digital Asset 타입을 직접 알지 않는다. Transactional Coordinator가 같은 DB transaction
+안에서 lease ownership을 CAS로 재검증한 뒤 `ExternalReconciliationEvidencePort`를 통해 connector별 독립 Evidence를
+복원하고 generic recovery와 Runtime 상태를 함께 전환한다. 어느 저장 단계든 실패하면 전체 변경을 rollback한다.
 
 로컬 Digital Asset adapter는 status query로 확인된 실행의 transaction, receipt/finality, transfer evidence를
-재검증하고 `VERIFIED`일 때만 transaction을 `SETTLED/RECOVERED`로 갱신한다. Evidence가 없거나 completion-safe하지
-않으면 Runtime을 성공 상태로 수렴시키지 않는다.
+재검증하고 `VERIFIED`일 때만 transaction을 `SETTLED/RECOVERED`로 갱신한다. Digital Asset status adapter가
+Evidence를 필수 capability로 선언하므로 Evidence adapter가 누락되거나 결과가 completion-safe하지 않으면 fail-closed하고
+Runtime을 성공 상태로 수렴시키지 않는다.
 
 ## 실행
 

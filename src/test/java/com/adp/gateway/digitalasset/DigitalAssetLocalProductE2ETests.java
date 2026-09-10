@@ -76,9 +76,13 @@ class DigitalAssetLocalProductE2ETests {
 
         if (fixture.path("expected_reconciliation").path("required").asBoolean()) {
             for (int attempt = 0; attempt < 50 && !reconciled(executionId); attempt++) {
-                assertThat(recoveryService.processNext("da-p0-local-product-e2e")).isTrue();
+                assertThat(recoveryService.processNext("da-p0-local-product-e2e"))
+                    .as("recovery attempt=%s, state=%s", attempt + 1, recoveryDiagnostic(executionId))
+                    .isTrue();
             }
-            assertThat(reconciled(executionId)).isTrue();
+            assertThat(reconciled(executionId))
+                .as("recovery did not converge: %s", recoveryDiagnostic(executionId))
+                .isTrue();
         }
 
         String expectedFinalState = fixture.path("expected_final_state").asText();
@@ -177,6 +181,17 @@ class DigitalAssetLocalProductE2ETests {
             .orElse(false);
     }
 
+    private RecoveryDiagnostic recoveryDiagnostic(String executionId) {
+        return jdbcClient.sql("""
+                select recovery_status, retry_disposition, next_attempt_at, last_error_code
+                from runtime.external_interaction_recovery where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(RecoveryDiagnostic.class)
+            .optional()
+            .orElse(null);
+    }
+
     private Path daRoot() {
         return Path.of(System.getenv().getOrDefault("ADP_DA_ROOT", "../ADP-DA")).toAbsolutePath().normalize();
     }
@@ -191,6 +206,14 @@ class DigitalAssetLocalProductE2ETests {
         String reasonCodes,
         int postEvidenceCount,
         int recoveryCount
+    ) {
+    }
+
+    private record RecoveryDiagnostic(
+        String recoveryStatus,
+        String retryDisposition,
+        OffsetDateTime nextAttemptAt,
+        String lastErrorCode
     ) {
     }
 }

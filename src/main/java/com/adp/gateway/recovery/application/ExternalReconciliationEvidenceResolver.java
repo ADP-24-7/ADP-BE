@@ -9,9 +9,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExternalReconciliationEvidenceResolver {
     private final List<ExternalReconciliationEvidencePort> ports;
+    private final ExternalStatusQueryResolver statusQueryResolver;
 
-    public ExternalReconciliationEvidenceResolver(List<ExternalReconciliationEvidencePort> ports) {
+    public ExternalReconciliationEvidenceResolver(
+        List<ExternalReconciliationEvidencePort> ports,
+        ExternalStatusQueryResolver statusQueryResolver
+    ) {
         this.ports = List.copyOf(ports);
+        this.statusQueryResolver = statusQueryResolver;
     }
 
     public void reconcile(ExternalInteractionRecovery recovery, ExternalStatusQueryResult status) {
@@ -23,6 +28,14 @@ public class ExternalReconciliationEvidenceResolver {
                 "Multiple reconciliation evidence adapters support connector " + recovery.connectorId()
             );
         }
-        matches.stream().findFirst().ifPresent(port -> port.reconcile(recovery, status));
+        if (matches.isEmpty()) {
+            if (statusQueryResolver.resolve(recovery.connectorId()).requiresReconciliationEvidence()) {
+                throw new ExternalStatusQueryPermanentException(
+                    "Required reconciliation evidence adapter is unavailable"
+                );
+            }
+            return;
+        }
+        matches.getFirst().reconcile(recovery, status);
     }
 }

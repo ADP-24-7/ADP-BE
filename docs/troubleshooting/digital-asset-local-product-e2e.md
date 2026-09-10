@@ -27,12 +27,13 @@ Approved Transaction Policy Gate
 - PASS Case만 `digital_asset_pre_execution_guard.status=PASSED`와 6개 control을 확인한다.
 - 모든 Case에서 External Effect Count를 별도로 검증한다.
 
-## SENT_UNKNOWN Runtime 상태만 수렴하고 Domain Evidence가 남는 문제
+## Recovery Evidence와 Runtime 상태의 부분 Commit 방지
 
 ### 증상
 
-기존 Recovery는 connector status를 `ACKNOWLEDGED`로 확인한 뒤 Runtime을 `EXTERNALLY_RECONCILED`로 바꿨지만,
-`digital_asset_transaction`은 `SENT_UNKNOWN/WAIT`에 남고 post-execution evidence도 복원되지 않았다.
+Domain adapter가 자체 transaction으로 Evidence를 먼저 commit한 뒤 공통 Recovery lease CAS가 실패하면,
+Evidence는 `VERIFIED/RECOVERED`지만 Recovery와 Runtime은 미완료인 부분 성공이 발생할 수 있었다. 반대로 generic 상태만
+수렴시키면 `digital_asset_transaction`은 `SENT_UNKNOWN/WAIT`에 남고 post-execution evidence도 복원되지 않는다.
 
 ### 위험
 
@@ -41,11 +42,15 @@ Digital Asset에서는 ACK 자체가 settlement 성공 증거가 아니다.
 
 ### 해결
 
-- 공통 Recovery에 pack-neutral `ExternalReconciliationEvidencePort`를 추가했다.
-- Digital Asset local adapter가 independent transaction, receipt/finality, transfer evidence를 먼저 재검증한다.
-- Evidence가 `VERIFIED`인 경우에만 transaction을 `SETTLED/RECOVERED`로 기록한다.
-- Evidence 복원 이후 generic recovery가 Runtime을 `EXTERNALLY_RECONCILED`로 전환한다.
+- 공통 Recovery에 pack-neutral `ExternalReconciliationEvidencePort`와 별도 Transactional Coordinator를 둔다.
+- 외부 status query는 transaction 밖에서 수행하고, lease CAS와 모든 DB write만 짧은 단일 transaction으로 묶는다.
+- 같은 transaction에서 lease ownership을 먼저 검증하고 Digital Asset Evidence, transaction, Recovery, Runtime을 갱신한다.
+- stale lease 또는 Evidence 저장 실패 시 전체 transaction을 rollback한다.
+- Digital Asset status adapter는 reconciliation evidence가 필수임을 선언하며 adapter 누락을 fail-closed한다.
 - 최초 connector 호출 횟수를 Fake Platform state에 기록해 blind resend가 없음을 검증한다.
+
+통합 테스트는 stale worker와 Evidence source 누락을 각각 주입해 post evidence 0건, transaction
+`SENT_UNKNOWN/WAIT`, Runtime `EGRESSING`, Recovery `CLAIMED`가 유지되는지 확인한다.
 
 ## tx hash를 성공으로 오판할 수 있는 로컬 시나리오 부재
 

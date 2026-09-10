@@ -13,7 +13,6 @@ import com.adp.gateway.recovery.domain.ExternalInteractionRecovery;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
@@ -44,7 +43,6 @@ public class FakeDigitalAssetRecoveryEvidenceAdapter implements ExternalReconcil
     }
 
     @Override
-    @Transactional
     public void reconcile(ExternalInteractionRecovery recovery, ExternalStatusQueryResult status) {
         FakeDigitalAssetRecoveryObservation observation = stateStore
             .findRecoveryObservation(recovery.providerCorrelationKey())
