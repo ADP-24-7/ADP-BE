@@ -534,7 +534,8 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 상세 계약은 [My Work / Approval Inbox](my-work-approval-inbox.md)에서 관리한다.
 
 - [x] Header My Work 개인 업무 요약
-- [x] 내 요청, 승인할 요청, 전체 이력 조회
+- [x] 진행 중 내 요청과 종료된 내 요청 이력 분리
+- [x] 승인할 요청, 본인 처리 이력, Auditor 기관 감사 이력 분리
 - [x] 기존 Audit Export 상태 기반 다운로드 완료 상태 해석
 - [x] 24시간 이상 승인 대기 집계
 - [x] Institution 및 Workload SQL scope

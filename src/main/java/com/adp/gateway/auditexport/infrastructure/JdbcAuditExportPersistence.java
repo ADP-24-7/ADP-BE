@@ -139,11 +139,31 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         StringBuilder where = new StringBuilder(" where institution_id = :institutionId");
         appendWorkloadScope(where, allowedWorkloads);
         switch (view) {
-            case MY_REQUESTS -> where.append(" and requester_id = :principalId");
+            case MY_REQUESTS -> where.append("""
+                 and requester_id = :principalId
+                 and (
+                   status in ('REQUESTED', 'APPROVED', 'GENERATING')
+                   or (status = 'READY' and downloaded_at is null)
+                 )
+                """);
+            case MY_HISTORY -> where.append("""
+                 and requester_id = :principalId
+                 and (
+                   status in ('REJECTED', 'FAILED', 'EXPIRED', 'REVOKED')
+                   or (status = 'READY' and downloaded_at is not null)
+                 )
+                """);
             case APPROVAL_QUEUE -> where.append(" and status = 'REQUESTED' and requester_id <> :principalId");
-            case HISTORY -> {
-                if (!privileged) where.append(" and requester_id = :principalId");
-            }
+            case DECISION_HISTORY -> where.append("""
+                 and exists (
+                   select 1 from audit_export_event handled
+                   where handled.export_id = audit_export_job.export_id
+                     and handled.institution_id = audit_export_job.institution_id
+                     and handled.actor_id = :principalId
+                     and handled.action in ('APPROVED', 'REJECTED', 'REVOKED')
+                 )
+                """);
+            case AUDIT_HISTORY -> { }
         }
         if (status != null) where.append(" and status = :status");
 
@@ -153,16 +173,15 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
                  order by
                    case
                      when status = 'READY' and downloaded_at is null then 0
-                     when status in ('FAILED', 'REJECTED', 'EXPIRED', 'REVOKED') then 1
-                     when status = 'REQUESTED' then 2
-                     when status in ('APPROVED', 'GENERATING') then 3
+                     when status = 'REQUESTED' then 1
+                     when status in ('APPROVED', 'GENERATING') then 2
                      else 4
                    end,
                    case when status = 'REQUESTED' then created_at end asc nulls last,
                    case when status <> 'REQUESTED' then updated_at end desc nulls last,
                    export_id desc
                 """;
-            case HISTORY -> " order by updated_at desc, export_id desc";
+            case MY_HISTORY, DECISION_HISTORY, AUDIT_HISTORY -> " order by updated_at desc, export_id desc";
         };
 
         JdbcClient.StatementSpec select = bindWorkQuery(
@@ -298,12 +317,12 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         }
         int changed = jdbcClient.sql("""
                 update audit_export_job
-                set status = 'REJECTED', approval_reason = :reason,
+                set status = 'REJECTED', approver_id = :actorId, approval_reason = :reason,
                     updated_at = :now, version = version + 1
                 where export_id = :exportId and institution_id = :institutionId
                   and status = 'REQUESTED' and version = :version
                 """)
-            .param("reason", reason).param("now", now).param("exportId", exportId)
+            .param("actorId", actorId).param("reason", reason).param("now", now).param("exportId", exportId)
             .param("institutionId", institutionId).param("version", before.version()).update();
         if (changed != 1) {
             throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Concurrent export transition");
@@ -472,7 +491,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             .param("principalId", principalId).param("institutionId", institutionId)
             .param("workloadId", workloadId)
             .param("allowedRoles", privilegedRequired ? Set.of("PRIVILEGED_OPERATOR")
-                : Set.of("PRIVILEGED_OPERATOR", "AUDITOR"))
+                : Set.of("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR"))
             .query(Boolean.class).single();
     }
 

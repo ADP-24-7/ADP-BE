@@ -110,13 +110,15 @@ class AuditReadControllerTests {
     }
 
     @Test
-    void operatorCannotExportEvidence() throws Exception {
-        String executionId = execute("forbidden");
+    void operatorCanInspectScopedEvidence() throws Exception {
+        String executionId = execute("operator-scoped");
 
         mockMvc.perform(get("/api/admin/audit/executions/{executionId}/evidence", executionId)
                 .header("X-ADP-User-Id", "operator-local")
                 .header("X-ADP-User-Roles", "OPERATOR"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.executionId").value(executionId))
+            .andExpect(jsonPath("$.schemaVersion").value("adp-execution-evidence/v1"));
     }
 
     @Test

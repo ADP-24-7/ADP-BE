@@ -137,10 +137,10 @@ class AuditExportControllerTests {
     void requesterCannotSelfApproveHighRiskExport() throws Exception {
         String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         String exportId = request(execute(marker, "approved context"), "PDF", "self-" + marker,
-            "operator-local", "PRIVILEGED_OPERATOR").path("exportId").asText();
+            "privileged-operator-local", "PRIVILEGED_OPERATOR").path("exportId").asText();
 
         mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportId)
-                .header("X-ADP-User-Id", "operator-local")
+                .header("X-ADP-User-Id", "privileged-operator-local")
                 .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"action\":\"APPROVE\",\"reason\":\"self approval\"}"))
@@ -238,14 +238,38 @@ class AuditExportControllerTests {
     }
 
     @Test
-    void ordinaryOperatorCannotRequestEvidenceExport() throws Exception {
+    void ordinaryOperatorCanRequestAndReadOnlyOwnEvidenceExport() throws Exception {
         String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         String executionId = execute(marker, "approved context");
-        mockMvc.perform(post("/api/v1/audit-exports")
+        String exportId = objectMapper.readTree(mockMvc.perform(post("/api/v1/audit-exports")
                 .header("X-ADP-User-Id", "ordinary-operator")
                 .header("X-ADP-User-Roles", "OPERATOR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(exportRequest(executionId, "CSV", "forbidden-" + marker)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString()).path("exportId").asText();
+
+        mockMvc.perform(get("/api/v1/audit-exports/{exportId}", exportId)
+                .header("X-ADP-User-Id", "ordinary-operator")
+                .header("X-ADP-User-Roles", "OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.job.requesterId").value("ordinary-operator"));
+
+        mockMvc.perform(get("/api/v1/audit-exports/{exportId}", exportId)
+                .header("X-ADP-User-Id", "different-operator")
+                .header("X-ADP-User-Roles", "OPERATOR"))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "APPROVAL_QUEUE")
+                .header("X-ADP-User-Id", "ordinary-operator")
+                .header("X-ADP-User-Roles", "OPERATOR"))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "AUDIT_HISTORY")
+                .header("X-ADP-User-Id", "ordinary-operator")
+                .header("X-ADP-User-Roles", "OPERATOR"))
             .andExpect(status().isForbidden());
     }
 
@@ -314,6 +338,62 @@ class AuditExportControllerTests {
     }
 
     @Test
+    void separatesActivePersonalWorkHandledDecisionsAndInstitutionAuditHistory() throws Exception {
+        String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String exportId = request(execute(marker, "approved context"), "CSV", "work-history-" + marker,
+            "auditor-local", "AUDITOR").path("exportId").asText();
+
+        mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"APPROVE\",\"reason\":\"승인 범위 확인\"}"))
+            .andExpect(status().isOk());
+        assertThat(workerService.processNext("history-worker")).isTrue();
+        mockMvc.perform(get("/api/v1/audit-exports/{exportId}/download", exportId)
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "MY_REQUESTS")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId", org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.hasItem(exportId))));
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "MY_HISTORY")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(exportId)));
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "DECISION_HISTORY")
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(exportId)));
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "AUDIT_HISTORY")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(exportId)));
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "AUDIT_HISTORY")
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "DECISION_HISTORY")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void workReadModelEnforcesInstitutionAndWorkloadScopeInSql() throws Exception {
         String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         String exportId = request(execute(marker, "approved context"), "CSV", "scope-" + marker,
@@ -346,6 +426,11 @@ class AuditExportControllerTests {
                 .content("{\"action\":\"APPROVE\",\"reason\":\"PDF 범위 확인\"}"))
             .andExpect(status().isOk());
         assertThat(workerService.processNext("pdf-worker")).isTrue();
+
+        mockMvc.perform(get("/api/v1/audit-exports/{exportId}/download", exportId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isForbidden());
 
         byte[] pdf = mockMvc.perform(get("/api/v1/audit-exports/{exportId}/download", exportId)
                 .header("X-ADP-User-Id", "auditor-local")

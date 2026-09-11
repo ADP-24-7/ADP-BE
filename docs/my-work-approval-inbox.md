@@ -8,12 +8,16 @@
 
 | View | 대상 | 범위 |
 | --- | --- | --- |
-| `MY_REQUESTS` | 감사 증적을 요청한 사용자 | 본인이 요청한 Job만 조회 |
+| `MY_REQUESTS` | 감사 증적을 요청한 사용자 | 본인의 진행 중 Job과 아직 다운로드하지 않은 결과 |
+| `MY_HISTORY` | 감사 증적을 요청한 사용자 | 본인의 다운로드 완료, 반려, 실패, 만료, 폐기 이력 |
 | `APPROVAL_QUEUE` | `PRIVILEGED_OPERATOR` | `REQUESTED` 상태이면서 본인 요청이 아닌 Job |
-| `HISTORY` | `PRIVILEGED_OPERATOR` | 권한 범위 내 전체 처리 이력 |
+| `DECISION_HISTORY` | `PRIVILEGED_OPERATOR` | 본인이 승인, 반려 또는 폐기한 Job |
+| `AUDIT_HISTORY` | `AUDITOR` | 감사 목적의 기관 및 Workload 범위 전체 이력 |
 
 모든 조회는 `institution_id`와 호출자에게 허용된 `workload_id`를 SQL에서 강제한다. 승인 큐는
-maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다.
+maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다. 일반 `OPERATOR`는 권한 범위의 실행 증적을 조회하고 본인
+명의로 반출을 요청할 수 있지만 승인, 타인 요청 이력, 기관 감사 이력에는 접근하지 않는다. 생성된 파일은 요청자
+본인만 다운로드한다. 로컬 계정도 `operator-local`과 `privileged-operator-local`을 분리해 이 경계를 그대로 재현한다.
 
 ## 상태 해석
 
@@ -30,8 +34,8 @@ maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다.
 ## 정렬과 우선 처리
 
 - `APPROVAL_QUEUE`: SLA 초과 요청을 포함해 접수 시각이 오래된 순
-- `MY_REQUESTS`: 다운로드 가능, 실패/반려 확인, 승인 대기, 생성 진행, 완료 순. 승인 대기끼리는 오래된 순
-- `HISTORY`: 최근 상태 변경 순
+- `MY_REQUESTS`: 다운로드 가능, 승인 대기, 생성 진행 순. 승인 대기끼리는 오래된 순
+- `MY_HISTORY`, `DECISION_HISTORY`, `AUDIT_HISTORY`: 최근 상태 변경 순
 
 정렬은 페이지네이션 전에 DB에서 수행해 다음 페이지의 오래된 요청이 최신 요청 뒤로 밀리지 않도록 한다.
 
@@ -45,8 +49,10 @@ maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다.
 
 ```http
 GET /api/v1/audit-exports?view=MY_REQUESTS&page=0&size=10
+GET /api/v1/audit-exports?view=MY_HISTORY&page=0&size=10
 GET /api/v1/audit-exports?view=APPROVAL_QUEUE&page=0&size=10
-GET /api/v1/audit-exports?view=HISTORY&page=0&size=10
+GET /api/v1/audit-exports?view=DECISION_HISTORY&page=0&size=10
+GET /api/v1/audit-exports?view=AUDIT_HISTORY&page=0&size=10
 GET /api/v1/audit-exports/work-summary
 ```
 
@@ -56,6 +62,8 @@ Monitoring은 집계와 업무 진입점만 제공한다. 승인, 반려, 폐기
 ## 검증 기준
 
 - Auditor의 본인 요청 조회와 Privileged Operator의 승인 큐 조회
+- 진행 중 본인 요청과 종료된 본인 이력 분리
+- 승인 담당자의 본인 처리 이력과 Auditor의 기관 전체 이력 분리
 - 본인 요청의 승인 큐 제외
 - Institution 및 Workload SQL scope
 - 24시간 이상 대기 집계

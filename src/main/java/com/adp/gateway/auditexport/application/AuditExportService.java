@@ -78,7 +78,9 @@ public class AuditExportService {
     public AuditExportDetail get(AuthPrincipal principal, String exportId) {
         requireExportRole(principal);
         requireInstitution(principal);
-        return persistence.load(exportId, principal.institutionId(), principal.workloadIds());
+        AuditExportDetail detail = persistence.load(exportId, principal.institutionId(), principal.workloadIds());
+        requireExportVisibility(principal, detail.job());
+        return detail;
     }
 
     public AuditExportWorkPage searchWork(
@@ -91,8 +93,13 @@ public class AuditExportService {
         requireExportRole(principal);
         requireInstitution(principal);
         boolean privileged = principal.hasRole(AdpRole.PRIVILEGED_OPERATOR);
-        if ((view == AuditExportWorkView.APPROVAL_QUEUE || view == AuditExportWorkView.HISTORY) && !privileged) {
+        boolean auditor = principal.hasRole(AdpRole.AUDITOR);
+        if ((view == AuditExportWorkView.APPROVAL_QUEUE || view == AuditExportWorkView.DECISION_HISTORY)
+            && !privileged) {
             throw new AccessDeniedException("Privileged operator role is required for approval work");
+        }
+        if (view == AuditExportWorkView.AUDIT_HISTORY && !auditor) {
+            throw new AccessDeniedException("Auditor role is required for institution audit history");
         }
         return persistence.searchWork(
             principal.institutionId(), principal.workloadIds(), principal.principalId(), privileged,
@@ -168,6 +175,9 @@ public class AuditExportService {
         requireExportRole(principal);
         requireInstitution(principal);
         AuditExportJob job = persistence.load(exportId, principal.institutionId(), principal.workloadIds()).job();
+        if (!principal.principalId().equals(job.requesterId())) {
+            throw new AccessDeniedException("Only the export requester can download generated content");
+        }
         requireCurrentGrant(principal, job, false);
         return persistence.download(exportId, principal.institutionId(), principal.workloadIds(),
             principal.principalId(), requestId, traceId, OffsetDateTime.now(clock));
@@ -204,8 +214,18 @@ public class AuditExportService {
     }
 
     private void requireExportRole(AuthPrincipal principal) {
-        if (!principal.hasRole(AdpRole.PRIVILEGED_OPERATOR) && !principal.hasRole(AdpRole.AUDITOR)) {
+        if (!principal.hasRole(AdpRole.OPERATOR)
+            && !principal.hasRole(AdpRole.PRIVILEGED_OPERATOR)
+            && !principal.hasRole(AdpRole.AUDITOR)) {
             throw new AccessDeniedException("Evidence export role is required");
+        }
+    }
+
+    private void requireExportVisibility(AuthPrincipal principal, AuditExportJob job) {
+        if (!principal.hasRole(AdpRole.PRIVILEGED_OPERATOR)
+            && !principal.hasRole(AdpRole.AUDITOR)
+            && !principal.principalId().equals(job.requesterId())) {
+            throw new AccessDeniedException("Operator can only read personally requested exports");
         }
     }
 

@@ -13,7 +13,8 @@ UI에서 본인 요청을 숨기는 것만으로는 maker-checker 경계가 보�
 
 ## 권한 범위를 서비스와 SQL 양쪽에서 검증
 
-`APPROVAL_QUEUE`, `HISTORY`는 서비스에서 `PRIVILEGED_OPERATOR`를 요구한다. 실제 목록과 집계 Query는
+`APPROVAL_QUEUE`, `DECISION_HISTORY`는 서비스에서 `PRIVILEGED_OPERATOR`를 요구하고 `AUDIT_HISTORY`는
+`AUDITOR`를 요구한다. 실제 목록과 집계 Query는
 `institution_id` 및 `allowedWorkloads` 조건을 항상 포함한다. 테스트에서는 제한된 Workload principal로
 persistence를 직접 호출해, 로컬 wildcard 인증 fixture가 SQL scope 검증을 가리지 않도록 했다.
 
@@ -40,3 +41,18 @@ Monitoring에서 승인 버튼을 제공하면 탐색 화면이 mutation 경계�
 `APPROVAL_QUEUE`는 오래된 순이었지만 `MY_REQUESTS`는 상태 우선순위 뒤에 `updated_at DESC`를 적용해 같은
 `REQUESTED` 상태가 최신 순으로 보였다. 두 화면 모두 승인 대기 안에서는 `created_at ASC`를 사용하도록 정렬을
 고정했다. 완료 및 오류 상태는 운영자가 최근 결과를 빠르게 확인할 수 있도록 기존 최신 변경 순을 유지한다.
+
+## 진행 목록에 종료 건이 계속 누적되는 문제
+
+다운로드 완료, 반려, 실패, 만료, 폐기 건까지 `MY_REQUESTS`에 두면 사용자가 지금 해야 할 일을 찾기 어렵다.
+`MY_REQUESTS`는 진행 중 상태와 미다운로드 `READY`만 반환하고 종료 건은 `MY_HISTORY`로 분리했다. 만료 또는 폐기된
+Job은 과거 승인을 되살리지 않는다. FE의 다시 요청은 기존 실행과 목적을 바탕으로 새 idempotency key를 가진 신규
+요청을 생성하며 BE가 현재 Institution, Workload, Evidence 권한을 다시 검증한다.
+
+## 운영자와 승인자의 로컬 권한이 같았던 문제
+
+초기 local fixture는 `operator-local`에 `OPERATOR`와 `PRIVILEGED_OPERATOR`를 함께 부여했다. 이 때문에 운영 담당자와
+승인 담당자가 같은 승인 탭과 전체 이력을 보는 것처럼 보였다. V10 local migration에서 중복 역할을 제거하고, 승인자는
+본인이 처리한 이력만, Auditor는 기관 감사 이력만 조회하도록 View 계약을 분리했다. 다만 운영 조사까지 차단하면 실행
+목록에서 상세 증적과 CSV/PDF 요청이 모두 403이 된다. `OPERATOR`에는 Scope 내 증적 조회와 본인 반출 요청만 허용하고,
+승인 command와 타인 이력은 계속 차단했다. 생성 파일 다운로드 역시 요청자 본인으로 제한한다.

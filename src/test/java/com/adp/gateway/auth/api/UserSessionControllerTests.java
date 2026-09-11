@@ -92,6 +92,18 @@ class UserSessionControllerTests {
     }
 
     @Test
+    void localOperationsAccountDoesNotInheritApprovalRole() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"principalId\":\"operator-local\",\"password\":\"operator-demo\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.roles").value(org.hamcrest.Matchers.contains("OPERATOR")))
+            .andExpect(jsonPath("$.roles", org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.hasItem("PRIVILEGED_OPERATOR"))));
+    }
+
+    @Test
     void rejectsSessionMutationWithoutCsrf() throws Exception {
         MockHttpSession session = login("auditor-local", "auditor-demo");
 
