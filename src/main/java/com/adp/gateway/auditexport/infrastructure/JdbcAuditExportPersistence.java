@@ -147,9 +147,26 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         }
         if (status != null) where.append(" and status = :status");
 
+        String orderBy = switch (view) {
+            case APPROVAL_QUEUE -> " order by created_at, export_id";
+            case MY_REQUESTS -> """
+                 order by
+                   case
+                     when status = 'READY' and downloaded_at is null then 0
+                     when status in ('FAILED', 'REJECTED', 'EXPIRED', 'REVOKED') then 1
+                     when status = 'REQUESTED' then 2
+                     when status in ('APPROVED', 'GENERATING') then 3
+                     else 4
+                   end,
+                   updated_at desc,
+                   export_id desc
+                """;
+            case HISTORY -> " order by updated_at desc, export_id desc";
+        };
+
         JdbcClient.StatementSpec select = bindWorkQuery(
             jdbcClient.sql("select * from audit_export_job" + where
-                + " order by created_at desc, export_id desc limit :size offset :offset"),
+                + orderBy + " limit :size offset :offset"),
             institutionId, allowedWorkloads, principalId, status
         ).param("size", size).param("offset", page * size);
         List<AuditExportJob> items = select.query(JOB_MAPPER).list();

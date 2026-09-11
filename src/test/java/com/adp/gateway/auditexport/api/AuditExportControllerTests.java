@@ -190,8 +190,14 @@ class AuditExportControllerTests {
         String executionId = execute(marker, "approved context");
         String auditorExport = request(executionId, "CSV", "work-auditor-" + marker,
             "auditor-local", "AUDITOR").path("exportId").asText();
+        String oldestAuditorExport = request(executionId, "CSV", "work-oldest-" + marker,
+            "auditor-local", "AUDITOR").path("exportId").asText();
         String approverOwnedExport = request(executionId, "PDF", "work-approver-" + marker,
             "privileged-operator-local", "PRIVILEGED_OPERATOR").path("exportId").asText();
+        jdbcClient.sql("update audit_export_job set created_at = :createdAt where export_id = :exportId")
+            .param("createdAt", OffsetDateTime.now().minusHours(48))
+            .param("exportId", oldestAuditorExport)
+            .update();
 
         mockMvc.perform(get("/api/v1/audit-exports")
                 .param("view", "MY_REQUESTS")
@@ -199,6 +205,7 @@ class AuditExportControllerTests {
                 .header("X-ADP-User-Roles", "AUDITOR"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(auditorExport)))
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(oldestAuditorExport)))
             .andExpect(jsonPath("$.items[*].exportId", org.hamcrest.Matchers.not(
                 org.hamcrest.Matchers.hasItem(approverOwnedExport))));
 
@@ -226,6 +233,13 @@ class AuditExportControllerTests {
                 .header("X-ADP-User-Id", "auditor-local")
                 .header("X-ADP-User-Roles", "AUDITOR"))
             .andExpect(status().isForbidden());
+
+        var approvalItems = exportPersistence.searchWork(
+            "institution_local", java.util.Set.of("*"), "privileged-operator-local", true,
+            AuditExportWorkView.APPROVAL_QUEUE, null, 0, 100
+        ).items();
+        assertThat(approvalItems).extracting("exportId")
+            .satisfies(ids -> assertThat(ids.indexOf(oldestAuditorExport)).isLessThan(ids.indexOf(auditorExport)));
     }
 
     @Test
