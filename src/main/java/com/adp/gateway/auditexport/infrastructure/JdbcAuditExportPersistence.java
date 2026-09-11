@@ -158,7 +158,8 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
                      when status in ('APPROVED', 'GENERATING') then 3
                      else 4
                    end,
-                   updated_at desc,
+                   case when status = 'REQUESTED' then created_at end asc nulls last,
+                   case when status <> 'REQUESTED' then updated_at end desc nulls last,
                    export_id desc
                 """;
             case HISTORY -> " order by updated_at desc, export_id desc";
@@ -319,15 +320,19 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         String reason, String requestId, String traceId, OffsetDateTime now
     ) {
         AuditExportJob before = loadScoped(exportId, institutionId, allowedWorkloads);
-        if (before.status() != AuditExportStatus.READY) {
-            throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Only ready export can be revoked");
+        if (before.status() != AuditExportStatus.APPROVED
+            && before.status() != AuditExportStatus.GENERATING
+            && before.status() != AuditExportStatus.READY) {
+            throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT",
+                "Only approved, generating, or ready export can be revoked");
         }
         int changed = jdbcClient.sql("""
                 update audit_export_job
                 set status = 'REVOKED', content = null, approval_reason = :reason,
+                    lease_owner = null, lease_until = null,
                     updated_at = :now, version = version + 1
                 where export_id = :exportId and institution_id = :institutionId
-                  and status = 'READY' and version = :version
+                  and status in ('APPROVED', 'GENERATING', 'READY') and version = :version
                 """)
             .param("reason", reason).param("now", now).param("exportId", exportId)
             .param("institutionId", institutionId).param("version", before.version()).update();
@@ -336,8 +341,10 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         }
         event(exportId, institutionId, actorId, requestId, traceId, "REVOKED", before.status(),
             AuditExportStatus.REVOKED, "AUDIT_EXPORT_REVOKED", now);
-        event(exportId, institutionId, actorId, requestId, traceId, "DELETED",
-            AuditExportStatus.REVOKED, AuditExportStatus.REVOKED, "AUDIT_EXPORT_CONTENT_DELETED", now);
+        if (before.status() == AuditExportStatus.READY) {
+            event(exportId, institutionId, actorId, requestId, traceId, "DELETED",
+                AuditExportStatus.REVOKED, AuditExportStatus.REVOKED, "AUDIT_EXPORT_CONTENT_DELETED", now);
+        }
         return loadById(exportId);
     }
 

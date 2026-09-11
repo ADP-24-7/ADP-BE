@@ -173,6 +173,71 @@ class AuditExportControllerTests {
     }
 
     @Test
+    void privilegedOperatorCanRevokeApprovedGeneratingAndReadyExportsWithRequiredReason() throws Exception {
+        String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String executionId = execute(marker, "approved context");
+        String[] exportIds = {
+            request(executionId, "CSV", "manual-revoke-approved-" + marker,
+                "auditor-local", "AUDITOR").path("exportId").asText(),
+            request(executionId, "CSV", "manual-revoke-generating-" + marker,
+                "auditor-local", "AUDITOR").path("exportId").asText(),
+            request(executionId, "CSV", "manual-revoke-ready-" + marker,
+                "auditor-local", "AUDITOR").path("exportId").asText()
+        };
+        for (String exportId : exportIds) {
+            mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportId)
+                    .header("X-ADP-User-Id", "privileged-operator-local")
+                    .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"action\":\"APPROVE\",\"reason\":\"승인 범위 확인\"}"))
+                .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportIds[0])
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"REVOKE\",\"reason\":\"\"}"))
+            .andExpect(status().isBadRequest());
+        revoke(exportIds[0], "승인 대상 오류");
+        assertThat(eventCount(exportIds[0], "REVOKED")).isEqualTo(1);
+        assertThat(eventCount(exportIds[0], "DELETED")).isZero();
+
+        jdbcClient.sql("""
+                update audit_export_job
+                set status = 'GENERATING', lease_owner = 'test-worker',
+                    lease_until = :leaseUntil, updated_at = :now
+                where export_id = :exportId
+                """)
+            .param("leaseUntil", OffsetDateTime.now().plusMinutes(1))
+            .param("now", OffsetDateTime.now())
+            .param("exportId", exportIds[1])
+            .update();
+        revoke(exportIds[1], "생성 중 범위 오류 발견");
+        assertThat(jdbcClient.sql("select lease_owner from audit_export_job where export_id = :exportId")
+            .param("exportId", exportIds[1]).query(String.class).optional()).isEmpty();
+        assertThat(eventCount(exportIds[1], "DELETED")).isZero();
+
+        jdbcClient.sql("""
+                update audit_export_job
+                set status = 'READY', content = :content, content_digest = :digest,
+                    content_size = 1, content_type = 'text/csv', file_name = 'evidence.csv',
+                    generated_at = :now, expires_at = :expiresAt, updated_at = :now
+                where export_id = :exportId
+                """)
+            .param("content", new byte[] {1})
+            .param("digest", "a".repeat(64))
+            .param("now", OffsetDateTime.now())
+            .param("expiresAt", OffsetDateTime.now().plusHours(1))
+            .param("exportId", exportIds[2])
+            .update();
+        revoke(exportIds[2], "다운로드 전 승인 오류 발견");
+        assertThat(jdbcClient.sql("select content from audit_export_job where export_id = :exportId")
+            .param("exportId", exportIds[2]).query(byte[].class).optional()).isEmpty();
+        assertThat(eventCount(exportIds[2], "DELETED")).isEqualTo(1);
+    }
+
+    @Test
     void ordinaryOperatorCannotRequestEvidenceExport() throws Exception {
         String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         String executionId = execute(marker, "approved context");
@@ -239,6 +304,12 @@ class AuditExportControllerTests {
             AuditExportWorkView.APPROVAL_QUEUE, null, 0, 100
         ).items();
         assertThat(approvalItems).extracting("exportId")
+            .satisfies(ids -> assertThat(ids.indexOf(oldestAuditorExport)).isLessThan(ids.indexOf(auditorExport)));
+        var requesterItems = exportPersistence.searchWork(
+            "institution_local", java.util.Set.of("*"), "auditor-local", false,
+            AuditExportWorkView.MY_REQUESTS, null, 0, 100
+        ).items();
+        assertThat(requesterItems).extracting("exportId")
             .satisfies(ids -> assertThat(ids.indexOf(oldestAuditorExport)).isLessThan(ids.indexOf(auditorExport)));
     }
 
@@ -320,6 +391,17 @@ class AuditExportControllerTests {
             {"executionId":"%s","reportType":"EXECUTION_EVIDENCE","format":"%s",
              "reason":"%s","idempotencyKey":"%s"}
             """.formatted(executionId, format, reason, key);
+    }
+
+    private void revoke(String exportId, String reason) throws Exception {
+        mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"REVOKE\",\"reason\":\"%s\"}".formatted(reason)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REVOKED"))
+            .andExpect(jsonPath("$.approvalReason").value(reason));
     }
 
     private String execute(String marker, String prompt) throws Exception {

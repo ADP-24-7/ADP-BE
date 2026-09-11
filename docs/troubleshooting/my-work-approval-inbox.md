@@ -27,3 +27,16 @@ Monitoring에서 승인 버튼을 제공하면 탐색 화면이 mutation 경계�
 헤더 My Work 메뉴는 이미 열린 정책 화면으로 이동할 수도 있다. FE는 `view` query parameter 변경을 감지해
 탭, 페이지, 선택된 검토 대상을 함께 초기화한다. Auditor가 권한 없는 승인/이력 URL로 진입하면
 `MY_REQUESTS`로 제한한다.
+
+## 잘못 승인된 반출을 만료까지 방치하는 문제
+
+초기 command는 `READY`만 폐기할 수 있었고 Work Inbox에는 폐기 조작이 없었다. 이 구조에서는 승인 오류를
+발견해도 생성 전이나 생성 중에는 중단할 수 없었다. 폐기 가능 상태를 `APPROVED`, `GENERATING`, `READY`로
+확장하고 사유 입력을 필수화했다. 생성 중 폐기는 lease를 함께 해제해 stale Worker가 완료 상태를 덮어쓰지 못하게
+하고, READY 폐기에서만 실제 content 삭제 Event를 기록한다.
+
+## 탭마다 달랐던 승인 대기 정렬
+
+`APPROVAL_QUEUE`는 오래된 순이었지만 `MY_REQUESTS`는 상태 우선순위 뒤에 `updated_at DESC`를 적용해 같은
+`REQUESTED` 상태가 최신 순으로 보였다. 두 화면 모두 승인 대기 안에서는 `created_at ASC`를 사용하도록 정렬을
+고정했다. 완료 및 오류 상태는 운영자가 최근 결과를 빠르게 확인할 수 있도록 기존 최신 변경 순을 유지한다.
