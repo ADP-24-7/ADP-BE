@@ -4,7 +4,7 @@
     {
       "name": "ADP-BE",
       "path": "ADP-BE",
-      "sourceDigest": "sha256:f7dd3738ed36766c236a8e705d180e5141cbcaaa927b8d3beb209eeedc5a8ea8",
+      "sourceDigest": "sha256:d23cf721fb155783ee553dac008c330973e6f8c3b67b7579aaa06d18515835ad",
       "selfHosted": true
     },
     {
@@ -24,7 +24,7 @@
     }
   ],
   "database": {
-    "latestFlywayVersion": "49"
+    "latestFlywayVersion": "50"
   },
   "requiredFiles": [
     "ADP-FE/package-lock.json",

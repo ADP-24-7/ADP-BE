@@ -72,6 +72,13 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
   - DB 전체 저장 실행과 Bundle 최신 선택 실행 수 분리
   - 기존 Runtime API 기반 세 NVIDIA Profile 실행 및 Bundle Export harness
   - 이전 버전 DB의 local principal institution binding 복구
+- [x] AI Experiment 02 BE Calibration Evidence 지원
+  - Branch: `feature/ai-experiment-02-calibration-evidence`
+  - Migration: V50
+  - `RAW_VALUE_REFLECTION`을 Data Class, Transform Strategy, Field Treatment와 privacy-safe하게 결속
+  - Privileged, Institution/Workload-scoped Calibration Evidence API와 versioned JSON Schema
+  - Legacy reflection metadata 누락과 Finding aggregate 불일치를 `calibration_ready=false`로 fail closed
+  - 기존 Evaluation Bundle v2, Response Guard 판정, Runtime Policy는 변경하지 않음
 
 ## Security Cross-cutting Tracking
 

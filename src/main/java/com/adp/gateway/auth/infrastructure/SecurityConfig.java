@@ -127,6 +127,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/bundle").hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/readiness").hasRole("PRIVILEGED_OPERATOR")
+                .requestMatchers("/api/admin/ai/evaluation-runs/*/calibration-evidence")
+                    .hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/contract", "/api/admin/ai/evaluation-runs/*/contract/freeze")
                     .hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers("/api/admin/audit/executions/*/evidence").hasRole("PRIVILEGED_OPERATOR")

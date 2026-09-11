@@ -7,7 +7,12 @@ import java.util.Map;
 
 import com.adp.gateway.context.application.CanonicalValueHasher;
 import com.adp.gateway.egress.domain.ExecutionPackType;
+import com.adp.gateway.egress.domain.FieldObligation;
+import com.adp.gateway.egress.domain.FieldTreatment;
+import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
+import com.adp.gateway.retrieval.domain.DataClass;
+import com.adp.gateway.transform.domain.TransformStrategy;
 import org.junit.jupiter.api.Test;
 
 class RegexResponseLeakageDetectorTests {
@@ -38,6 +43,35 @@ class RegexResponseLeakageDetectorTests {
         assertThat(findings).extracting("findingType")
             .contains("ACCESS_TOKEN", "REFRESH_TOKEN", "CREDENTIAL", "PRIVATE_KEY", "SEED");
         assertThat(findings).allSatisfy(finding -> assertThat(finding.evidenceDigest()).hasSize(64));
+    }
+
+    @Test
+    void classifiesRawReflectionBySourceDataClassAndTransformWithoutExposingFieldPath() {
+        var payload = new OutboundCandidatePayload(
+            "out_test", "dest_test", "v1", "profile_digest", ExecutionPackType.AI,
+            "schema-v1", "candidate_digest", List.of(new OutboundCandidateField(
+                "$.transactions[0].transactionId",
+                DataClass.TRANSACTION_IDENTIFIER,
+                TransformStrategy.HMAC_PSEUDO,
+                FieldObligation.PSEUDONYMIZABLE,
+                FieldTreatment.TRANSFORMED,
+                "value-digest",
+                List.of(),
+                "hmac-transaction-value"
+            ))
+        );
+
+        var findings = detector.detect(payload, Map.of("answer", "Seen hmac-transaction-value"));
+
+        assertThat(findings).hasSize(1);
+        var finding = findings.getFirst();
+        assertThat(finding.findingType()).isEqualTo("RAW_VALUE_REFLECTION");
+        assertThat(finding.sourceDataClass()).isEqualTo("TRANSACTION_IDENTIFIER");
+        assertThat(finding.transformStrategy()).isEqualTo("HMAC_PSEUDO");
+        assertThat(finding.fieldTreatment()).isEqualTo("TRANSFORMED");
+        assertThat(finding.outboundFieldPathDigest()).hasSize(64);
+        assertThat(finding.toString()).doesNotContain("$.transactions[0].transactionId");
+        assertThat(finding.toString()).doesNotContain("hmac-transaction-value");
     }
 
     private OutboundCandidatePayload payload() {

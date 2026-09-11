@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
@@ -49,6 +50,9 @@ class AiEvaluationBundleControllerTests {
 
     @Autowired
     private AiEvaluationRunCatalog evaluationRuns;
+
+    @Autowired
+    private JdbcClient jdbcClient;
 
     @org.junit.jupiter.api.BeforeEach
     void freezeEvaluationContract() throws Exception {
@@ -280,6 +284,157 @@ class AiEvaluationBundleControllerTests {
                 .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.reasonCode").value("AI_EVALUATION_BUNDLE_NOT_FOUND"));
+    }
+
+    @Test
+    void exportsPrivacySafeCalibrationEvidenceForTheSelectedCaseModelMatrix() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        var executionIds = new java.util.ArrayList<String>();
+        for (int index = 0; index < modelProfiles.profiles().size(); index++) {
+            executionIds.add(submitEvaluation("calibration_" + suffix + "_" + index, index));
+        }
+        addReflectionFinding(executionIds.getFirst(), true);
+
+        String response = mockMvc.perform(get(
+                "/api/admin/ai/evaluation-runs/{runId}/calibration-evidence",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID
+            )
+            .header("X-ADP-User-Id", "bundle-exporter")
+            .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.manifest.schema_version").value("adp-ai-calibration-evidence/v1"))
+            .andExpect(jsonPath("$.manifest.content_digest")
+                .value(org.hamcrest.Matchers.matchesPattern("sha256:[0-9a-f]{64}")))
+            .andExpect(jsonPath("$.manifest.execution_count").value(3))
+            .andExpect(jsonPath("$.calibration_ready").value(true))
+            .andExpect(jsonPath("$.readiness_reason_codes.length()").value(0))
+            .andExpect(jsonPath("$..raw_value").doesNotExist())
+            .andExpect(jsonPath("$..outbound_field_path").doesNotExist())
+            .andReturn().getResponse().getContentAsString();
+        JsonNode reflected = java.util.stream.StreamSupport.stream(
+                objectMapper.readTree(response).path("executions").spliterator(), false
+            )
+            .filter(execution -> execution.path("finding_count").asInt() == 1)
+            .findFirst()
+            .orElseThrow();
+        JsonNode group = reflected.path("finding_groups").get(0);
+        assertThat(group.path("finding_type").asText()).isEqualTo("RAW_VALUE_REFLECTION");
+        assertThat(group.path("source_data_class").asText()).isEqualTo("TRANSACTION_IDENTIFIER");
+        assertThat(group.path("transform_strategy").asText()).isEqualTo("HMAC_PSEUDO");
+        assertThat(group.path("field_treatment").asText()).isEqualTo("TRANSFORMED");
+        assertThat(group.path("evidence_digests").get(0).asText()).isEqualTo("b".repeat(64));
+        assertCalibrationContract(response);
+    }
+
+    @Test
+    void marksLegacyReflectionEvidenceAsNotCalibrationReady() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        var executionIds = new java.util.ArrayList<String>();
+        for (int index = 0; index < modelProfiles.profiles().size(); index++) {
+            executionIds.add(submitEvaluation("legacy_calibration_" + suffix + "_" + index, index));
+        }
+        addReflectionFinding(executionIds.getFirst(), false);
+
+        String response = mockMvc.perform(get(
+                "/api/admin/ai/evaluation-runs/{runId}/calibration-evidence",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID
+            )
+            .header("X-ADP-User-Id", "bundle-exporter")
+            .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.calibration_ready").value(false))
+            .andExpect(jsonPath("$.readiness_reason_codes[0]").value("REFLECTION_METADATA_MISSING"))
+            .andReturn().getResponse().getContentAsString();
+        assertThat(java.util.stream.StreamSupport.stream(
+                objectMapper.readTree(response).path("executions").spliterator(), false
+            )
+            .mapToInt(execution -> execution.path("missing_reflection_metadata_count").asInt())
+            .sum()).isEqualTo(1);
+    }
+
+    @Test
+    void operatorCannotExportCalibrationEvidence() throws Exception {
+        mockMvc.perform(get(
+                "/api/admin/ai/evaluation-runs/{runId}/calibration-evidence",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID
+            )
+            .header("X-ADP-User-Id", "operator-local")
+            .header("X-ADP-User-Roles", "OPERATOR"))
+            .andExpect(status().isForbidden());
+    }
+
+    private void addReflectionFinding(String executionId, boolean withMetadata) {
+        String connectorExecutionId = jdbcClient.sql("""
+                select connector_execution_id from runtime.response_guard_result
+                where execution_id = :executionId
+                """)
+            .param("executionId", executionId)
+            .query(String.class)
+            .single();
+        jdbcClient.sql("""
+            insert into runtime.response_sensitive_finding (
+                connector_execution_id, execution_id, finding_type, location,
+                start_offset, end_offset, detector_version, evidence_digest,
+                source_data_class, transform_strategy, field_treatment,
+                outbound_field_path_digest, created_at
+            ) values (
+                :connectorExecutionId, :executionId, 'RAW_VALUE_REFLECTION', '$.response',
+                1, 8, 'ai-response-regex-v2', :evidenceDigest,
+                :sourceDataClass, :transformStrategy, :fieldTreatment,
+                :fieldPathDigest, current_timestamp
+            )
+            """)
+            .param("connectorExecutionId", connectorExecutionId)
+            .param("executionId", executionId)
+            .param("evidenceDigest", "b".repeat(64))
+            .param("sourceDataClass", withMetadata ? "TRANSACTION_IDENTIFIER" : null)
+            .param("transformStrategy", withMetadata ? "HMAC_PSEUDO" : null)
+            .param("fieldTreatment", withMetadata ? "TRANSFORMED" : null)
+            .param("fieldPathDigest", withMetadata ? "c".repeat(64) : null)
+            .update();
+        jdbcClient.sql("""
+            update runtime.response_guard_result
+            set status = 'REJECTED', leakage_detected = true,
+                reason_codes = 'RESPONSE_SENSITIVE_DATA_DETECTED', finding_count = 1
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .update();
+        jdbcClient.sql("""
+            update runtime.runtime_execution
+            set response_guard_status = 'REJECTED', controlled_delivery_status = 'WITHHELD',
+                response_guard_reason_codes = 'RESPONSE_SENSITIVE_DATA_DETECTED'
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .update();
+    }
+
+    private void assertCalibrationContract(String response) throws Exception {
+        String schemaJson = java.nio.file.Files.readString(
+            java.nio.file.Path.of("docs/contracts/ai-calibration-evidence.schema.json")
+        );
+        var schema = com.networknt.schema.SchemaRegistry
+            .withDefaultDialect(com.networknt.schema.SpecificationVersion.DRAFT_2020_12)
+            .getSchema(schemaJson, com.networknt.schema.InputFormat.JSON);
+        assertThat(schema.validate(
+            response,
+            com.networknt.schema.InputFormat.JSON,
+            context -> context.executionConfig(config -> config.formatAssertionsEnabled(true))
+        )).isEmpty();
+
+        JsonNode root = objectMapper.readTree(response);
+        Map<String, Object> content = new java.util.TreeMap<>();
+        content.put("schema_version", root.path("manifest").path("schema_version").asText());
+        content.put("evaluation_run_id", root.path("manifest").path("evaluation_run_id").asText());
+        content.put("evaluation_run_version", root.path("manifest").path("evaluation_run_version").asText());
+        content.put("calibration_ready", root.path("calibration_ready").asBoolean());
+        content.put("readiness_reason_codes", objectMapper.convertValue(
+            root.path("readiness_reason_codes"), Object.class
+        ));
+        content.put("executions", objectMapper.convertValue(root.path("executions"), Object.class));
+        assertThat(root.path("manifest").path("content_digest").asText())
+            .isEqualTo(canonicalizer.digest(content));
     }
 
     private org.springframework.test.web.servlet.ResultActions export(String role) throws Exception {
