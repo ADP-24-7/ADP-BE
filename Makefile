@@ -3,6 +3,11 @@ SHELL := /bin/sh
 GRADLE_IMAGE ?= gradle:8.14.3-jdk21
 COMPOSE ?= docker compose
 ADP_DA_ROOT ?= $(CURDIR)/../ADP-DA
+INTEGRATION_PROFILE ?= demo
+INTEGRATION_LOCK ?= config/integration/repository-lock.json
+INTEGRATION_PROFILE_FILE := config/integration/profiles/$(INTEGRATION_PROFILE).env
+INTEGRATION_ENV_FILES := --env-file .env --env-file $(INTEGRATION_PROFILE_FILE)
+INTEGRATION_COMPOSE := $(COMPOSE) $(INTEGRATION_ENV_FILES)
 DOCKER_RUN_GRADLE := docker run --rm \
 	-v "$(CURDIR)":/workspace \
 	-v adp-be-gradle-cache:/home/gradle/.gradle \
@@ -37,7 +42,7 @@ DOCKER_RUN_GRADLE_DEV := docker run --rm --network adp-local \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/dev-run-project-cache
 
-.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps ai-eval-e2e digital-asset-e2e ncp-artifact-ingest-e2e
+.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps integration-validate integration-up integration-verify integration-check integration-down ai-eval-e2e digital-asset-e2e ncp-artifact-ingest-e2e
 
 help:
 	@printf "%s\n" \
@@ -55,6 +60,8 @@ help:
 		"  make docker-rebuild Rebuild and start the full dev stack" \
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
+		"  make integration-check INTEGRATION_PROFILE=demo Validate lock, start and verify the full stack" \
+		"  make integration-down INTEGRATION_PROFILE=demo Stop the integration stack" \
 		"  make ai-eval-e2e Run the explicitly confirmed real three-model Evaluation and export the DA Bundle" \
 		"  make digital-asset-e2e Run DA PR #31 six-case fixtures through the real local Runtime path" \
 		"  make ncp-artifact-ingest-e2e Read the DA Bundle from NCP and ingest it through the BE API" \
@@ -105,6 +112,24 @@ docker-logs:
 
 docker-ps:
 	$(COMPOSE) ps
+
+integration-validate: env
+	python3 scripts/validate-integration-lock.py --lock $(INTEGRATION_LOCK) --profile $(INTEGRATION_PROFILE)
+	$(INTEGRATION_COMPOSE) config --quiet
+
+integration-up: integration-validate docker-network
+	$(INTEGRATION_COMPOSE) up -d --build --wait --wait-timeout 300
+
+integration-verify:
+	INTEGRATION_PROFILE=$(INTEGRATION_PROFILE) ./scripts/verify-local-integration.sh
+	@actual_version=`$(INTEGRATION_COMPOSE) exec -T postgres psql -U "$${POSTGRES_USER:-adp}" -d "$${POSTGRES_DB:-adp}" -Atc "select max(version) from flyway_schema_history where success"`; \
+	 expected_version=`python3 -c 'import json; print(json.load(open("$(INTEGRATION_LOCK)"))["database"]["latestFlywayVersion"])'`; \
+	 test "$$actual_version" = "$$expected_version" || { printf '%s\n' "Flyway mismatch: expected=$$expected_version actual=$$actual_version" >&2; exit 1; }
+
+integration-check: integration-up integration-verify
+
+integration-down: env
+	$(INTEGRATION_COMPOSE) down
 
 ai-eval-e2e:
 	./scripts/run-ai-evaluation-e2e.sh

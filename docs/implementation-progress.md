@@ -19,6 +19,18 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 | BE-11 | Baseline Completed | Observability Operations |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
+| Slice 30 | In Progress | Local Integration Lock, Profiles & One-command Verification |
+
+## Slice 30 Local Integration Reproducibility
+
+- [x] BE Compose를 네 Repository 통합 실행 Source of Truth로 유지
+- [x] FE·BE·DA·Docs Commit SHA와 Flyway current를 Repository Lock으로 고정
+- [x] Checkout drift, dirty tracked file, 필수 입력 누락, Migration drift 사전 차단
+- [x] `local`, `demo`, `production-like` 환경 Profile 분리
+- [x] Secret `.env`와 versioned non-secret Profile 책임 분리
+- [x] 전체 Container health와 Runtime Profile, Flyway current 검증 명령 추가
+- [x] Demo 합성 데이터 Provenance를 BE metadata와 FE UI에 표시
+- [ ] 고정 Commit 상태에서 전체 Docker Stack 재기동 검증
 
 ## AI Runtime Evaluation Tracking
 
