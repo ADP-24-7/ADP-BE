@@ -19,7 +19,19 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 | BE-11 | Baseline Completed | Observability Operations |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
-| Slice 30 | In Progress | Local Integration Lock, Profiles & One-command Verification |
+| Slice 30 | Completed | Local Integration Lock, Profiles & One-command Verification |
+| Slice 32 | Completed | Production Reference Architecture & Claim Boundary |
+
+## Slice 32 Production Reference Architecture
+
+- [x] 중앙 API Gateway와 private ingress를 기본 배치로 정의
+- [x] OIDC Admin Session과 mTLS Service Identity를 설계 전용 범위로 분리
+- [x] PostgreSQL/Object Storage의 Source of Truth와 HA/retention 책임 정의
+- [x] Secret Manager/KMS와 Egress Proxy/Firewall 목표 경계 정의
+- [x] Prometheus/Alertmanager/SIEM 책임과 low-cardinality 원칙 정의
+- [x] additive Migration, immutable image, Policy/Runtime rollback 책임 분리
+- [x] Local/NCP Foundation 검증과 Cloud/HA/DR 미검증 Claim 분리
+- [x] Machine-readable Architecture Contract와 CI drift 검증 추가
 
 ## Slice 30 Local Integration Reproducibility
 

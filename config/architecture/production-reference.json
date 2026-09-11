@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "adp-production-reference/v1",
+  "claims": {
+    "localProductRuntimeVerified": true,
+    "ncpQaFoundationVerified": true,
+    "productionCloudRuntimeVerified": false,
+    "highAvailabilityVerified": false,
+    "disasterRecoveryVerified": false,
+    "publicDemoVerified": false
+  },
+  "components": [
+    {
+      "id": "central-api-gateway",
+      "owner": "INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/production-reference-architecture.md"]
+    },
+    {
+      "id": "admin-oidc",
+      "owner": "BE_INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/sec-0-security-contract.md"]
+    },
+    {
+      "id": "service-mtls",
+      "owner": "BE_INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/sec-0-security-contract.md"]
+    },
+    {
+      "id": "gateway-runtime",
+      "owner": "BE",
+      "status": "IMPLEMENTED_LOCAL",
+      "evidence": ["src/main/java/com/adp/gateway/runtime/application/RuntimeExecutionService.java"]
+    },
+    {
+      "id": "egress-network-control",
+      "owner": "INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/sec-1-2-security-hardening.md"]
+    },
+    {
+      "id": "provider-adapters",
+      "owner": "BE",
+      "status": "IMPLEMENTED_LOCAL",
+      "evidence": ["src/main/java/com/adp/gateway/connector"]
+    },
+    {
+      "id": "postgresql-state",
+      "owner": "BE",
+      "status": "IMPLEMENTED_LOCAL",
+      "evidence": ["src/main/resources/db/migration"]
+    },
+    {
+      "id": "postgresql-ha",
+      "owner": "INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/production-reference-architecture.md"]
+    },
+    {
+      "id": "object-storage-handoff",
+      "owner": "BE_INFRA",
+      "status": "VERIFIED_QA_FOUNDATION",
+      "evidence": ["docs/ncp-5-be-content-store.md"]
+    },
+    {
+      "id": "secret-manager-kms",
+      "owner": "INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/production-reference-architecture.md"]
+    },
+    {
+      "id": "prometheus-alerting",
+      "owner": "BE_INFRA",
+      "status": "IMPLEMENTED_LOCAL",
+      "evidence": ["ops/prometheus/alerts.yml"]
+    },
+    {
+      "id": "siem-integration",
+      "owner": "INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/production-reference-architecture.md"]
+    },
+    {
+      "id": "backup-restore-dr",
+      "owner": "INFRA",
+      "status": "OPTIONAL_CLOUD_UNVERIFIED",
+      "evidence": ["docs/production-reference-architecture.md"]
+    },
+    {
+      "id": "deployment-rollback",
+      "owner": "BE_INFRA",
+      "status": "DESIGN_ONLY",
+      "evidence": ["docs/production-reference-architecture.md"]
+    }
+  ]
+}
