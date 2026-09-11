@@ -111,9 +111,10 @@ public class AuditExportService {
         requireExportRole(principal);
         requireInstitution(principal);
         boolean privileged = principal.hasRole(AdpRole.PRIVILEGED_OPERATOR);
+        boolean operationsAvailable = privileged || principal.hasRole(AdpRole.AUDITOR);
         return persistence.summarizeWork(
             principal.institutionId(), principal.workloadIds(), principal.principalId(), privileged,
-            OffsetDateTime.now(clock)
+            operationsAvailable, OffsetDateTime.now(clock)
         );
     }
 

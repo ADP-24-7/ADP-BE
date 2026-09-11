@@ -17,7 +17,9 @@
 모든 조회는 `institution_id`와 호출자에게 허용된 `workload_id`를 SQL에서 강제한다. 승인 큐는
 maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다. 일반 `OPERATOR`는 권한 범위의 실행 증적을 조회하고 본인
 명의로 반출을 요청할 수 있지만 승인, 타인 요청 이력, 기관 감사 이력에는 접근하지 않는다. 생성된 파일은 요청자
-본인만 다운로드한다. 로컬 계정도 `operator-local`과 `privileged-operator-local`을 분리해 이 경계를 그대로 재현한다.
+본인만 만료 전까지 반복 다운로드할 수 있으며 모든 다운로드를 Event로 기록한다. 개인 업무 집계는 모든 반출 가능
+역할에 제공하지만 기관 전체 운영 집계는 `PRIVILEGED_OPERATOR`, `AUDITOR`에게만 제공한다. 로컬 계정도
+`operator-local`과 `privileged-operator-local`을 분리해 이 경계를 그대로 재현한다.
 
 ## 상태 해석
 
@@ -42,8 +44,13 @@ maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다. 일반 `
 ## 승인 취소와 폐기
 
 `PRIVILEGED_OPERATOR`는 잘못 승인된 반출을 `APPROVED`, `GENERATING`, `READY` 상태에서 `REVOKE`할 수 있다.
-폐기 사유는 필수이며 기존 승인 근거를 대체해 운영 이력에 남는다. `GENERATING` 폐기는 Worker lease를 해제하고,
-실제 결과 파일이 존재하는 `READY` 폐기는 content를 즉시 삭제한 뒤 `AUDIT_EXPORT_CONTENT_DELETED` Event를 추가한다.
+폐기 사유는 필수이며 승인자·승인 시각·승인 사유와 별도의 폐기자·폐기 시각·폐기 사유로 보존한다. 각 상태 변경
+Event에도 당시 사유를 함께 저장하므로 후속 전이가 앞선 판단 근거를 덮어쓰지 않는다. `GENERATING` 폐기는 Worker
+lease를 해제하고, 실제 결과 파일이 존재하는 `READY` 폐기는 content를 즉시 삭제한 뒤
+`AUDIT_EXPORT_CONTENT_DELETED` Event를 추가한다.
+
+다운로드는 대상 Job을 행 잠금한 뒤 `READY`, 만료 시각, content digest를 확인한다. 폐기와 다운로드가 동시에
+요청되면 먼저 잠금을 획득해 commit한 전이가 우선하며, 폐기가 먼저 commit된 파일은 반환하지 않는다.
 
 ## API
 
@@ -70,5 +77,8 @@ Monitoring은 집계와 업무 진입점만 제공한다. 승인, 반려, 폐기
 - 승인 Queue와 본인 승인 대기 요청의 오래된 순 정렬
 - `APPROVED`, `GENERATING`, `READY`의 사유 필수 폐기
 - 생성 중 lease 해제와 READY content 삭제 Event
-- V51 조회 인덱스 생성
+- 승인·반려·폐기 Event의 사유 원문 보존과 승인/폐기 snapshot 분리
+- 다운로드와 폐기 직렬화 및 반복 다운로드 Event
+- 역할별 개인/기관 운영 집계 분리
+- V51 조회 인덱스와 V52 결정 증적 보존 migration
 - 기존 승인, 생성, 다운로드 command 회귀

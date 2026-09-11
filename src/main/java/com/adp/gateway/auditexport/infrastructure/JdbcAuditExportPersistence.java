@@ -38,6 +38,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         rs.getString("event_id"), rs.getString("actor_id"), rs.getString("request_id"),
         rs.getString("trace_id"), rs.getString("action"), nullableStatus(rs.getString("from_status")),
         AuditExportStatus.valueOf(rs.getString("to_status")), rs.getString("reason_code"),
+        rs.getString("reason_text"),
         rs.getObject("occurred_at", OffsetDateTime.class)
     );
 
@@ -120,7 +121,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         if (inserted == 1) {
             event(job.exportId(), job.institutionId(), reservation.requesterId(), reservation.requestId(),
                 reservation.traceId(), "REQUESTED", null, AuditExportStatus.REQUESTED,
-                "AUDIT_EXPORT_REQUESTED", reservation.now());
+                "AUDIT_EXPORT_REQUESTED", reservation.requestReason(), reservation.now());
         }
         return job;
     }
@@ -203,6 +204,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         Set<String> allowedWorkloads,
         String principalId,
         boolean privileged,
+        boolean operationsAvailable,
         OffsetDateTime now
     ) {
         StringBuilder scope = new StringBuilder(" where institution_id = :institutionId");
@@ -239,6 +241,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             return new AuditExportWorkSummary(
                 principalId,
                 privileged,
+                operationsAvailable,
                 new AuditExportWorkSummary.PersonalWork(
                     rs.getLong("my_pending"), rs.getLong("my_approved"), rs.getLong("my_ready"),
                     rs.getLong("my_downloaded"), rs.getLong("my_rejected"), rs.getLong("my_failed")
@@ -248,9 +251,14 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
                     privileged ? rs.getLong("approval_aged") : 0
                 ),
                 new AuditExportWorkSummary.Operations(
-                    rs.getLong("ops_pending"), oldestAge, rs.getLong("approved_24h"),
-                    rs.getLong("rejected_24h"), rs.getLong("generating"), rs.getLong("ready"),
-                    rs.getLong("failed"), rs.getLong("expired")
+                    operationsAvailable ? rs.getLong("ops_pending") : 0,
+                    operationsAvailable ? oldestAge : null,
+                    operationsAvailable ? rs.getLong("approved_24h") : 0,
+                    operationsAvailable ? rs.getLong("rejected_24h") : 0,
+                    operationsAvailable ? rs.getLong("generating") : 0,
+                    operationsAvailable ? rs.getLong("ready") : 0,
+                    operationsAvailable ? rs.getLong("failed") : 0,
+                    operationsAvailable ? rs.getLong("expired") : 0
                 ),
                 now
             );
@@ -301,7 +309,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Concurrent export transition");
         }
         event(exportId, institutionId, actorId, requestId, traceId, "APPROVED", before.status(),
-            AuditExportStatus.APPROVED, "AUDIT_EXPORT_APPROVED", now);
+            AuditExportStatus.APPROVED, "AUDIT_EXPORT_APPROVED", reason, now);
         return loadById(exportId);
     }
 
@@ -328,7 +336,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Concurrent export transition");
         }
         event(exportId, institutionId, actorId, requestId, traceId, "REJECTED", before.status(),
-            AuditExportStatus.REJECTED, "AUDIT_EXPORT_REJECTED", now);
+            AuditExportStatus.REJECTED, "AUDIT_EXPORT_REJECTED", reason, now);
         return loadById(exportId);
     }
 
@@ -347,22 +355,23 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         }
         int changed = jdbcClient.sql("""
                 update audit_export_job
-                set status = 'REVOKED', content = null, approval_reason = :reason,
+                set status = 'REVOKED', content = null,
+                    revoked_by = :actorId, revoked_at = :now, revocation_reason = :reason,
                     lease_owner = null, lease_until = null,
                     updated_at = :now, version = version + 1
                 where export_id = :exportId and institution_id = :institutionId
                   and status in ('APPROVED', 'GENERATING', 'READY') and version = :version
                 """)
-            .param("reason", reason).param("now", now).param("exportId", exportId)
+            .param("actorId", actorId).param("reason", reason).param("now", now).param("exportId", exportId)
             .param("institutionId", institutionId).param("version", before.version()).update();
         if (changed != 1) {
             throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Concurrent export transition");
         }
         event(exportId, institutionId, actorId, requestId, traceId, "REVOKED", before.status(),
-            AuditExportStatus.REVOKED, "AUDIT_EXPORT_REVOKED", now);
+            AuditExportStatus.REVOKED, "AUDIT_EXPORT_REVOKED", reason, now);
         if (before.status() == AuditExportStatus.READY) {
             event(exportId, institutionId, actorId, requestId, traceId, "DELETED",
-                AuditExportStatus.REVOKED, AuditExportStatus.REVOKED, "AUDIT_EXPORT_CONTENT_DELETED", now);
+                AuditExportStatus.REVOKED, AuditExportStatus.REVOKED, "AUDIT_EXPORT_CONTENT_DELETED", null, now);
         }
         return loadById(exportId);
     }
@@ -381,9 +390,9 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             .list();
         expired.forEach(item -> {
             event(item.exportId(), item.institutionId(), "system:expiry", null, null, "EXPIRED",
-                AuditExportStatus.READY, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_EXPIRED", now);
+                AuditExportStatus.READY, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_EXPIRED", null, now);
             event(item.exportId(), item.institutionId(), "system:expiry", null, null, "DELETED",
-                AuditExportStatus.EXPIRED, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_CONTENT_DELETED", now);
+                AuditExportStatus.EXPIRED, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_CONTENT_DELETED", null, now);
         });
         return expired.size();
     }
@@ -438,7 +447,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Export lease is stale");
         }
         event(exportId, before.institutionId(), workerId, null, null, "GENERATED", before.status(),
-            AuditExportStatus.READY, "AUDIT_EXPORT_GENERATED", generatedAt);
+            AuditExportStatus.READY, "AUDIT_EXPORT_GENERATED", null, generatedAt);
     }
 
     @Override
@@ -450,6 +459,9 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         int changed = jdbcClient.sql("""
                 update audit_export_job
                 set status = :status, content = null, failure_code = :failureCode,
+                    revoked_by = case when :status = 'REVOKED' then :workerId else revoked_by end,
+                    revoked_at = case when :status = 'REVOKED' then :now else revoked_at end,
+                    revocation_reason = case when :status = 'REVOKED' then :failureCode else revocation_reason end,
                     lease_owner = null, lease_until = null, updated_at = :now, version = version + 1
                 where export_id = :exportId and status = 'GENERATING' and lease_owner = :workerId
                 """)
@@ -457,7 +469,7 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             .param("exportId", exportId).param("workerId", workerId).update();
         if (changed == 1) {
             event(exportId, before.institutionId(), workerId, null, null, target.name(), before.status(),
-                target, failureCode, now);
+                target, failureCode, failureCode, now);
         }
     }
 
@@ -501,8 +513,11 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         String exportId, String institutionId, Set<String> allowedWorkloads, String actorId,
         String requestId, String traceId, OffsetDateTime now
     ) {
-        expire(exportId, institutionId, now);
-        AuditExportJob job = loadScoped(exportId, institutionId, allowedWorkloads);
+        AuditExportJob job = loadScopedForUpdate(exportId, institutionId, allowedWorkloads);
+        if (job.status() == AuditExportStatus.READY && !job.expiresAt().isAfter(now)) {
+            expire(exportId, institutionId, now);
+            throw new AuditExportException("AUDIT_EXPORT_EXPIRED", "Export has expired");
+        }
         if (job.status() == AuditExportStatus.EXPIRED) {
             throw new AuditExportException("AUDIT_EXPORT_EXPIRED", "Export has expired");
         }
@@ -514,22 +529,39 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         if (!sha256(content).equals(job.contentDigest())) {
             throw new AuditExportException("AUDIT_EXPORT_DIGEST_MISMATCH", "Export digest mismatch");
         }
-        jdbcClient.sql("""
+        int changed = jdbcClient.sql("""
                 update audit_export_job set downloaded_at = :now, updated_at = :now, version = version + 1
-                where export_id = :exportId
-                """).param("now", now).param("exportId", exportId).update();
+                where export_id = :exportId and institution_id = :institutionId
+                  and status = 'READY' and version = :version
+                """).param("now", now).param("exportId", exportId)
+            .param("institutionId", institutionId).param("version", job.version()).update();
+        if (changed != 1) {
+            throw new AuditExportException("AUDIT_EXPORT_STATUS_CONFLICT", "Concurrent export transition");
+        }
         event(exportId, institutionId, actorId, requestId, traceId, "DOWNLOADED", job.status(),
-            job.status(), "AUDIT_EXPORT_DOWNLOADED", now);
+            job.status(), "AUDIT_EXPORT_DOWNLOADED", null, now);
         return new AuditExportDownload(content, job.contentType(), job.fileName(), job.contentDigest());
     }
 
     private AuditExportJob loadScoped(String exportId, String institutionId, Set<String> allowedWorkloads) {
+        return loadScoped(exportId, institutionId, allowedWorkloads, false);
+    }
+
+    private AuditExportJob loadScopedForUpdate(
+        String exportId, String institutionId, Set<String> allowedWorkloads
+    ) {
+        return loadScoped(exportId, institutionId, allowedWorkloads, true);
+    }
+
+    private AuditExportJob loadScoped(
+        String exportId, String institutionId, Set<String> allowedWorkloads, boolean forUpdate
+    ) {
         String workloadScope = allowedWorkloads.contains("*") ? ""
             : allowedWorkloads.isEmpty() ? " and 1 = 0" : " and workload_id in (:allowedWorkloads)";
         JdbcClient.StatementSpec spec = jdbcClient.sql("""
                 select * from audit_export_job
                 where export_id = :exportId and institution_id = :institutionId
-                """ + workloadScope)
+                """ + workloadScope + (forUpdate ? " for update" : ""))
             .param("exportId", exportId).param("institutionId", institutionId);
         if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
             spec = spec.param("allowedWorkloads", allowedWorkloads);
@@ -581,30 +613,32 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             .param("now", now).param("exportId", exportId).param("institutionId", institutionId).update();
         if (changed == 1) {
             event(exportId, institutionId, "system:expiry", null, null, "EXPIRED",
-                AuditExportStatus.READY, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_EXPIRED", now);
+                AuditExportStatus.READY, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_EXPIRED", null, now);
             event(exportId, institutionId, "system:expiry", null, null, "DELETED",
-                AuditExportStatus.EXPIRED, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_CONTENT_DELETED", now);
+                AuditExportStatus.EXPIRED, AuditExportStatus.EXPIRED, "AUDIT_EXPORT_CONTENT_DELETED", null, now);
         }
     }
 
     private void event(
         String exportId, String institutionId, String actorId, String requestId, String traceId,
-        String action, AuditExportStatus from, AuditExportStatus to, String reasonCode, OffsetDateTime now
+        String action, AuditExportStatus from, AuditExportStatus to, String reasonCode,
+        String reasonText, OffsetDateTime now
     ) {
         jdbcClient.sql("""
                 insert into audit_export_event (
                     event_id, export_id, institution_id, actor_id, request_id, trace_id,
-                    action, from_status, to_status, reason_code, occurred_at
+                    action, from_status, to_status, reason_code, reason_text, occurred_at
                 ) values (
                     :eventId, :exportId, :institutionId, :actorId, :requestId, :traceId,
-                    :action, :fromStatus, :toStatus, :reasonCode, :occurredAt
+                    :action, :fromStatus, :toStatus, :reasonCode, :reasonText, :occurredAt
                 )
                 """)
             .param("eventId", "expevt_" + UUID.randomUUID()).param("exportId", exportId)
             .param("institutionId", institutionId).param("actorId", actorId)
             .param("requestId", requestId).param("traceId", traceId).param("action", action)
             .param("fromStatus", from == null ? null : from.name())
-            .param("toStatus", to.name()).param("reasonCode", reasonCode).param("occurredAt", now)
+            .param("toStatus", to.name()).param("reasonCode", reasonCode).param("reasonText", reasonText)
+            .param("occurredAt", now)
             .update();
     }
 
@@ -615,7 +649,9 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
             rs.getString("report_type"), AuditExportFormat.valueOf(rs.getString("export_format")),
             AuditExportStatus.valueOf(rs.getString("status")), rs.getString("scope_digest"),
             rs.getString("requester_id"), rs.getString("approver_id"), rs.getString("request_reason"),
-            rs.getString("approval_reason"), rs.getString("idempotency_key"), rs.getString("scope_json"),
+            rs.getString("approval_reason"), rs.getString("revoked_by"),
+            rs.getObject("revoked_at", OffsetDateTime.class), rs.getString("revocation_reason"),
+            rs.getString("idempotency_key"), rs.getString("scope_json"),
             (Integer) rs.getObject("row_count"), rs.getString("content_digest"),
             (Long) rs.getObject("content_size"), rs.getString("content_type"), rs.getString("file_name"),
             rs.getString("failure_code"), rs.getObject("created_at", OffsetDateTime.class),

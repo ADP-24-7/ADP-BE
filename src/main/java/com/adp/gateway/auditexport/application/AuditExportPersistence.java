@@ -38,6 +38,7 @@ public interface AuditExportPersistence {
         Set<String> allowedWorkloads,
         String principalId,
         boolean privileged,
+        boolean operationsAvailable,
         OffsetDateTime now
     );
 

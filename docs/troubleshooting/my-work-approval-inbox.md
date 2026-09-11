@@ -56,3 +56,25 @@ Job은 과거 승인을 되살리지 않는다. FE의 다시 요청은 기존 �
 본인이 처리한 이력만, Auditor는 기관 감사 이력만 조회하도록 View 계약을 분리했다. 다만 운영 조사까지 차단하면 실행
 목록에서 상세 증적과 CSV/PDF 요청이 모두 403이 된다. `OPERATOR`에는 Scope 내 증적 조회와 본인 반출 요청만 허용하고,
 승인 command와 타인 이력은 계속 차단했다. 생성 파일 다운로드 역시 요청자 본인으로 제한한다.
+
+## 폐기가 승인 근거를 덮어쓰던 문제
+
+초기 폐기 구현은 `approval_reason`을 폐기 사유로 갱신했다. 그 결과 승인 당시 판단 근거가 사라지고 APPROVED Event에도
+사유가 없어, 최종 Job만으로는 승인과 폐기의 의사결정 흐름을 재현할 수 없었다. V52에서 `revoked_by`, `revoked_at`,
+`revocation_reason` snapshot과 Event `reason_text`를 추가했다. 승인·반려·폐기는 각자의 사유를 append-only Event에
+기록하고, 폐기는 기존 `approval_reason`을 변경하지 않는다. 기존 REVOKED 데이터는 폐기 Event를 기준으로 별도 폐기
+snapshot으로 이동한다.
+
+## 다운로드와 폐기가 동시에 처리되던 문제
+
+다운로드가 상태 확인 후 조건 없는 UPDATE를 수행하면, 그 사이 폐기가 commit돼 content가 삭제되어도 오래 읽은 값을
+반환할 수 있다. 다운로드 트랜잭션이 Job을 `SELECT ... FOR UPDATE`로 잠근 뒤 READY 상태, 만료, digest를 확인하고
+동일 version의 READY row만 갱신하도록 변경했다. 폐기 역시 같은 row를 갱신하므로 두 작업은 직렬화된다. 테스트에서는
+폐기가 잠금을 먼저 획득한 상태에서 다운로드를 대기시킨 뒤, 폐기 commit 후 파일이 반환되지 않고 DOWNLOAD Event도
+생성되지 않는 것을 검증한다.
+
+## 운영 집계가 일반 운영자에게 노출되던 문제
+
+개인 업무 카운트와 기관 전체 처리량을 같은 응답에 담으면서 일반 `OPERATOR`도 승인 대기, 생성 실패 등 기관 집계를
+볼 수 있었다. 서버가 `operationsAvailable`을 역할에서 계산하고 권한이 없으면 기관 집계를 0/null로 축소한다. FE도
+이 서버 판정을 기준으로 Governance Operations 영역을 렌더링한다.

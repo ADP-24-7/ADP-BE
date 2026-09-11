@@ -4,13 +4,13 @@
     {
       "name": "ADP-BE",
       "path": "ADP-BE",
-      "sourceDigest": "sha256:b703d54a3fb8ee897d06fc3c679d46cb7a7ccca00733b648cd72ae3a42ea2b36",
+      "sourceDigest": "sha256:f8a88c7d0919fb706578df651ad35a065f9f0df53e9646bf01b7c2a6147fc061",
       "selfHosted": true
     },
     {
       "name": "ADP-FE",
       "path": "ADP-FE",
-      "commit": "e7ee6ace5bfb4742cb322d0cbcacf7ec1000fb44"
+      "commit": "7d2b2d3af0ed107b48885302f30842b63b57144c"
     },
     {
       "name": "ADP-DA",
@@ -24,7 +24,7 @@
     }
   ],
   "database": {
-    "latestFlywayVersion": "51"
+    "latestFlywayVersion": "52"
   },
   "requiredFiles": [
     "ADP-FE/package-lock.json",

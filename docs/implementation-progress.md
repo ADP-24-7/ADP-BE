@@ -541,6 +541,9 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 - [x] Institution 및 Workload SQL scope
 - [x] 승인 큐 자기 요청 제외와 Privileged Operator 권한 강제
 - [x] Monitoring 집계와 승인 command 화면 분리
+- [x] 승인·반려·폐기 사유의 append-only Event와 승인/폐기 snapshot 분리
+- [x] 다운로드·폐기 행 잠금 직렬화와 만료 전 반복 다운로드 감사
+- [x] 역할별 개인 업무/기관 운영 집계 분리
 
 ## Slice 27 Auth & Maker-Checker Product Closure
 

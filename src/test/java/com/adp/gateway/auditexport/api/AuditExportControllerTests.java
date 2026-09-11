@@ -9,7 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.adp.gateway.auditexport.application.AuditExportWorkerService;
 import com.adp.gateway.auditexport.application.AuditExportPersistence;
@@ -22,6 +26,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -37,6 +43,7 @@ class AuditExportControllerTests {
     @Autowired private AuditExportWorkerService workerService;
     @Autowired private AuditExportPersistence exportPersistence;
     @Autowired private JdbcClient jdbcClient;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     @Test
     void makerCheckerGeneratesAndDownloadsPrivacySafeCsvWithAuditedLifecycle() throws Exception {
@@ -202,6 +209,24 @@ class AuditExportControllerTests {
         revoke(exportIds[0], "승인 대상 오류");
         assertThat(eventCount(exportIds[0], "REVOKED")).isEqualTo(1);
         assertThat(eventCount(exportIds[0], "DELETED")).isZero();
+        assertThat(jdbcClient.sql("""
+                select approval_reason from audit_export_job where export_id = :exportId
+                """).param("exportId", exportIds[0]).query(String.class).single())
+            .isEqualTo("승인 범위 확인");
+        assertThat(jdbcClient.sql("""
+                select revocation_reason from audit_export_job where export_id = :exportId
+                """).param("exportId", exportIds[0]).query(String.class).single())
+            .isEqualTo("승인 대상 오류");
+        assertThat(jdbcClient.sql("""
+                select reason_text from audit_export_event
+                where export_id = :exportId and action = 'APPROVED'
+                """).param("exportId", exportIds[0]).query(String.class).single())
+            .isEqualTo("승인 범위 확인");
+        assertThat(jdbcClient.sql("""
+                select reason_text from audit_export_event
+                where export_id = :exportId and action = 'REVOKED'
+                """).param("exportId", exportIds[0]).query(String.class).single())
+            .isEqualTo("승인 대상 오류");
 
         jdbcClient.sql("""
                 update audit_export_job
@@ -271,6 +296,14 @@ class AuditExportControllerTests {
                 .header("X-ADP-User-Id", "ordinary-operator")
                 .header("X-ADP-User-Roles", "OPERATOR"))
             .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/audit-exports/work-summary")
+                .header("X-ADP-User-Id", "ordinary-operator")
+                .header("X-ADP-User-Roles", "OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.operationsAvailable").value(false))
+            .andExpect(jsonPath("$.operations.pendingApproval").value(0))
+            .andExpect(jsonPath("$.operations.oldestPendingAgeSeconds").doesNotExist());
     }
 
     @Test
@@ -439,6 +472,11 @@ class AuditExportControllerTests {
             .andExpect(header().string("Content-Type", "application/pdf"))
             .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        mockMvc.perform(get("/api/v1/audit-exports/{exportId}/download", exportId)
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk());
+        assertThat(eventCount(exportId, "DOWNLOADED")).isEqualTo(2);
 
         jdbcClient.sql("update audit_export_job set expires_at = :expired where export_id = :exportId")
             .param("expired", OffsetDateTime.now().minusMinutes(1)).param("exportId", exportId).update();
@@ -451,6 +489,51 @@ class AuditExportControllerTests {
             .param("exportId", exportId).query(byte[].class).optional()).isEmpty();
         assertThat(eventCount(exportId, "EXPIRED")).isEqualTo(1);
         assertThat(eventCount(exportId, "DELETED")).isEqualTo(1);
+    }
+
+    @Test
+    void committedRevocationPreventsAWaitingDownloadFromReturningContent() throws Exception {
+        String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String exportId = request(execute(marker, "approved context"), "CSV", "download-race-" + marker,
+            "auditor-local", "AUDITOR").path("exportId").asText();
+        mockMvc.perform(post("/api/v1/audit-exports/{exportId}/approval", exportId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"APPROVE\",\"reason\":\"동시성 검증 승인\"}"))
+            .andExpect(status().isOk());
+        assertThat(workerService.processNext("download-race-worker")).isTrue();
+
+        CountDownLatch rowLocked = new CountDownLatch(1);
+        CountDownLatch allowRevoke = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var revoke = executor.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                jdbcClient.sql("select export_id from audit_export_job where export_id = :exportId for update")
+                    .param("exportId", exportId).query(String.class).single();
+                rowLocked.countDown();
+                try {
+                    assertThat(allowRevoke.await(5, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(exception);
+                }
+                exportPersistence.revoke(exportId, "institution_local", Set.of("*"),
+                    "privileged-operator-local", "동시 다운로드 차단", "req-race", "trace-race",
+                    OffsetDateTime.now());
+            }));
+            assertThat(rowLocked.await(5, TimeUnit.SECONDS)).isTrue();
+            var download = executor.submit(() -> mockMvc.perform(
+                get("/api/v1/audit-exports/{exportId}/download", exportId)
+                    .header("X-ADP-User-Id", "auditor-local")
+                    .header("X-ADP-User-Roles", "AUDITOR")
+            ).andReturn().getResponse().getStatus());
+
+            allowRevoke.countDown();
+            revoke.get(5, TimeUnit.SECONDS);
+            assertThat(download.get(5, TimeUnit.SECONDS)).isEqualTo(409);
+        }
+        assertThat(eventCount(exportId, "REVOKED")).isEqualTo(1);
+        assertThat(eventCount(exportId, "DOWNLOADED")).isZero();
     }
 
     private JsonNode request(
@@ -486,7 +569,7 @@ class AuditExportControllerTests {
                 .content("{\"action\":\"REVOKE\",\"reason\":\"%s\"}".formatted(reason)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("REVOKED"))
-            .andExpect(jsonPath("$.approvalReason").value(reason));
+            .andExpect(jsonPath("$.revocationReason").value(reason));
     }
 
     private String execute(String marker, String prompt) throws Exception {

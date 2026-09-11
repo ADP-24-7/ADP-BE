@@ -28,6 +28,22 @@ class FlywayMigrationTests {
         assertThat(indexCount).isEqualTo(2);
     }
 
+    @Test
+    void v52MigrationPreservesApprovalAndRevocationEvidenceSeparately() {
+        assertThat(jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_export_job'
+                  and column_name in ('revoked_by', 'revoked_at', 'revocation_reason')
+                """).query(Integer.class).single()).isEqualTo(3);
+        assertThat(jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = 'audit_export_event'
+                  and column_name = 'reason_text'
+                """).query(Integer.class).single()).isEqualTo(1);
+    }
+
 
     @Autowired
     private JdbcClient jdbcClient;

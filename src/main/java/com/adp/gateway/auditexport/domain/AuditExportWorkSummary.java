@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 public record AuditExportWorkSummary(
     String principalId,
     boolean approvalAvailable,
+    boolean operationsAvailable,
     PersonalWork personal,
     ApprovalWork approvals,
     Operations operations,
