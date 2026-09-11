@@ -313,6 +313,40 @@ class FlywayMigrationTests {
     }
 
     @Test
+    void v50MigrationAddsPrivacySafeAiCalibrationMetadata() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'response_sensitive_finding'
+                  and column_name in (
+                    'source_data_class', 'transform_strategy', 'field_treatment',
+                    'outbound_field_path_digest'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+        Integer constraintCount = jdbcClient.sql("""
+                select count(*)
+                from information_schema.table_constraints
+                where constraint_schema = 'runtime'
+                  and table_name = 'response_sensitive_finding'
+                  and constraint_name in (
+                    'chk_response_finding_source_data_class',
+                    'chk_response_finding_transform_strategy',
+                    'chk_response_finding_field_treatment',
+                    'chk_response_finding_field_path_digest',
+                    'chk_response_finding_reflection_metadata_shape'
+                  )
+                """)
+            .query(Integer.class)
+            .single();
+
+        assertThat(columnCount).isEqualTo(4);
+        assertThat(constraintCount).isEqualTo(5);
+    }
+
+    @Test
     void v44MigrationCreatesSecurityFindingReadIndexes() {
         Integer indexCount = jdbcClient.sql("""
                 select count(*)

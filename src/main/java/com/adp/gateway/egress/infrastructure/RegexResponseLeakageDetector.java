@@ -63,13 +63,23 @@ public class RegexResponseLeakageDetector implements ResponseLeakageDetector {
             }
         });
         outboundPayload.fields().stream()
-            .map(field -> field.value() == null ? null : String.valueOf(field.value()))
-            .filter(value -> value != null && value.length() >= 4)
-            .distinct()
-            .forEach(value -> {
+            .filter(field -> field.value() != null && String.valueOf(field.value()).length() >= 4)
+            .forEach(field -> {
+                String value = String.valueOf(field.value());
                 int offset = response.indexOf(value);
                 if (offset >= 0) {
-                    findings.add(finding("RAW_VALUE_REFLECTION", offset, offset + value.length(), value));
+                    findings.add(new ResponseSensitiveFinding(
+                        "RAW_VALUE_REFLECTION",
+                        "$.response",
+                        offset,
+                        offset + value.length(),
+                        VERSION,
+                        hasher.hash("$.response:" + value),
+                        field.dataClass().name(),
+                        field.strategy().name(),
+                        field.treatment().name(),
+                        hasher.hash("outbound-field-path:" + field.path())
+                    ));
                 }
             });
         return List.copyOf(findings);
