@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -24,6 +25,18 @@ def git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def source_digest(repo: Path) -> str:
+    """Digest the committed source tree while excluding the self-referential lock."""
+    entries = git(repo, "ls-files", "--stage").splitlines()
+    canonical_entries = []
+    for entry in entries:
+        _, path = entry.split("\t", 1)
+        if path != LOCK_RELATIVE_PATH:
+            canonical_entries.append(entry)
+    payload = "\n".join(sorted(canonical_entries)).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
 def validate(lock_path: Path, profile: str, allow_dirty: bool = False) -> list[str]:
     errors: list[str] = []
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
@@ -39,33 +52,34 @@ def validate(lock_path: Path, profile: str, allow_dirty: bool = False) -> list[s
     for repository in lock.get("repositories", []):
         name = repository["name"]
         repo = workspace_root / repository["path"]
-        expected = repository["commit"]
         if not (repo / ".git").exists():
             errors.append(f"{name}: repository not found at {repo}")
             continue
-        try:
-            current = git(repo, "rev-parse", "HEAD")
-            git(repo, "cat-file", "-e", f"{expected}^{{commit}}")
-        except subprocess.CalledProcessError:
-            errors.append(f"{name}: expected commit is unavailable: {expected}")
-            continue
-
-        if current != expected:
-            if repository.get("selfHosted"):
-                changed = git(repo, "diff", "--name-only", expected, current).splitlines()
-                unexpected = [path for path in changed if path != LOCK_RELATIVE_PATH]
-                if unexpected:
-                    errors.append(
-                        f"{name}: source differs from locked commit {expected[:12]} "
-                        f"({', '.join(unexpected[:5])})"
-                    )
-            else:
+        if repository.get("selfHosted"):
+            expected_digest = repository.get("sourceDigest", "")
+            actual_digest = source_digest(repo)
+            if not expected_digest.startswith("sha256:"):
+                errors.append(f"{name}: self-hosted source digest is missing or invalid")
+            elif actual_digest != expected_digest:
+                errors.append(
+                    f"{name}: source digest differs from lock "
+                    f"(expected {expected_digest}, found {actual_digest})"
+                )
+        else:
+            expected = repository.get("commit", "")
+            try:
+                current = git(repo, "rev-parse", "HEAD")
+                git(repo, "cat-file", "-e", f"{expected}^{{commit}}")
+            except subprocess.CalledProcessError:
+                errors.append(f"{name}: expected commit is unavailable: {expected}")
+                continue
+            if current != expected:
                 errors.append(f"{name}: expected {expected[:12]}, found {current[:12]}")
 
         if not allow_dirty:
-            dirty = git(repo, "status", "--porcelain", "--untracked-files=no")
+            dirty = git(repo, "status", "--porcelain")
             if dirty:
-                errors.append(f"{name}: tracked working tree changes are not reproducible")
+                errors.append(f"{name}: working tree changes are not reproducible")
 
     for relative in lock.get("requiredFiles", []):
         if not (workspace_root / relative).is_file():
@@ -89,7 +103,12 @@ def main() -> int:
     parser.add_argument("--lock", type=Path, default=Path(LOCK_RELATIVE_PATH))
     parser.add_argument("--profile", default="demo")
     parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument("--print-source-digest", action="store_true")
     args = parser.parse_args()
+
+    if args.print_source_digest:
+        print(source_digest(args.lock.resolve().parents[2]))
+        return 0
 
     errors = validate(args.lock.resolve(), args.profile, args.allow_dirty)
     if errors:

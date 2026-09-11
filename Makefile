@@ -42,7 +42,7 @@ DOCKER_RUN_GRADLE_DEV := docker run --rm --network adp-local \
 	-w /workspace \
 	$(GRADLE_IMAGE) gradle --no-daemon --project-cache-dir /home/gradle/.gradle/dev-run-project-cache
 
-.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps integration-validate integration-up integration-verify integration-check integration-down ai-eval-e2e digital-asset-e2e ncp-artifact-ingest-e2e
+.PHONY: help setup env docker-network postgres-up test-postgres-up test package check run docker-up docker-rebuild docker-down docker-logs docker-ps integration-lock-digest integration-validate integration-up integration-verify integration-check integration-down ai-eval-e2e digital-asset-e2e ncp-artifact-ingest-e2e
 
 help:
 	@printf "%s\n" \
@@ -60,6 +60,7 @@ help:
 		"  make docker-rebuild Rebuild and start the full dev stack" \
 		"  make docker-logs Follow full dev stack logs" \
 		"  make docker-ps   Show full dev stack containers" \
+		"  make integration-lock-digest Print the BE source digest after staging source changes" \
 		"  make integration-check INTEGRATION_PROFILE=demo Validate lock, start and verify the full stack" \
 		"  make integration-down INTEGRATION_PROFILE=demo Stop the integration stack" \
 		"  make ai-eval-e2e Run the explicitly confirmed real three-model Evaluation and export the DA Bundle" \
@@ -112,6 +113,9 @@ docker-logs:
 
 docker-ps:
 	$(COMPOSE) ps
+
+integration-lock-digest:
+	python3 scripts/validate-integration-lock.py --lock $(INTEGRATION_LOCK) --print-source-digest
 
 integration-validate: env
 	python3 scripts/validate-integration-lock.py --lock $(INTEGRATION_LOCK) --profile $(INTEGRATION_PROFILE)

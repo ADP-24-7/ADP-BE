@@ -7,17 +7,18 @@ BE Compose를 Local Integration Source of Truth로 유지하면서 특정 개발
 
 ## Repository Lock
 
-`config/integration/repository-lock.json`은 FE, BE, DA, Docs의 검증된 Commit과 Flyway current version, 필수 입력 파일을
+`config/integration/repository-lock.json`은 FE, DA, Docs의 검증된 Commit, BE source digest, Flyway current version, 필수 입력 파일을
 고정한다. `scripts/validate-integration-lock.py`는 다음 조건에서 기동 전에 실패한다.
 
 - Peer Repository HEAD가 Lock Commit과 다름
-- 추적 중인 파일에 commit되지 않은 변경이 있음
+- ignored 파일을 제외한 tracked/untracked 변경이 있음
 - 고정 Commit을 로컬 Git Object에서 찾을 수 없음
 - DA Fixture, FE/Docs lockfile 등 필수 입력이 없음
 - Flyway 최신 Version이 Lock과 다름
 
-Lock을 보관하는 BE는 자기 참조 Commit을 만들 수 없으므로, Lock에 기록된 Commit 이후 변경이 Lock 파일 하나뿐일 때만
-동일 source snapshot으로 인정한다. 실제 BE source가 변경되면 반드시 새 source Commit으로 Lock을 갱신해야 한다.
+Lock을 보관하는 BE는 자기 Commit SHA를 참조하지 않는다. Git index의 `mode + blob hash + path`를 정렬한 뒤 Lock 파일을
+제외하고 SHA-256을 계산한다. 따라서 squash merge나 feature branch 삭제 이후에도 동일 source snapshot은 같은 digest를
+유지한다. BE source 변경 후에는 변경을 stage한 다음 `make integration-lock-digest` 결과로 Lock을 갱신한다.
 
 ## 환경 Profile
 
@@ -29,6 +30,7 @@ Lock을 보관하는 BE는 자기 참조 Commit을 만들 수 없으므로, Lock
 
 Profile 파일에는 Secret을 저장하지 않는다. 개인 Secret은 Git에서 제외된 `.env`에만 두고 Make가 `.env` 다음에 선택한
 Profile을 적용한다. Profile은 보안 토글을 결정하고 `.env`는 Credential 값만 제공한다.
+정의되지 않은 Profile 또는 Data Provenance 값은 BE 기동과 FE 설정 파싱 단계에서 즉시 실패한다.
 
 ## 실행
 
@@ -51,7 +53,7 @@ local fixture source reference를 유지하며 실제 고객 데이터로 표현
 
 ## 완료 증거
 
-- Lock drift/dirty tree/Flyway drift validator unit test
+- Lock source digest/peer drift/tracked 및 untracked dirty tree/Flyway drift validator unit test
 - 세 Profile의 `docker compose config --quiet`
 - 빈 PostgreSQL에서 V1부터 current까지 Flyway 적용
 - BE, FE, DA, Docs와 PostgreSQL health 확인

@@ -22,7 +22,7 @@ class InternalInfoControllerTests {
         properties.setProperty("version", "0.0.1-SNAPSHOT");
         BuildProperties buildProperties = new BuildProperties(properties);
         InternalInfoController controller = new InternalInfoController(
-            clock, buildProperties, "demo", "SYNTHETIC"
+            clock, buildProperties, new RuntimeEnvironment("demo", "SYNTHETIC")
         );
 
         ResponseEntity<Map<String, Object>> response = controller.info();
@@ -33,5 +33,18 @@ class InternalInfoControllerTests {
         assertThat(response.getBody()).containsEntry("runtimeProfile", "demo");
         assertThat(response.getBody()).containsEntry("dataProvenance", "SYNTHETIC");
         assertThat(response.getBody()).containsEntry("timestamp", "2026-08-27T00:00Z");
+    }
+
+    @Test
+    void rejectsInvalidRuntimeEnvironmentAtStartup() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new RuntimeEnvironment("demmo", "SYNTHETIC")
+        ).isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Invalid adp.environment.profile");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new RuntimeEnvironment("demo", "CUSTOMER_DATA")
+        ).isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Invalid adp.environment.data-provenance");
     }
 }

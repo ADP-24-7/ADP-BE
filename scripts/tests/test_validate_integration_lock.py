@@ -24,6 +24,7 @@ class IntegrationLockValidatorTests(unittest.TestCase):
         (self.be / "src/main/resources/db/migration").mkdir(parents=True)
         (self.be / "src/main/resources/db/migration/V49__current.sql").write_text("select 1;\n")
         (self.fe / "package-lock.json").write_text("{}\n")
+        (self.fe / ".gitignore").write_text(".env\n")
         self.commit(self.be, "inputs")
         self.commit(self.fe, "inputs")
         self.lock_path = self.be / MODULE.LOCK_RELATIVE_PATH
@@ -55,12 +56,18 @@ class IntegrationLockValidatorTests(unittest.TestCase):
         self.lock_path.write_text(json.dumps({
             "schemaVersion": "adp-local-integration-lock/v1",
             "repositories": [
-                {"name": "ADP-BE", "path": "ADP-BE", "commit": self.head(self.be), "selfHosted": True},
+                {
+                    "name": "ADP-BE",
+                    "path": "ADP-BE",
+                    "sourceDigest": MODULE.source_digest(self.be),
+                    "selfHosted": True,
+                },
                 {"name": "ADP-FE", "path": "ADP-FE", "commit": fe_commit or self.head(self.fe)},
             ],
             "database": {"latestFlywayVersion": "49"},
             "requiredFiles": ["ADP-FE/package-lock.json"],
         }))
+        self.commit(self.be, "lock")
 
     def test_accepts_exact_locked_repositories(self):
         self.write_lock()
@@ -78,7 +85,32 @@ class IntegrationLockValidatorTests(unittest.TestCase):
         self.write_lock()
         (self.fe / "README.md").write_text("dirty")
         errors = MODULE.validate(self.lock_path, "demo")
-        self.assertIn("ADP-FE: tracked working tree changes are not reproducible", errors)
+        self.assertIn("ADP-FE: working tree changes are not reproducible", errors)
+
+    def test_rejects_untracked_source_files(self):
+        self.write_lock()
+        source = self.fe / "src/TemporaryOverride.ts"
+        source.parent.mkdir(parents=True)
+        source.write_text("export const enabled = true;\n")
+
+        errors = MODULE.validate(self.lock_path, "demo")
+
+        self.assertIn("ADP-FE: working tree changes are not reproducible", errors)
+
+    def test_accepts_ignored_local_environment_file(self):
+        self.write_lock()
+        (self.fe / ".env").write_text("SECRET=local-only\n")
+
+        self.assertEqual([], MODULE.validate(self.lock_path, "demo"))
+
+    def test_rejects_self_hosted_source_digest_drift(self):
+        self.write_lock()
+        (self.be / "README.md").write_text("changed")
+        self.commit(self.be, "source drift")
+
+        errors = MODULE.validate(self.lock_path, "demo", allow_dirty=True)
+
+        self.assertTrue(any("ADP-BE: source digest differs" in error for error in errors))
 
     def test_rejects_flyway_version_drift(self):
         self.write_lock()

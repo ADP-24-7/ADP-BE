@@ -5,14 +5,27 @@
 기존 Compose는 `../ADP-FE`, `../ADP-DA`, `../ADP-Docs`를 직접 mount했지만 어느 Commit인지 확인하지 않았다. 같은 명령을
 실행해도 팀원별 checkout에 따라 API Contract, Fixture, 화면이 달라질 수 있었다.
 
-Repository Lock과 preflight validator를 추가해 실제 HEAD, dirty tracked file, 필수 입력, Flyway current를 기동 전에
+Repository Lock과 preflight validator를 추가해 실제 HEAD, dirty tracked/untracked file, 필수 입력, Flyway current를 기동 전에
 검증한다. 개발 중 임의 drift를 자동 checkout하거나 reset하지 않고 원인을 출력한 뒤 fail closed한다.
 
 ## BE가 자신의 Commit SHA를 Lock하는 순환 문제
 
-Lock 파일 안에 현재 BE Commit을 기록하면 Lock 파일 변경 자체가 다음 Commit을 만들기 때문에 HEAD와 기록값이 영원히
-일치할 수 없다. 따라서 BE 항목은 마지막 source Commit을 기록하고, 그 이후 diff가 Lock 파일 하나뿐일 때만 허용한다.
-애플리케이션 source나 Compose가 바뀌면 validator가 거부하므로 새 source Commit으로 Lock을 갱신해야 한다.
+Lock 파일 안에 현재 BE Commit을 기록하면 Lock 파일 변경 자체가 다음 Commit을 만들고, squash merge 후에는 중간 Commit이
+remote에서 사라질 수 있다. BE는 Commit 대신 Git index의 canonical source digest를 사용하고 Lock 파일 자체는 digest에서
+제외한다. 이 방식은 merge 전략과 무관하며 애플리케이션 source나 Compose가 바뀌면 validator가 거부한다.
+
+## Untracked source가 Docker image에 포함되던 문제
+
+기존 dirty 검사는 `--untracked-files=no`를 사용했지만 BE Dockerfile의 `COPY src`와 FE Dockerfile의 `COPY .`는 untracked
+source도 image에 포함한다. 따라서 commit 조합이 같아도 실행 결과가 달라질 수 있었다. validator는 이제 ignored 파일을
+제외한 모든 working tree 변경을 거부한다. 로컬 Secret인 `.env`처럼 허용할 파일은 `.gitignore`로 명시하고, untracked
+Java/TypeScript source는 통합 실행 전에 반드시 commit한다.
+
+## 잘못된 환경 값이 운영형 기본값으로 바뀌던 문제
+
+`demmo` 같은 오타를 `production-like`로, 잘못된 provenance를 `NONE`으로 조용히 바꾸면 화면 표시와 실제 실행 조건이
+달라질 수 있다. 값이 누락된 경우에만 문서화된 기본값을 사용하고, 명시된 값이 허용 목록에 없으면 BE bean 생성과 FE 환경
+파싱 단계에서 즉시 실패하도록 변경했다.
 
 ## `.env` 하나에 개발 편의와 운영형 설정이 섞이던 문제
 
