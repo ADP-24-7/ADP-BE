@@ -22,6 +22,9 @@ import com.adp.gateway.auditexport.domain.AuditExportFormat;
 import com.adp.gateway.auditexport.domain.AuditExportJob;
 import com.adp.gateway.auditexport.domain.AuditExportStatus;
 import com.adp.gateway.auditexport.domain.AuditExportScope;
+import com.adp.gateway.auditexport.domain.AuditExportWorkPage;
+import com.adp.gateway.auditexport.domain.AuditExportWorkSummary;
+import com.adp.gateway.auditexport.domain.AuditExportWorkView;
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -120,6 +123,101 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
                 "AUDIT_EXPORT_REQUESTED", reservation.now());
         }
         return job;
+    }
+
+    @Override
+    public AuditExportWorkPage searchWork(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String principalId,
+        boolean privileged,
+        AuditExportWorkView view,
+        AuditExportStatus status,
+        int page,
+        int size
+    ) {
+        StringBuilder where = new StringBuilder(" where institution_id = :institutionId");
+        appendWorkloadScope(where, allowedWorkloads);
+        switch (view) {
+            case MY_REQUESTS -> where.append(" and requester_id = :principalId");
+            case APPROVAL_QUEUE -> where.append(" and status = 'REQUESTED' and requester_id <> :principalId");
+            case HISTORY -> {
+                if (!privileged) where.append(" and requester_id = :principalId");
+            }
+        }
+        if (status != null) where.append(" and status = :status");
+
+        JdbcClient.StatementSpec select = bindWorkQuery(
+            jdbcClient.sql("select * from audit_export_job" + where
+                + " order by created_at desc, export_id desc limit :size offset :offset"),
+            institutionId, allowedWorkloads, principalId, status
+        ).param("size", size).param("offset", page * size);
+        List<AuditExportJob> items = select.query(JOB_MAPPER).list();
+        long total = bindWorkQuery(
+            jdbcClient.sql("select count(*) from audit_export_job" + where),
+            institutionId, allowedWorkloads, principalId, status
+        ).query(Long.class).single();
+        return new AuditExportWorkPage(items, page, size, total);
+    }
+
+    @Override
+    public AuditExportWorkSummary summarizeWork(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String principalId,
+        boolean privileged,
+        OffsetDateTime now
+    ) {
+        StringBuilder scope = new StringBuilder(" where institution_id = :institutionId");
+        appendWorkloadScope(scope, allowedWorkloads);
+        JdbcClient.StatementSpec statement = jdbcClient.sql("""
+            select
+              count(*) filter (where requester_id = :principalId and status = 'REQUESTED') as my_pending,
+              count(*) filter (where requester_id = :principalId and status in ('APPROVED', 'GENERATING')) as my_approved,
+              count(*) filter (where requester_id = :principalId and status = 'READY' and downloaded_at is null) as my_ready,
+              count(*) filter (where requester_id = :principalId and downloaded_at is not null) as my_downloaded,
+              count(*) filter (where requester_id = :principalId and status = 'REJECTED') as my_rejected,
+              count(*) filter (where requester_id = :principalId and status in ('FAILED', 'EXPIRED', 'REVOKED')) as my_failed,
+              count(*) filter (where status = 'REQUESTED' and requester_id <> :principalId) as approval_pending,
+              count(*) filter (where status = 'REQUESTED' and requester_id <> :principalId
+                and created_at <= :agingThreshold) as approval_aged,
+              count(*) filter (where status = 'REQUESTED') as ops_pending,
+              min(created_at) filter (where status = 'REQUESTED') as oldest_pending_at,
+              count(*) filter (where approved_at >= :windowStart) as approved_24h,
+              count(*) filter (where status = 'REJECTED' and updated_at >= :windowStart) as rejected_24h,
+              count(*) filter (where status = 'GENERATING') as generating,
+              count(*) filter (where status = 'READY' and downloaded_at is null) as ready,
+              count(*) filter (where status = 'FAILED') as failed,
+              count(*) filter (where status = 'EXPIRED') as expired
+            from audit_export_job
+            """ + scope)
+            .param("institutionId", institutionId)
+            .param("principalId", principalId)
+            .param("agingThreshold", now.minusHours(24))
+            .param("windowStart", now.minusHours(24));
+        statement = bindWorkloads(statement, allowedWorkloads);
+        return statement.query((rs, rowNum) -> {
+            OffsetDateTime oldest = rs.getObject("oldest_pending_at", OffsetDateTime.class);
+            Long oldestAge = oldest == null ? null : Math.max(0, java.time.Duration.between(oldest, now).toSeconds());
+            return new AuditExportWorkSummary(
+                principalId,
+                privileged,
+                new AuditExportWorkSummary.PersonalWork(
+                    rs.getLong("my_pending"), rs.getLong("my_approved"), rs.getLong("my_ready"),
+                    rs.getLong("my_downloaded"), rs.getLong("my_rejected"), rs.getLong("my_failed")
+                ),
+                new AuditExportWorkSummary.ApprovalWork(
+                    privileged ? rs.getLong("approval_pending") : 0,
+                    privileged ? rs.getLong("approval_aged") : 0
+                ),
+                new AuditExportWorkSummary.Operations(
+                    rs.getLong("ops_pending"), oldestAge, rs.getLong("approved_24h"),
+                    rs.getLong("rejected_24h"), rs.getLong("generating"), rs.getLong("ready"),
+                    rs.getLong("failed"), rs.getLong("expired")
+                ),
+                now
+            );
+        }).single();
     }
 
     @Override
@@ -395,6 +493,33 @@ public class JdbcAuditExportPersistence implements AuditExportPersistence {
         }
         return spec.query(JOB_MAPPER).optional()
             .orElseThrow(() -> new AuditExportException("AUDIT_EXPORT_NOT_FOUND", "Audit export not found"));
+    }
+
+    private JdbcClient.StatementSpec bindWorkQuery(
+        JdbcClient.StatementSpec statement,
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String principalId,
+        AuditExportStatus status
+    ) {
+        statement = statement.param("institutionId", institutionId).param("principalId", principalId);
+        statement = bindWorkloads(statement, allowedWorkloads);
+        return status == null ? statement : statement.param("status", status.name());
+    }
+
+    private void appendWorkloadScope(StringBuilder sql, Set<String> allowedWorkloads) {
+        if (allowedWorkloads.contains("*")) return;
+        sql.append(allowedWorkloads.isEmpty() ? " and 1 = 0" : " and workload_id in (:allowedWorkloads)");
+    }
+
+    private JdbcClient.StatementSpec bindWorkloads(
+        JdbcClient.StatementSpec statement,
+        Set<String> allowedWorkloads
+    ) {
+        if (!allowedWorkloads.contains("*") && !allowedWorkloads.isEmpty()) {
+            return statement.param("allowedWorkloads", allowedWorkloads);
+        }
+        return statement;
     }
 
     private AuditExportJob loadById(String exportId) {

@@ -529,6 +529,18 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.
 
+## My Work / Approval Inbox
+
+상세 계약은 [My Work / Approval Inbox](my-work-approval-inbox.md)에서 관리한다.
+
+- [x] Header My Work 개인 업무 요약
+- [x] 내 요청, 승인할 요청, 전체 이력 조회
+- [x] 기존 Audit Export 상태 기반 다운로드 완료 상태 해석
+- [x] 24시간 이상 승인 대기 집계
+- [x] Institution 및 Workload SQL scope
+- [x] 승인 큐 자기 요청 제외와 Privileged Operator 권한 강제
+- [x] Monitoring 집계와 승인 command 화면 분리
+
 ## Slice 27 Auth & Maker-Checker Product Closure
 
 상세 원인과 해결 과정은 [Session Authentication and Maker-Checker Closure](troubleshooting/session-auth-maker-checker.md)에서 관리한다.

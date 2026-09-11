@@ -18,6 +18,10 @@ import com.adp.gateway.auditexport.domain.AuditExportFormat;
 import com.adp.gateway.auditexport.domain.AuditExportJob;
 import com.adp.gateway.auditexport.domain.AuditExportReportType;
 import com.adp.gateway.auditexport.domain.AuditExportScope;
+import com.adp.gateway.auditexport.domain.AuditExportStatus;
+import com.adp.gateway.auditexport.domain.AuditExportWorkPage;
+import com.adp.gateway.auditexport.domain.AuditExportWorkSummary;
+import com.adp.gateway.auditexport.domain.AuditExportWorkView;
 import com.adp.gateway.auth.domain.AdpRole;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -75,6 +79,35 @@ public class AuditExportService {
         requireExportRole(principal);
         requireInstitution(principal);
         return persistence.load(exportId, principal.institutionId(), principal.workloadIds());
+    }
+
+    public AuditExportWorkPage searchWork(
+        AuthPrincipal principal,
+        AuditExportWorkView view,
+        AuditExportStatus status,
+        int page,
+        int size
+    ) {
+        requireExportRole(principal);
+        requireInstitution(principal);
+        boolean privileged = principal.hasRole(AdpRole.PRIVILEGED_OPERATOR);
+        if ((view == AuditExportWorkView.APPROVAL_QUEUE || view == AuditExportWorkView.HISTORY) && !privileged) {
+            throw new AccessDeniedException("Privileged operator role is required for approval work");
+        }
+        return persistence.searchWork(
+            principal.institutionId(), principal.workloadIds(), principal.principalId(), privileged,
+            view, status, page, size
+        );
+    }
+
+    public AuditExportWorkSummary summarizeWork(AuthPrincipal principal) {
+        requireExportRole(principal);
+        requireInstitution(principal);
+        boolean privileged = principal.hasRole(AdpRole.PRIVILEGED_OPERATOR);
+        return persistence.summarizeWork(
+            principal.institutionId(), principal.workloadIds(), principal.principalId(), privileged,
+            OffsetDateTime.now(clock)
+        );
     }
 
     public AuditExportJob approve(

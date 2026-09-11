@@ -7,6 +7,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 
 ## 문서
 
+- [My Work / Approval Inbox](my-work-approval-inbox.md)
 - [Session Authentication and Maker-Checker Closure](session-auth-maker-checker.md)
 - [Admin Console 인증 컨텍스트 경계](admin-console-auth-context.md)
 - [BE 리뷰 및 CI 트러블슈팅](be-review-and-ci.md)

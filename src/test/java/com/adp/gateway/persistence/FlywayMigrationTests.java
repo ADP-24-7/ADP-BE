@@ -17,6 +17,17 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 @SpringBootTest
 class FlywayMigrationTests {
+    @Test
+    void v51MigrationIndexesAuditExportWorkQueues() {
+        Integer indexCount = jdbcClient.sql("""
+                select count(*) from pg_indexes
+                where schemaname = 'public' and tablename = 'audit_export_job'
+                  and indexname in ('idx_audit_export_job_requester_work', 'idx_audit_export_job_approval_work')
+                """).query(Integer.class).single();
+
+        assertThat(indexCount).isEqualTo(2);
+    }
+
 
     @Autowired
     private JdbcClient jdbcClient;

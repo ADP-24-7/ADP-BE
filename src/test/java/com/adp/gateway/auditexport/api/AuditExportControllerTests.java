@@ -12,6 +12,8 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.adp.gateway.auditexport.application.AuditExportWorkerService;
+import com.adp.gateway.auditexport.application.AuditExportPersistence;
+import com.adp.gateway.auditexport.domain.AuditExportWorkView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,7 @@ class AuditExportControllerTests {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private AuditExportWorkerService workerService;
+    @Autowired private AuditExportPersistence exportPersistence;
     @Autowired private JdbcClient jdbcClient;
 
     @Test
@@ -179,6 +182,71 @@ class AuditExportControllerTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(exportRequest(executionId, "CSV", "forbidden-" + marker)))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void exposesScopedMyWorkAndApprovalQueueWithoutSelfApprovalTasks() throws Exception {
+        String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String executionId = execute(marker, "approved context");
+        String auditorExport = request(executionId, "CSV", "work-auditor-" + marker,
+            "auditor-local", "AUDITOR").path("exportId").asText();
+        String approverOwnedExport = request(executionId, "PDF", "work-approver-" + marker,
+            "privileged-operator-local", "PRIVILEGED_OPERATOR").path("exportId").asText();
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "MY_REQUESTS")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(auditorExport)))
+            .andExpect(jsonPath("$.items[*].exportId", org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.hasItem(approverOwnedExport))));
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "APPROVAL_QUEUE")
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[*].exportId").value(org.hamcrest.Matchers.hasItem(auditorExport)))
+            .andExpect(jsonPath("$.items[*].exportId", org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.hasItem(approverOwnedExport))));
+
+        mockMvc.perform(get("/api/v1/audit-exports/work-summary")
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.principalId").value("privileged-operator-local"))
+            .andExpect(jsonPath("$.approvalAvailable").value(true))
+            .andExpect(jsonPath("$.personal.pendingApproval").isNumber())
+            .andExpect(jsonPath("$.approvals.pending").isNumber())
+            .andExpect(jsonPath("$.operations.pendingApproval").isNumber());
+
+        mockMvc.perform(get("/api/v1/audit-exports")
+                .param("view", "APPROVAL_QUEUE")
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void workReadModelEnforcesInstitutionAndWorkloadScopeInSql() throws Exception {
+        String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        String exportId = request(execute(marker, "approved context"), "CSV", "scope-" + marker,
+            "auditor-local", "AUDITOR").path("exportId").asText();
+        jdbcClient.sql("update audit_export_job set workload_id = 'restricted-workload' where export_id = :exportId")
+            .param("exportId", exportId).update();
+
+        assertThat(exportPersistence.searchWork(
+            "institution_local", java.util.Set.of("customer_summary"), "auditor-local", false,
+            AuditExportWorkView.MY_REQUESTS, null, 0, 100
+        ).items()).extracting("exportId").doesNotContain(exportId);
+
+        jdbcClient.sql("update audit_export_job set institution_id = 'other-institution' where export_id = :exportId")
+            .param("exportId", exportId).update();
+        assertThat(exportPersistence.searchWork(
+            "institution_local", java.util.Set.of("*"), "auditor-local", false,
+            AuditExportWorkView.MY_REQUESTS, null, 0, 100
+        ).items()).extracting("exportId").doesNotContain(exportId);
     }
 
     @Test
