@@ -30,7 +30,7 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 - [x] Secret `.env`와 versioned non-secret Profile 책임 분리
 - [x] 전체 Container health와 Runtime Profile, Flyway current 검증 명령 추가
 - [x] Demo 합성 데이터 Provenance를 BE metadata와 FE UI에 표시
-- [ ] 고정 Commit 상태에서 전체 Docker Stack 재기동 검증
+- [x] 고정 Commit 상태에서 전체 Docker Stack 재기동 검증
 
 ## AI Runtime Evaluation Tracking
 

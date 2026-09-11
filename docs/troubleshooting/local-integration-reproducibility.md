@@ -25,3 +25,9 @@ Credential과 환경별 보안 토글을 같은 파일에서 관리하면 produc
 단순 `docker compose up`은 Flyway current, 실제 endpoint, profile provenance를 증명하지 않는다. `integration-check`는
 health 대기 후 네 서비스 endpoint, BE runtime profile, Demo synthetic provenance, PostgreSQL Flyway version을 별도로
 확인한다.
+
+## Flyway current가 V49인데 V9로 판정된 문제
+
+`flyway_schema_history.version`은 문자열 컬럼이므로 SQL `max(version)`은 숫자 순서가 아니라 사전순으로 계산된다. 그 결과
+V1부터 V49까지 적용된 DB에서 `9`가 반환됐다. 숫자로만 구성된 Version을 `integer`로 변환한 뒤 `max()`를 계산하도록
+검증 Query를 수정했다. Migration 성공 여부와 검증 도구의 Version 비교 방식을 분리해서 확인해야 한다.

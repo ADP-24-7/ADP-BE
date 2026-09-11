@@ -122,7 +122,7 @@ integration-up: integration-validate docker-network
 
 integration-verify:
 	INTEGRATION_PROFILE=$(INTEGRATION_PROFILE) ./scripts/verify-local-integration.sh
-	@actual_version=`$(INTEGRATION_COMPOSE) exec -T postgres psql -U "$${POSTGRES_USER:-adp}" -d "$${POSTGRES_DB:-adp}" -Atc "select max(version) from flyway_schema_history where success"`; \
+	@actual_version=`$(INTEGRATION_COMPOSE) exec -T postgres psql -U "$${POSTGRES_USER:-adp}" -d "$${POSTGRES_DB:-adp}" -Atc "select max(version::integer) from flyway_schema_history where success and version ~ '^[0-9]+$$'"`; \
 	 expected_version=`python3 -c 'import json; print(json.load(open("$(INTEGRATION_LOCK)"))["database"]["latestFlywayVersion"])'`; \
 	 test "$$actual_version" = "$$expected_version" || { printf '%s\n' "Flyway mismatch: expected=$$expected_version actual=$$actual_version" >&2; exit 1; }
 

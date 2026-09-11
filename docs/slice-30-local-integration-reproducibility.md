@@ -46,8 +46,8 @@ make integration-down INTEGRATION_PROFILE=demo
 ## Synthetic Provenance
 
 Demo profile은 BE `/api/internal/info`에서 `runtimeProfile=demo`, `dataProvenance=SYNTHETIC`을 반환한다. FE도 같은 Compose
-profile 값을 받아 운영 화면에 합성 데이터 사용 상태를 표시한다. Runtime Evidence는 기존 Version/Digest와 local fixture
-source reference를 유지하며 실제 고객 데이터로 표현하지 않는다.
+profile 값을 받아 로그인 화면과 운영 화면에 합성 데이터 사용 상태를 표시한다. Runtime Evidence는 기존 Version/Digest와
+local fixture source reference를 유지하며 실제 고객 데이터로 표현하지 않는다.
 
 ## 완료 증거
 
