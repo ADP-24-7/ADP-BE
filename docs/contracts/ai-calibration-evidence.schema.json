@@ -27,7 +27,6 @@
   },
   "$defs": {
     "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "rawDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "manifest": {
       "type": "object",
       "additionalProperties": false,
@@ -80,7 +79,7 @@
       "additionalProperties": false,
       "required": [
         "finding_type", "source_data_class", "transform_strategy",
-        "field_treatment", "count", "evidence_digests"
+        "field_treatment", "count"
       ],
       "properties": {
         "finding_type": { "type": "string", "minLength": 1, "maxLength": 120 },
@@ -99,12 +98,7 @@
           "type": ["string", "null"],
           "enum": ["REMOVED", "TRANSFORMED", "KEEP_EXACT_PROTECTED", null]
         },
-        "count": { "type": "integer", "minimum": 1 },
-        "evidence_digests": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/rawDigest" }
-        }
+        "count": { "type": "integer", "minimum": 1 }
       }
     }
   }

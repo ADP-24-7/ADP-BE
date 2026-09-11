@@ -74,6 +74,42 @@ class RegexResponseLeakageDetectorTests {
         assertThat(finding.toString()).doesNotContain("hmac-transaction-value");
     }
 
+    @Test
+    void countsEachReflectedOutboundFieldOccurrenceWhenValuesAreEqual() {
+        var fields = List.of(
+            reflectedField("$.transactions[0].transactionId"),
+            reflectedField("$.transactions[1].transactionId")
+        );
+        var payload = new OutboundCandidatePayload(
+            "out_test", "dest_test", "v1", "profile_digest", ExecutionPackType.AI,
+            "schema-v1", "candidate_digest", fields
+        );
+
+        var findings = detector.detect(payload, Map.of("answer", "Seen hmac-transaction-value"));
+
+        assertThat(findings).hasSize(2);
+        assertThat(findings).allSatisfy(finding -> {
+            assertThat(finding.findingType()).isEqualTo("RAW_VALUE_REFLECTION");
+            assertThat(finding.sourceDataClass()).isEqualTo("TRANSACTION_IDENTIFIER");
+            assertThat(finding.transformStrategy()).isEqualTo("HMAC_PSEUDO");
+            assertThat(finding.fieldTreatment()).isEqualTo("TRANSFORMED");
+        });
+        assertThat(findings).extracting("outboundFieldPathDigest").doesNotHaveDuplicates();
+    }
+
+    private OutboundCandidateField reflectedField(String path) {
+        return new OutboundCandidateField(
+            path,
+            DataClass.TRANSACTION_IDENTIFIER,
+            TransformStrategy.HMAC_PSEUDO,
+            FieldObligation.PSEUDONYMIZABLE,
+            FieldTreatment.TRANSFORMED,
+            "value-digest",
+            List.of(),
+            "hmac-transaction-value"
+        );
+    }
+
     private OutboundCandidatePayload payload() {
         return new OutboundCandidatePayload(
             "out_test",

@@ -56,11 +56,6 @@ public record AiCalibrationEvidence(
         String sourceDataClass,
         String transformStrategy,
         String fieldTreatment,
-        int count,
-        List<String> evidenceDigests
-    ) {
-        public FindingGroup {
-            evidenceDigests = List.copyOf(evidenceDigests);
-        }
-    }
+        int count
+    ) { }
 }

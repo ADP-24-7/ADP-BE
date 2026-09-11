@@ -13,9 +13,14 @@ import java.util.UUID;
 
 import com.adp.gateway.ai.application.AiEvaluationBundleCanonicalizer;
 import com.adp.gateway.ai.application.AiEvaluationBundlePort;
+import com.adp.gateway.ai.application.AiCalibrationEvidencePort;
+import com.adp.gateway.ai.application.AiCalibrationEvidenceService;
 import com.adp.gateway.ai.application.AiEvaluationPrompt;
 import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
+import com.adp.gateway.auth.domain.AdpRole;
+import com.adp.gateway.auth.domain.AuthPrincipal;
+import com.adp.gateway.auth.domain.PrincipalType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -44,6 +49,12 @@ class AiEvaluationBundleControllerTests {
 
     @Autowired
     private AiEvaluationBundlePort bundlePort;
+
+    @Autowired
+    private AiCalibrationEvidencePort calibrationEvidencePort;
+
+    @Autowired
+    private AiCalibrationEvidenceService calibrationEvidenceService;
 
     @Autowired
     private AiEvaluationBundleCanonicalizer canonicalizer;
@@ -310,6 +321,8 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.readiness_reason_codes.length()").value(0))
             .andExpect(jsonPath("$..raw_value").doesNotExist())
             .andExpect(jsonPath("$..outbound_field_path").doesNotExist())
+            .andExpect(jsonPath("$..evidence_digest").doesNotExist())
+            .andExpect(jsonPath("$..evidence_digests").doesNotExist())
             .andReturn().getResponse().getContentAsString();
         JsonNode reflected = java.util.stream.StreamSupport.stream(
                 objectMapper.readTree(response).path("executions").spliterator(), false
@@ -322,8 +335,24 @@ class AiEvaluationBundleControllerTests {
         assertThat(group.path("source_data_class").asText()).isEqualTo("TRANSACTION_IDENTIFIER");
         assertThat(group.path("transform_strategy").asText()).isEqualTo("HMAC_PSEUDO");
         assertThat(group.path("field_treatment").asText()).isEqualTo("TRANSFORMED");
-        assertThat(group.path("evidence_digests").get(0).asText()).isEqualTo("b".repeat(64));
+        assertThat(group.path("count").asInt()).isEqualTo(1);
+        assertThat(group.has("evidence_digests")).isFalse();
         assertCalibrationContract(response);
+
+        Set<String> selectedExecutions = Set.copyOf(executionIds);
+        assertThat(calibrationEvidencePort.loadGuards(
+            selectedExecutions, "other-institution", Set.of("*")
+        )).isEmpty();
+        assertThat(calibrationEvidencePort.loadFindings(
+            selectedExecutions, "institution_local", Set.of("fraud_detection")
+        )).isEmpty();
+        assertThatThrownBy(() -> calibrationEvidenceService.export(
+            scopedPrincipal("other-institution", Set.of("*")), AiEvaluationRunCatalog.BASELINE_RUN_ID
+        )).isInstanceOf(com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException.class);
+        assertThatThrownBy(() -> calibrationEvidenceService.export(
+            scopedPrincipal("institution_local", Set.of("fraud_detection")),
+            AiEvaluationRunCatalog.BASELINE_RUN_ID
+        )).isInstanceOf(com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException.class);
     }
 
     @Test
@@ -428,6 +457,13 @@ class AiEvaluationBundleControllerTests {
         content.put("schema_version", root.path("manifest").path("schema_version").asText());
         content.put("evaluation_run_id", root.path("manifest").path("evaluation_run_id").asText());
         content.put("evaluation_run_version", root.path("manifest").path("evaluation_run_version").asText());
+        content.put("execution_count", root.path("manifest").path("execution_count").asInt());
+        content.put("execution_from", java.time.OffsetDateTime.parse(
+            root.path("manifest").path("execution_from").asText()
+        ));
+        content.put("execution_cutoff_at", java.time.OffsetDateTime.parse(
+            root.path("manifest").path("execution_cutoff_at").asText()
+        ));
         content.put("calibration_ready", root.path("calibration_ready").asBoolean());
         content.put("readiness_reason_codes", objectMapper.convertValue(
             root.path("readiness_reason_codes"), Object.class
@@ -435,6 +471,13 @@ class AiEvaluationBundleControllerTests {
         content.put("executions", objectMapper.convertValue(root.path("executions"), Object.class));
         assertThat(root.path("manifest").path("content_digest").asText())
             .isEqualTo(canonicalizer.digest(content));
+    }
+
+    private AuthPrincipal scopedPrincipal(String institutionId, Set<String> workloads) {
+        return new AuthPrincipal(
+            "bundle-exporter", PrincipalType.USER, "Bundle Exporter", institutionId,
+            false, workloads, Set.of(AdpRole.PRIVILEGED_OPERATOR)
+        );
     }
 
     private org.springframework.test.web.servlet.ResultActions export(String role) throws Exception {

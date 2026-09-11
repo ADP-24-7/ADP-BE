@@ -69,11 +69,16 @@ public class AiCalibrationEvidenceService {
             .toList();
         List<String> readinessReasons = readinessReasons(executions, guards.size(), executionIds.size());
         boolean calibrationReady = readinessReasons.isEmpty();
+        OffsetDateTime executionFrom = bundle.manifest().executionFrom();
+        OffsetDateTime executionCutoffAt = bundle.manifest().executionCutoffAt();
 
         Map<String, Object> content = new TreeMap<>();
         content.put("schema_version", SCHEMA_VERSION);
         content.put("evaluation_run_id", bundle.manifest().evaluationRunId());
         content.put("evaluation_run_version", bundle.manifest().evaluationRunVersion());
+        content.put("execution_count", executions.size());
+        content.put("execution_from", executionFrom);
+        content.put("execution_cutoff_at", executionCutoffAt);
         content.put("calibration_ready", calibrationReady);
         content.put("readiness_reason_codes", readinessReasons);
         content.put("executions", executions);
@@ -88,8 +93,8 @@ public class AiCalibrationEvidenceService {
                 bundle.manifest().evaluationRunVersion(),
                 executions.size(),
                 generatedAt,
-                bundle.manifest().executionFrom(),
-                bundle.manifest().executionCutoffAt()
+                executionFrom,
+                executionCutoffAt
             ),
             calibrationReady,
             readinessReasons,
@@ -111,8 +116,7 @@ public class AiCalibrationEvidenceService {
                 entry.getKey().sourceDataClass(),
                 entry.getKey().transformStrategy(),
                 entry.getKey().fieldTreatment(),
-                entry.getValue().size(),
-                entry.getValue().stream().map(AiCalibrationFindingSource::evidenceDigest).sorted().toList()
+                entry.getValue().size()
             ))
             .toList();
         int missingMetadataCount = (int) findings.stream()

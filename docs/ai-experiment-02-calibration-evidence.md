@@ -12,7 +12,7 @@ Provider 응답에서 reflection됐는지 privacy-safe Evidence로 재현한다.
 
 - 권한: `PRIVILEGED_OPERATOR`
 - 범위: 인증 Principal의 Institution과 Workload allowlist
-- 선택 기준: 기존 Evaluation Bundle과 동일한 Case x Model별 최신 COMPLETE 실행
+- 선택 기준: Case x Model별 최신 실행을 선택하며 최신 실행의 Evidence가 COMPLETE가 아니면 전체 Export 실패
 - 최대 실행 수: 기존 Bundle 상한 10,000건
 - Schema: `docs/contracts/ai-calibration-evidence.schema.json`
 
@@ -25,10 +25,16 @@ Provider 응답에서 reflection됐는지 privacy-safe Evidence로 재현한다.
 - `transform_strategy`
 - `field_treatment`
 - `count`
-- `evidence_digests`
 
 원문 Provider response, exact 민감값, Outbound field path는 반환하지 않는다. Field path는 DB에도 SHA-256 digest만 저장한다.
 정규식 자체로 탐지된 Finding은 Outbound field와 결속되지 않으므로 source/transform/treatment가 `null`이다.
+저엔트로피 개인정보의 일반 SHA-256 값은 사전 대입으로 추정될 수 있으므로 내부 `evidence_digest`도 API 계약에는 노출하지 않는다.
+
+`count`는 unique value 수가 아니라 동일 metadata group에 귀속된 reflected outbound field occurrence 수다. 동일한 변환값이
+두 outbound field에 존재하고 응답에 반영되면 두 건으로 집계한다.
+
+`manifest.content_digest`는 호출 시각인 `generated_at`만 제외하고 schema/run identity, execution count, source window,
+준비 상태와 실행별 Evidence를 묶는다. 따라서 `execution_from` 또는 `execution_cutoff_at`이 달라지면 digest도 달라진다.
 
 ## Legacy와 준비 상태
 
