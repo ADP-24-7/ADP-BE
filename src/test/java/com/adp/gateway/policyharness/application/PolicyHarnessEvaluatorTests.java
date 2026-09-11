@@ -116,6 +116,45 @@ class PolicyHarnessEvaluatorTests {
         assertThat(result.approvalReuseStatus()).isEqualTo(ApprovalReuseStatus.BLOCKED);
     }
 
+    @Test
+    void blocksWhenPurposeDoesNotMatchTheApproval() {
+        var result = evaluateScope("customer_summary", "INTERNAL_ANALYTICS", "subject-digest");
+
+        assertThat(result.approvalReuseStatus()).isEqualTo(ApprovalReuseStatus.BLOCKED);
+        assertThat(result.reasonCodes()).containsExactly("PURPOSE_SCOPE_MISMATCH");
+    }
+
+    @Test
+    void blocksWhenWorkloadDoesNotMatchTheApproval() {
+        var result = evaluateScope("customer_profile", "CUSTOMER_SUPPORT", "subject-digest");
+
+        assertThat(result.approvalReuseStatus()).isEqualTo(ApprovalReuseStatus.BLOCKED);
+        assertThat(result.reasonCodes()).containsExactly("WORKLOAD_SCOPE_MISMATCH");
+    }
+
+    private com.adp.gateway.policyharness.domain.PolicyHarnessBinding evaluateScope(
+        String workloadId,
+        String purpose,
+        String subjectDigest
+    ) {
+        RuntimeDecision decision = mock(RuntimeDecision.class);
+        when(decision.finalAction()).thenReturn(FinalAction.ALLOW);
+        return evaluator.evaluate(
+            approval(),
+            "institution_local",
+            principal(),
+            workloadId,
+            purpose,
+            subjectDigest,
+            List.of("AI_USE"),
+            destination(),
+            snapshot("policy-v1", "snapshot-digest"),
+            decision,
+            lineage(Set.of("request.prompt")),
+            OffsetDateTime.parse("2026-09-02T00:00:00Z")
+        );
+    }
+
     private ApprovalScope approval() {
         return new ApprovalScope(
             "approval-v1",

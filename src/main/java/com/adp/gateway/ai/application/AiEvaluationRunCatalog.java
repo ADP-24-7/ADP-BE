@@ -24,6 +24,17 @@ public class AiEvaluationRunCatalog {
     public static final String DA_PROVENANCE_DATASET_ROW_REF =
         "financial_synthetic_processed_v1:customers.csv#CustomerID=10832:"
             + "sha256:18f0831cf7e970ad9d8c376d3a3877c86612270dd259745b8a14225761de5dfe";
+    public static final String EXPERIMENT_02_V2_RUN_ID = "ai-experiment-02-financial-regulatory-v2";
+    public static final String EXPERIMENT_02_V3_RUN_ID = "ai-experiment-02-financial-regulatory-v3";
+    public static final String EXPERIMENT_02_V4_RUN_ID = "ai-experiment-02-financial-regulatory-v4";
+    public static final String EXPERIMENT_02_RUN_ID = "ai-experiment-02-financial-regulatory-v5";
+    public static final String EXPERIMENT_02_P1 = "financial-regulatory-p1-customer-10861";
+    public static final String EXPERIMENT_02_P2 = "financial-regulatory-p2-customer-10832";
+    public static final String EXPERIMENT_02_P3 = "financial-regulatory-p3-customer-10202";
+    public static final String EXPERIMENT_02_P1_ROW_REF =
+        "financial_synthetic_processed_v1:customers.csv#CustomerID=10861:sha256:db19a727415717a1ca271cea5bdb39ccdc6af4686a033eeb631ae4c83447401b";
+    public static final String EXPERIMENT_02_P3_ROW_REF =
+        "financial_synthetic_processed_v1:customers.csv#CustomerID=10202:sha256:2e794d37166b1eae5e50e1703d62d442174b61464d74c96dd8e7778f15e1149f";
 
     private final Map<String, AiEvaluationRunDefinition> runs;
 
@@ -115,9 +126,83 @@ public class AiEvaluationRunCatalog {
             daCase,
             modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet())
         );
+        var e2Cases = Map.of(
+            EXPERIMENT_02_P1, new AiEvaluationCaseDefinition(EXPERIMENT_02_P1, EXPERIMENT_02_P1_ROW_REF,
+                "ai-evaluation-input/v1", expectedInputDigest),
+            EXPERIMENT_02_P2, new AiEvaluationCaseDefinition(EXPERIMENT_02_P2, DA_PROVENANCE_DATASET_ROW_REF,
+                "ai-evaluation-input/v1", expectedInputDigest),
+            EXPERIMENT_02_P3, new AiEvaluationCaseDefinition(EXPERIMENT_02_P3, EXPERIMENT_02_P3_ROW_REF,
+                "ai-evaluation-input/v1", expectedInputDigest)
+        );
+        String e2V2ContractDigest = digest(
+            objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true), hasher,
+            Map.of("runId", EXPERIMENT_02_V2_RUN_ID, "runVersion", "2.0.0",
+                "datasetId", "financial_synthetic", "datasetVersion", "financial_synthetic_processed_v1",
+                "datasetDigest", "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+                "policySnapshotDigest", modelProfiles.policySnapshotDigest(),
+                "cases", e2Cases.values().stream().sorted(java.util.Comparator.comparing(AiEvaluationCaseDefinition::caseId)).toList(),
+                "modelBindings", profileBindings)
+        );
+        var experiment02V2 = new AiEvaluationRunDefinition(EXPERIMENT_02_V2_RUN_ID, "2.0.0", "financial_synthetic",
+            "financial_synthetic_processed_v1",
+            "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+            modelProfiles.policySnapshotDigest(), e2V2ContractDigest, e2Cases,
+            modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet()));
+        String e2V3ContractDigest = digest(
+            objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true), hasher,
+            Map.of("runId", EXPERIMENT_02_V3_RUN_ID, "runVersion", "3.0.0",
+                "datasetId", "financial_synthetic", "datasetVersion", "financial_synthetic_processed_v1",
+                "datasetDigest", "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+                "policySnapshotDigest", modelProfiles.policySnapshotDigest(),
+                "cases", e2Cases.values().stream().sorted(java.util.Comparator.comparing(AiEvaluationCaseDefinition::caseId)).toList(),
+                "modelBindings", profileBindings)
+        );
+        var experiment02V3 = new AiEvaluationRunDefinition(EXPERIMENT_02_V3_RUN_ID, "3.0.0", "financial_synthetic",
+            "financial_synthetic_processed_v1",
+            "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+            modelProfiles.policySnapshotDigest(), e2V3ContractDigest, e2Cases,
+            modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet()));
+        String e2V4ContractDigest = digest(
+            objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true), hasher,
+            Map.of("runId", EXPERIMENT_02_V4_RUN_ID, "runVersion", "4.0.0",
+                "datasetId", "financial_synthetic", "datasetVersion", "financial_synthetic_processed_v1",
+                "datasetDigest", "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+                "policySnapshotDigest", modelProfiles.policySnapshotDigest(),
+                "cases", e2Cases.values().stream().sorted(java.util.Comparator.comparing(AiEvaluationCaseDefinition::caseId)).toList(),
+                "modelBindings", profileBindings,
+                "egressEvidenceDigest", "sha256:ab100dde0147c22177b3e7842cf3dc69a8d52fe4ad435a75902ac291f59b2b2f")
+        );
+        var experiment02V4 = new AiEvaluationRunDefinition(EXPERIMENT_02_V4_RUN_ID, "4.0.0", "financial_synthetic",
+            "financial_synthetic_processed_v1",
+            "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+            modelProfiles.policySnapshotDigest(), e2V4ContractDigest, e2Cases,
+            modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet()));
+        String e2ContractDigest = digest(
+            objectMapper.copy().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true), hasher,
+            Map.ofEntries(
+                Map.entry("runId", EXPERIMENT_02_RUN_ID), Map.entry("runVersion", "5.0.0"),
+                Map.entry("datasetId", "financial_synthetic"),
+                Map.entry("datasetVersion", "financial_synthetic_processed_v1"),
+                Map.entry("datasetDigest", "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44"),
+                Map.entry("policySnapshotDigest", modelProfiles.policySnapshotDigest()),
+                Map.entry("cases", e2Cases.values().stream().sorted(java.util.Comparator.comparing(AiEvaluationCaseDefinition::caseId)).toList()),
+                Map.entry("modelBindings", profileBindings),
+                Map.entry("egressEvidenceDigest", "sha256:ab100dde0147c22177b3e7842cf3dc69a8d52fe4ad435a75902ac291f59b2b2f"),
+                Map.entry("temporalProvenanceDigest", "sha256:7deb467f14d4b054f7f6106d8c874185050173b41e8a1c0b3411de073f940e42")
+            )
+        );
+        var experiment02 = new AiEvaluationRunDefinition(EXPERIMENT_02_RUN_ID, "5.0.0", "financial_synthetic",
+            "financial_synthetic_processed_v1",
+            "sha256:9afdc4bf89c0047a5e90f21e6f8eaffb4f6c148998f1740f30baf666bdae0a44",
+            modelProfiles.policySnapshotDigest(), e2ContractDigest, e2Cases,
+            modelProfiles.profiles().stream().map(profile -> profile.profileId()).collect(java.util.stream.Collectors.toSet()));
         this.runs = Map.of(
             baseline.evaluationRunId(), baseline,
-            daProvenance.evaluationRunId(), daProvenance
+            daProvenance.evaluationRunId(), daProvenance,
+            experiment02V2.evaluationRunId(), experiment02V2,
+            experiment02V3.evaluationRunId(), experiment02V3,
+            experiment02V4.evaluationRunId(), experiment02V4,
+            experiment02.evaluationRunId(), experiment02
         );
     }
 

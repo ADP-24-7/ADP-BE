@@ -917,11 +917,23 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                    policy_layers_digest,
                    input_digest,
                    canonical_context_digest, runtime_context_digest,
-                   policy_version, snapshot_digest, decision_id, final_action,
+                   policy_version, snapshot_digest, decision_id,
+                   (select policy_action from runtime.runtime_decision rd
+                    where rd.execution_id = runtime_execution.execution_id) as policy_action,
+                   (select reason_codes from runtime.runtime_decision rd
+                    where rd.execution_id = runtime_execution.execution_id) as policy_reason_codes,
+                   (select requirement_refs from governance.policy_snapshot ps
+                    where ps.snapshot_digest = runtime_execution.snapshot_digest) as policy_requirement_refs,
+                   (select evidence_refs from runtime.policy_evaluation pe
+                    where pe.execution_id = runtime_execution.execution_id) as policy_evidence_refs,
+                   final_action,
                    transform_execution_id, transform_status, transform_output_digest,
                    outbound_payload_id, outbound_candidate_digest, outbound_guard_status,
                    connector_execution_id, connector_status, response_guard_status,
                    response_guard_reason_codes,
+                   (select string_agg(distinct finding_type, ',' order by finding_type)
+                    from runtime.response_sensitive_finding rsf
+                    where rsf.execution_id = runtime_execution.execution_id) as response_finding_types,
                    (select requested_fields from runtime.policy_harness_binding phb
                     where phb.execution_id = runtime_execution.execution_id) as requested_fields,
                    requested_fields_digest, requested_field_count,

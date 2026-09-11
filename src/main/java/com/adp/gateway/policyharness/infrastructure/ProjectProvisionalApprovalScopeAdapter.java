@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 
+import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
 import com.adp.gateway.ai.application.AiModelProfileCatalog;
 import com.adp.gateway.ai.domain.AiModelProfile;
 import com.adp.gateway.auth.domain.AdpRole;
@@ -12,6 +13,8 @@ import com.adp.gateway.dataaccess.application.SubjectRefHasher;
 import com.adp.gateway.policyharness.application.ApprovalScopeNotFoundException;
 import com.adp.gateway.policyharness.application.ApprovalScopePort;
 import com.adp.gateway.policyharness.domain.ApprovalScope;
+import com.adp.gateway.egress.infrastructure.ProjectProvisionalDestinationProfileAdapter;
+import com.adp.gateway.policy.infrastructure.ProjectProvisionalPolicySnapshotAdapter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +24,9 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
 
     public static final String APPROVAL_REFERENCE = "approval_ai_customer_support_v1";
     public static final String DIGITAL_ASSET_APPROVAL_REFERENCE = "approval_digital_asset_purchase_v1";
+    public static final String PREFLIGHT_POLICY_BLOCK_APPROVAL = "approval_preflight_policy_block";
+    public static final String PREFLIGHT_OUTBOUND_BLOCK_APPROVAL = "approval_preflight_outbound_block";
+    public static final SubjectRef DA_PROVENANCE_SUBJECT = new SubjectRef("customer", "da-customer-10832");
     private final SubjectRefHasher subjectRefHasher;
     private final AiModelProfileCatalog aiModelProfiles;
 
@@ -34,11 +40,57 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
 
     @Override
     public ApprovalScope load(String approvalReference, OffsetDateTime requestStartedAt) {
+        if (PREFLIGHT_POLICY_BLOCK_APPROVAL.equals(approvalReference)) {
+            return preflightApproval(
+                approvalReference,
+                ProjectProvisionalDestinationProfileAdapter.PREFLIGHT_POLICY_BLOCK_DESTINATION,
+                ProjectProvisionalPolicySnapshotAdapter.PREFLIGHT_POLICY_BLOCK_SNAPSHOT_DIGEST
+            );
+        }
+        if (PREFLIGHT_OUTBOUND_BLOCK_APPROVAL.equals(approvalReference)) {
+            return preflightApproval(
+                approvalReference,
+                ProjectProvisionalDestinationProfileAdapter.PREFLIGHT_OUTBOUND_BLOCK_DESTINATION,
+                "be-snapshot-local-fixture:customer-summary:customer-support:internal-provider"
+            );
+        }
+        for (AiModelProfile profile : aiModelProfiles.profiles()) {
+            for (var binding : List.of(
+                new String[] {AiEvaluationRunCatalog.EXPERIMENT_02_P1, "customer:da-customer-10861"},
+                new String[] {AiEvaluationRunCatalog.EXPERIMENT_02_P2, "customer:da-customer-10832"},
+                new String[] {AiEvaluationRunCatalog.EXPERIMENT_02_P3, "customer:da-customer-10202"}
+            )) {
+                String expected = aiModelProfiles.approvalReference(
+                    profile, AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID, binding[0]
+                );
+                if (expected.equals(approvalReference)) {
+                    return aiEvaluationApproval(profile, approvalReference, SubjectRef.from(binding[1]));
+                }
+            }
+        }
+        var daProvenanceModelProfile = aiModelProfiles.profiles().stream()
+            .filter(profile -> aiModelProfiles.approvalReference(
+                profile,
+                AiEvaluationRunCatalog.DA_PROVENANCE_RUN_ID,
+                AiEvaluationRunCatalog.DA_PROVENANCE_CASE_ID
+            ).equals(approvalReference))
+            .findFirst();
+        if (daProvenanceModelProfile.isPresent()) {
+            return aiEvaluationApproval(
+                daProvenanceModelProfile.get(),
+                approvalReference,
+                DA_PROVENANCE_SUBJECT
+            );
+        }
         var modelProfile = aiModelProfiles.profiles().stream()
             .filter(profile -> aiModelProfiles.approvalReference(profile).equals(approvalReference))
             .findFirst();
         if (modelProfile.isPresent()) {
-            return aiEvaluationApproval(modelProfile.get());
+            return aiEvaluationApproval(
+                modelProfile.get(),
+                approvalReference,
+                SubjectRef.from("customer:customer-100")
+            );
         }
         if (DIGITAL_ASSET_APPROVAL_REFERENCE.equals(approvalReference)) {
             return digitalAssetApproval();
@@ -81,10 +133,36 @@ public class ProjectProvisionalApprovalScopeAdapter implements ApprovalScopePort
         );
     }
 
-    private ApprovalScope aiEvaluationApproval(AiModelProfile modelProfile) {
-        String subjectDigest = subjectRefHasher.hash(SubjectRef.from("customer:customer-100"));
+    private ApprovalScope preflightApproval(
+        String approvalReference,
+        String destinationProfileId,
+        String policySnapshotDigest
+    ) {
         return new ApprovalScope(
-            aiModelProfiles.approvalReference(modelProfile), modelProfile.profileVersion(),
+            approvalReference, "0.0.0", "local-" + approvalReference + "-digest",
+            "institution_local", "institution-policy/local/1.0.0", "local-institution-policy-digest-v1",
+            "customer_summary", "CUSTOMER_SUPPORT", "EXACT_DIGEST",
+            subjectRefHasher.hash(SubjectRef.from("customer:customer-100")),
+            "be-runtime-policy/0.0.0", policySnapshotDigest,
+            Set.of(AdpRole.RUNTIME_EXECUTOR), Set.of("AI_USE"),
+            Set.of(
+                "request.prompt", "customer.customer_id", "customer.segment", "account.account_id",
+                "account.account_type", "account.balance", "transaction.transaction_id",
+                "transaction.posted_at", "transaction.merchant_category", "transaction.amount"
+            ),
+            destinationProfileId, "0.0.0", OffsetDateTime.parse("2026-01-01T00:00:00Z"), null,
+            List.of("PROJECT_PROVISIONAL_PREFLIGHT_APPROVAL_EVIDENCE")
+        );
+    }
+
+    private ApprovalScope aiEvaluationApproval(
+        AiModelProfile modelProfile,
+        String approvalReference,
+        SubjectRef subject
+    ) {
+        String subjectDigest = subjectRefHasher.hash(subject);
+        return new ApprovalScope(
+            approvalReference, modelProfile.profileVersion(),
             aiModelProfiles.approvalScopeDigest(modelProfile, subjectDigest),
             "institution_local", "institution-policy/local/1.0.0", "local-institution-policy-digest-v1",
             "customer_summary", "CUSTOMER_SUPPORT", "EXACT_DIGEST",

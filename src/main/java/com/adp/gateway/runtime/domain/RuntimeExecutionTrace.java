@@ -32,6 +32,10 @@ public record RuntimeExecutionTrace(
     String policyVersion,
     String snapshotDigest,
     String decisionId,
+    String policyAction,
+    String policyReasonCodes,
+    String policyRequirementRefs,
+    String policyEvidenceRefs,
     String finalAction,
     String transformExecutionId,
     String transformStatus,
@@ -43,6 +47,7 @@ public record RuntimeExecutionTrace(
     String connectorStatus,
     String responseGuardStatus,
     String responseGuardReasonCodes,
+    String responseFindingTypes,
     String requestedFields,
     String requestedFieldsDigest,
     Integer requestedFieldCount,
@@ -115,41 +120,46 @@ public record RuntimeExecutionTrace(
         OffsetDateTime receivedAt
     ) {
         return new RuntimeExecutionTrace(
-            executionId,
-            requestId,
-            traceId,
-            idempotencyKey,
-            workloadId,
-            purposeCode,
-            subjectRefDigest,
-            null,
-            destinationProfileId,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            institutionId,
-            approvalReference,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            inputDigest,
-            null,
-            null,
+            executionId, // executionId
+            requestId, // requestId
+            traceId, // traceId
+            idempotencyKey, // idempotencyKey
+            workloadId, // workloadId
+            purposeCode, // purposeCode
+            subjectRefDigest, // subjectRefDigest
+            null, // providerProfileId
+            destinationProfileId, // destinationProfileId
+            null, // destinationProfileVersion
+            null, // destinationProfileDigest
+            null, // destinationTenantId
+            null, // destinationRegion
+            null, // destinationRetentionPolicy
+            null, // destinationTrainingUseAllowed
+            institutionId, // institutionId
+            approvalReference, // approvalReference
+            null, // approvalVersion
+            null, // approvalScopeDigest
+            null, // approvalReuseStatus
+            null, // approvalReasonCodes
+            null, // policyLayers
+            null, // policyLayersDigest
+            inputDigest, // inputDigest
             null,
             null,
             null,
             null,
             null,
+            null, // policyAction
+            null, // policyReasonCodes
+            null, // policyRequirementRefs
+            null, // policyEvidenceRefs
             null,
             null,
             null,
             null,
+            null,
+            null,
+            null, // responseFindingTypes
             null,
             null,
             null,

@@ -56,6 +56,10 @@ public class AiModelProfileCatalog {
         return "approval_ai_eval_" + profile.profileId();
     }
 
+    public String approvalReference(AiModelProfile profile, String evaluationRunId, String evaluationCaseId) {
+        return approvalReference(profile) + "_" + evaluationRunId + "_" + evaluationCaseId;
+    }
+
     public String policySnapshotDigest() {
         return digest(Map.ofEntries(
             Map.entry("policyVersion", "be-runtime-policy/0.0.0"),

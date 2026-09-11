@@ -65,7 +65,7 @@ class AdminIdentityControllerTests {
             .andExpect(jsonPath("$.permissions[?(@.workloadId == 'customer_summary')].purpose")
                 .value("CUSTOMER_SUPPORT"))
             .andExpect(jsonPath("$.permissions[?(@.workloadId == 'customer_summary')].subjectGrantCount")
-                .value(2))
+                .value(4))
             .andExpect(jsonPath("$.permissions[?(@.workloadId == 'customer_summary')].workloadRegistryStatus")
                 .value("ENABLED"))
             .andExpect(jsonPath("$.permissions[?(@.workloadId == 'workload_local')].workloadRegistryStatus")

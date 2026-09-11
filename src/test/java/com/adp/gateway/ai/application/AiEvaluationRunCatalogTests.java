@@ -55,6 +55,19 @@ class AiEvaluationRunCatalogTests {
         assertThat(run.modelProfileIds()).hasSize(3);
     }
 
+    @Test
+    void experiment02PinsThreeDatasetCasesAndThreeModels() {
+        var run = runs.find(AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID).orElseThrow();
+        assertThat(run.cases()).hasSize(3);
+        assertThat(run.modelProfileIds()).hasSize(3);
+        assertThat(run.cases().values()).allSatisfy(item -> {
+            assertThat(item.datasetRowRef()).startsWith("financial_synthetic_processed_v1:customers.csv#CustomerID=");
+            assertThat(item.datasetRowRef()).matches(".*:sha256:[0-9a-f]{64}");
+            assertThat(runs.resolve(new AiEvaluationReference(run.evaluationRunId(), item.caseId(), null, null, null, null),
+                Map.of("prompt", AiEvaluationPrompt.TEXT)).actualInputDigest()).isEqualTo(item.expectedInputDigest());
+        });
+    }
+
     private AiEvaluationReference reference() {
         return new AiEvaluationReference(
             AiEvaluationRunCatalog.BASELINE_RUN_ID,
