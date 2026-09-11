@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.eq;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -16,6 +17,12 @@ import java.util.Set;
 
 import com.adp.gateway.audit.application.AuditRecorder;
 import com.adp.gateway.ai.application.AiCanonicalContextBuilder;
+import com.adp.gateway.ai.application.AiEvaluationContractService;
+import com.adp.gateway.ai.application.AiEvaluationPrompt;
+import com.adp.gateway.ai.application.AiEvaluationRunCatalog;
+import com.adp.gateway.ai.application.AiEvaluationRunMismatchException;
+import com.adp.gateway.ai.domain.AiEvaluationContractSnapshot;
+import com.adp.gateway.ai.domain.AiEvaluationReference;
 import com.adp.gateway.ai.infrastructure.AiExternalSchemaMapper;
 import com.adp.gateway.auth.application.AuthorizationDecision;
 import com.adp.gateway.auth.application.AuthorizationService;
@@ -74,6 +81,7 @@ import com.adp.gateway.retrieval.domain.RetrievalResult;
 import com.adp.gateway.runtime.domain.RuntimeExecutionStatus;
 import com.adp.gateway.transform.application.TransformEngine;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class RuntimeExecutionServiceTests {
 
@@ -308,7 +316,7 @@ class RuntimeExecutionServiceTests {
         );
 
         verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
-        verify(outboundGuardChain, never()).guard(any(), any(), any(), any(), any(), any());
+        verify(outboundGuardChain, never()).guard(any(), any(), any(), any(), any(), any(), any(), any());
         verify(connector, never()).execute(any(), any(), any(), any());
     }
 
@@ -369,6 +377,77 @@ class RuntimeExecutionServiceTests {
         verify(destinationProfilePort, never()).load(any(), any());
         verify(retrievalService, never()).retrieve(any());
         verify(outboundCandidatePayloadBuilder, never()).build(any(), any(), any(), any());
+        verify(connector, never()).execute(any(), any(), any(), any());
+    }
+
+    @Test
+    void providerGovernanceMismatchStopsIntegratedFlowBeforeRetrievalTransformAndConnector() {
+        AuthorizationService authorizationService = mock(AuthorizationService.class);
+        RetrievalService retrievalService = mock(RetrievalService.class);
+        CanonicalContextBuilder contextBuilder = mock(CanonicalContextBuilder.class);
+        RuntimePolicyContextFactory runtimePolicyContextFactory = mock(RuntimePolicyContextFactory.class);
+        PolicySnapshotPort policySnapshotPort = mock(PolicySnapshotPort.class);
+        PolicyApplicabilityEvaluator applicabilityEvaluator = mock(PolicyApplicabilityEvaluator.class);
+        RuntimeDecisionService decisionService = mock(RuntimeDecisionService.class);
+        RuntimeConnectorPort connector = mock(RuntimeConnectorPort.class);
+        AuditRecorder auditRecorder = mock(AuditRecorder.class);
+        RuntimeExecutionPersistence persistence = mock(RuntimeExecutionPersistence.class);
+        SubjectRefHasher subjectRefHasher = mock(SubjectRefHasher.class);
+        RuntimeInputHasher runtimeInputHasher = mock(RuntimeInputHasher.class);
+        TransformEngine transformEngine = mock(TransformEngine.class);
+        DestinationProfilePort destinationProfilePort = mock(DestinationProfilePort.class);
+        OutboundCandidatePayloadBuilder outboundCandidatePayloadBuilder = mock(OutboundCandidatePayloadBuilder.class);
+        OutboundGuardChain outboundGuardChain = mock(OutboundGuardChain.class);
+        ResponseGuardPort responseGuardPort = mock(ResponseGuardPort.class);
+        RuntimeExecutionService service = service(
+            authorizationService, retrievalService, contextBuilder, runtimePolicyContextFactory, policySnapshotPort,
+            applicabilityEvaluator, decisionService, connector, auditRecorder, persistence, subjectRefHasher,
+            runtimeInputHasher, transformEngine, destinationProfilePort, outboundCandidatePayloadBuilder,
+            outboundGuardChain, responseGuardPort,
+            Clock.fixed(java.time.Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC)
+        );
+        AiEvaluationContractService evaluationContracts = mock(AiEvaluationContractService.class);
+        AiEvaluationContractSnapshot frozen = mock(AiEvaluationContractSnapshot.class);
+        var fixed = new ObjectMapper().createObjectNode().put("transform_scope", "ai-evaluation:test");
+        when(frozen.fixedConditions()).thenReturn(fixed);
+        when(evaluationContracts.required(AiEvaluationRunCatalog.BASELINE_RUN_ID)).thenReturn(frozen);
+        var mismatch = new AiEvaluationRunMismatchException("AI_MODEL_NOT_APPROVED");
+        org.mockito.Mockito.doThrow(mismatch).when(evaluationContracts).validateProviderBinding(
+            any(), eq("customer_summary"), eq("CUSTOMER_SUPPORT"), any()
+        );
+        ReflectionTestUtils.setField(service, "evaluationContracts", evaluationContracts);
+        when(authorizationService.authorize(any())).thenReturn(AuthorizationDecision.allow());
+        when(runtimeInputHasher.hash(any())).thenReturn("input-digest");
+        when(subjectRefHasher.hash(any())).thenReturn("subject-digest");
+        when(destinationProfilePort.load(any(), any())).thenReturn(destinationProfile());
+        var reference = new AiEvaluationReference(
+            AiEvaluationRunCatalog.BASELINE_RUN_ID, AiEvaluationRunCatalog.BASELINE_CASE_ID,
+            null, null, null, null
+        );
+
+        assertThatThrownBy(() -> service.execute(
+            request(), principal(), "institution_local", ProjectProvisionalApprovalScopeAdapter.APPROVAL_REFERENCE,
+            "dest_internal_provider_project_provisional", List.of("AI_USE"),
+            Map.of("prompt", AiEvaluationPrompt.TEXT), reference
+        )).isSameAs(mismatch);
+
+        var receivedTrace = org.mockito.ArgumentCaptor.forClass(
+            com.adp.gateway.runtime.domain.RuntimeExecutionTrace.class
+        );
+        verify(persistence).recordReceived(receivedTrace.capture(), any(), any());
+        org.assertj.core.api.Assertions.assertThat(com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.snapshot(
+            receivedTrace.getValue().executionId()
+        )).anySatisfy(timing -> {
+            org.assertj.core.api.Assertions.assertThat(timing.stage()).isEqualTo("PROVIDER_GOVERNANCE");
+            org.assertj.core.api.Assertions.assertThat(timing.decision()).isEqualTo("BLOCK");
+            org.assertj.core.api.Assertions.assertThat(timing.reasonCodes()).containsExactly("AI_MODEL_NOT_APPROVED");
+        });
+
+        verify(evaluationContracts).validateProviderBinding(
+            any(), eq("customer_summary"), eq("CUSTOMER_SUPPORT"), any()
+        );
+        verify(retrievalService, never()).retrieve(any());
+        verify(transformEngine, never()).transform(any(), any(), any(), any(), any());
         verify(connector, never()).execute(any(), any(), any(), any());
     }
 
@@ -442,7 +521,7 @@ class RuntimeExecutionServiceTests {
                 List.of()
             ));
         when(outboundCandidatePayloadBuilder.build(any(), any(), any(), any())).thenReturn(payload);
-        when(outboundGuardChain.guard(any(), any(), any(), any(), any(), any()))
+        when(outboundGuardChain.guard(any(), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(OutboundGuardResult.passed());
         when(connector.execute(any(), any(), any(), any())).thenReturn(connectorResult);
         when(responseGuardPort.guard(any(), any())).thenReturn(ResponseGuardResult.notEvaluated(List.of("CONNECTOR_NOT_EXECUTED")));

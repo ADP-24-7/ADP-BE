@@ -278,6 +278,28 @@ public class RuntimeExecutionService {
             var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
             persistence.recordDestinationProfile(executionId, destinationProfile);
+            if (resolvedEvaluation != null) {
+                com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "PROVIDER_GOVERNANCE");
+                try {
+                    evaluationContracts.validateProviderBinding(
+                        resolvedEvaluation,
+                        requestContext.workloadId(),
+                        requestContext.purpose(),
+                        destinationProfile
+                    );
+                    com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.decision(
+                        executionId, "PROVIDER_GOVERNANCE", "PASS", List.of()
+                    );
+                } catch (com.adp.gateway.ai.application.AiEvaluationRunMismatchException exception) {
+                    com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.decision(
+                        executionId, "PROVIDER_GOVERNANCE", "BLOCK", exception.reasonCodes()
+                    );
+                    log.warn("AI provider governance blocked executionId={} reason={}", executionId, exception.getMessage());
+                    throw exception;
+                } finally {
+                    com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "PROVIDER_GOVERNANCE");
+                }
+            }
             var packContextBuilder = contextBuilderResolver.resolve(destinationProfile.packType());
             var externalSchemaMapper = externalSchemaMapperResolver.resolve(destinationProfile.packType());
             var runtimeConnector = runtimeConnectorResolver.resolve(destinationProfile.packType());
@@ -477,7 +499,9 @@ public class RuntimeExecutionService {
                 requestContext.purpose(),
                 now,
                 decision,
-                outboundPayload
+                outboundPayload,
+                canonicalContext,
+                transformResult
             );
             persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
             com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "OUTBOUND_GUARD");

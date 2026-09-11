@@ -25,6 +25,13 @@ public final class RuntimeStageTimingRecorder {
         timing.end = OffsetDateTime.now();
     }
 
+    public static void decision(String executionId, String stage, String decision, List<String> reasonCodes) {
+        var timing = TIMINGS.computeIfAbsent(executionId, ignored -> new ConcurrentHashMap<>())
+            .computeIfAbsent(stage, ignored -> new MutableTiming());
+        timing.decision = decision;
+        timing.reasonCodes = List.copyOf(reasonCodes);
+    }
+
     public static List<StageTiming> snapshot(String executionId) {
         var values = TIMINGS.get(executionId);
         if (values == null) return List.of();
@@ -32,14 +39,30 @@ public final class RuntimeStageTimingRecorder {
         values.forEach((stage, timing) -> {
             if (timing.start != null && timing.end != null) {
                 result.add(new StageTiming(stage, timing.start, timing.end,
-                    Duration.between(timing.start, timing.end).toMillis()));
+                    Duration.between(timing.start, timing.end).toMillis(), timing.decision, timing.reasonCodes));
             }
         });
         result.sort(java.util.Comparator.comparing(StageTiming::startedAt));
         return List.copyOf(result);
     }
 
-    private static final class MutableTiming { private OffsetDateTime start; private OffsetDateTime end; }
+    private static final class MutableTiming {
+        private OffsetDateTime start;
+        private OffsetDateTime end;
+        private String decision;
+        private List<String> reasonCodes = List.of();
+    }
 
-    public record StageTiming(String stage, OffsetDateTime startedAt, OffsetDateTime endedAt, long durationMillis) {}
+    public record StageTiming(
+        String stage,
+        OffsetDateTime startedAt,
+        OffsetDateTime endedAt,
+        long durationMillis,
+        String decision,
+        List<String> reasonCodes
+    ) {
+        public StageTiming {
+            reasonCodes = List.copyOf(reasonCodes);
+        }
+    }
 }

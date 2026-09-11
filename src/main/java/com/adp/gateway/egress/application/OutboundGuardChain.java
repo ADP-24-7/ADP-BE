@@ -2,7 +2,9 @@ package com.adp.gateway.egress.application;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import com.adp.gateway.context.domain.CanonicalContext;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.DestinationProfile;
@@ -12,6 +14,8 @@ import com.adp.gateway.egress.domain.OutboundCandidateField;
 import com.adp.gateway.egress.domain.OutboundCandidatePayload;
 import com.adp.gateway.egress.domain.OutboundGuardResult;
 import com.adp.gateway.retrieval.domain.DataClass;
+import com.adp.gateway.transform.domain.TransformResult;
+import com.adp.gateway.transform.domain.TransformStrategy;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
@@ -32,6 +36,19 @@ public class OutboundGuardChain {
         java.time.OffsetDateTime requestStartedAt,
         RuntimeDecision decision,
         OutboundCandidatePayload payload
+    ) {
+        return guard(destinationProfile, workloadId, purposeCode, requestStartedAt, decision, payload, null, null);
+    }
+
+    public OutboundGuardResult guard(
+        DestinationProfile destinationProfile,
+        String workloadId,
+        String purposeCode,
+        java.time.OffsetDateTime requestStartedAt,
+        RuntimeDecision decision,
+        OutboundCandidatePayload payload,
+        CanonicalContext sourceContext,
+        TransformResult transformResult
     ) {
         Timer.Sample timer = Timer.start(meterRegistry);
         List<String> reasonCodes = new ArrayList<>();
@@ -65,6 +82,9 @@ public class OutboundGuardChain {
                 .filter(contract -> contract.required()
                     && payload.fields().stream().noneMatch(field -> matchesContract(field.path(), contract.path())))
                 .forEach(contract -> reasonCodes.add("REQUIRED_FIELD_MISSING"));
+            if (sourceContext != null) {
+                validateRequiredExact(destinationProfile, decision, payload, sourceContext, transformResult, reasonCodes);
+            }
             if (!reasonCodes.isEmpty()) {
                 recordGuardMetric("REJECTED", reasonCodes);
                 return OutboundGuardResult.rejected(reasonCodes);
@@ -73,6 +93,63 @@ public class OutboundGuardChain {
             return OutboundGuardResult.passed();
         } finally {
             timer.stop(Timer.builder("egress.guard.duration").register(meterRegistry));
+        }
+    }
+
+    private void validateRequiredExact(
+        DestinationProfile destinationProfile,
+        RuntimeDecision decision,
+        OutboundCandidatePayload payload,
+        CanonicalContext sourceContext,
+        TransformResult transformResult,
+        List<String> reasonCodes
+    ) {
+        destinationProfile.fieldContracts().stream()
+            .filter(contract -> contract.obligation() == FieldObligation.REQUIRED_EXACT)
+            .forEach(contract -> {
+                var source = sourceContext.fields().stream()
+                    .filter(field -> matchesContract(field.path(), contract.path()))
+                    .findFirst();
+                var outbound = payload.fields().stream()
+                    .filter(field -> matchesContract(field.path(), contract.path()))
+                    .findFirst();
+                if (source.isEmpty()) {
+                    addReason(reasonCodes, "REQUIRED_EXACT_SOURCE_MISSING");
+                    return;
+                }
+                if (outbound.isEmpty()) {
+                    addReason(reasonCodes, "REQUIRED_EXACT_FIELD_MISSING");
+                    return;
+                }
+                if (outbound.get().strategy() != TransformStrategy.KEEP
+                    || outbound.get().treatment() != FieldTreatment.KEEP_EXACT_PROTECTED) {
+                    addReason(reasonCodes, "REQUIRED_EXACT_STRATEGY_NOT_KEEP");
+                }
+                if (!Objects.deepEquals(source.get().value(), outbound.get().value())
+                    || !Objects.equals(source.get().valueDigest(), outbound.get().valueDigest())) {
+                    addReason(reasonCodes, "REQUIRED_EXACT_VALUE_MISMATCH");
+                }
+                if (decision.finalAction() == FinalAction.TRANSFORM) {
+                    var transformed = transformResult == null
+                        ? java.util.Optional.<com.adp.gateway.transform.domain.TransformFieldResult>empty()
+                        : transformResult.fields().stream()
+                            .filter(field -> matchesContract(field.path(), contract.path()))
+                            .findFirst();
+                    if (transformed.isEmpty()) {
+                        addReason(reasonCodes, "REQUIRED_EXACT_TRANSFORM_EVIDENCE_MISSING");
+                    } else if (transformed.get().strategy() != TransformStrategy.KEEP
+                        || !Objects.deepEquals(source.get().value(), transformed.get().transformedValue())
+                        || !Objects.equals(source.get().valueDigest(), transformed.get().sourceValueDigest())
+                        || !Objects.equals(source.get().valueDigest(), transformed.get().transformedValueDigest())) {
+                        addReason(reasonCodes, "REQUIRED_EXACT_TRANSFORM_MISMATCH");
+                    }
+                }
+            });
+    }
+
+    private void addReason(List<String> reasonCodes, String reasonCode) {
+        if (!reasonCodes.contains(reasonCode)) {
+            reasonCodes.add(reasonCode);
         }
     }
 

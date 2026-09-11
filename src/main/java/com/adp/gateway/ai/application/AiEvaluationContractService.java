@@ -72,17 +72,20 @@ public class AiEvaluationContractService {
     private final PolicySnapshotPort policies;
     private final RuntimePolicyContextFactory policyContexts;
     private final TransformStrategyResolver transforms;
+    private final AiProviderGovernanceEvaluator providerGovernanceEvaluator;
     private final Clock clock;
 
     public AiEvaluationContractService(AiEvaluationRunCatalog runs, AiModelProfileCatalog models,
         AiEvaluationContractPort store, AiEvaluationBundleCanonicalizer canonical, ObjectMapper mapper,
         RetrievalService retrieval, CanonicalContextBuilder contexts, AiCanonicalContextBuilder prompts,
         DestinationProfilePort destinations, PolicySnapshotPort policies,
-        RuntimePolicyContextFactory policyContexts, TransformStrategyResolver transforms, Clock clock) {
+        RuntimePolicyContextFactory policyContexts, TransformStrategyResolver transforms,
+        AiProviderGovernanceEvaluator providerGovernanceEvaluator, Clock clock) {
         this.runs = runs; this.models = models; this.store = store; this.canonical = canonical;
         this.mapper = mapper; this.retrieval = retrieval; this.contexts = contexts; this.prompts = prompts;
         this.destinations = destinations; this.policies = policies; this.policyContexts = policyContexts;
         this.transforms = transforms; this.clock = clock;
+        this.providerGovernanceEvaluator = providerGovernanceEvaluator;
     }
 
     public AiEvaluationContractSnapshot read(AuthPrincipal principal, String runId) {
@@ -284,6 +287,107 @@ public class AiEvaluationContractService {
     public boolean isProviderExecutionAuthorized(String runId) {
         var assurance = required(runId).fixedConditions().path("provider_destination_assurance");
         return assurance.isMissingNode() || assurance.path("provider_call_authorized").asBoolean(false);
+    }
+
+    /**
+     * Validates the frozen workload, provider connection, model and destination bindings before
+     * transform or provider-request construction. External execution authorization remains a
+     * separate fail-closed boundary because an approved binding does not authorize a call.
+     */
+    public void validateProviderBinding(
+        AiEvaluationReference reference,
+        String workloadId,
+        String purposeCode,
+        DestinationProfile destination
+    ) {
+        var model = models.findByProfileId(destination.providerProfileId())
+            .orElseThrow(() -> mismatch("AI_MODEL_NOT_APPROVED"));
+        validateProviderBinding(reference, workloadId, purposeCode, destination,
+            model.providerConnectionProfileId(), model.modelId());
+    }
+
+    void validateProviderBinding(
+        AiEvaluationReference reference,
+        String workloadId,
+        String purposeCode,
+        DestinationProfile destination,
+        String requestedConnectionProfileId,
+        String requestedModelId
+    ) {
+        var run = run(reference.evaluationRunId());
+        var frozen = required(run.evaluationRunId());
+        require(frozen.fixedConditions().path("workload").asText().equals(workloadId)
+            && frozen.fixedConditions().path("purpose_code").asText().equals(purposeCode)
+            && destination.allowedBindings().stream().anyMatch(binding ->
+                binding.workloadId().equals(workloadId) && binding.purposeCode().equals(purposeCode)),
+            "AI_WORKLOAD_BINDING_MISMATCH");
+
+        var model = models.findByProfileId(destination.providerProfileId())
+            .orElseThrow(() -> mismatch("AI_MODEL_NOT_APPROVED"));
+        require(run.modelProfileIds().contains(model.profileId()), "AI_MODEL_NOT_APPROVED");
+        var approved = frozen.modelProfiles().stream()
+            .filter(item -> item.profileId().equals(model.profileId()))
+            .findFirst().orElseThrow(() -> mismatch("AI_MODEL_NOT_APPROVED"));
+        require(approved.connectionProfileId().equals(model.providerConnectionProfileId())
+            && approved.connectionProfileId().equals(requestedConnectionProfileId),
+            "AI_PROVIDER_NOT_APPROVED");
+        require(approved.providerModelId().equals(model.modelId())
+            && approved.providerModelId().equals(requestedModelId)
+            && approved.profileDigest().equals(model.modelProfileDigest()), "AI_MODEL_NOT_APPROVED");
+        require(approved.destinationProfileId().equals(destination.destinationProfileId())
+            && approved.destinationProfileDigest().equals(destination.profileDigest())
+            && model.destinationProfileId().equals(destination.destinationProfileId())
+            && model.destinationProfileDigest().equals(destination.profileDigest()),
+            "AI_DESTINATION_MISMATCH");
+        if (AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID.equals(run.evaluationRunId())) {
+            var governance = evaluateProviderGovernance(destination);
+            if (!governance.isPassed()) {
+                throw new AiEvaluationRunMismatchException(governance.reasonCodes());
+            }
+        }
+    }
+
+    public com.adp.gateway.ai.domain.AiProviderGovernanceContract providerGovernanceContract() {
+        String version = "e2-provider-governance/1.2.0";
+        var modelProfileIds = models.profiles().stream().map(AiModelProfile::profileId).sorted().toList();
+        var destinationIds = models.profiles().stream().map(AiModelProfile::destinationProfileId).sorted().toList();
+        var destinationDigests = models.profiles().stream().map(AiModelProfile::destinationProfileDigest).sorted().toList();
+        var content = Map.ofEntries(
+            Map.entry("contract_version", version),
+            Map.entry("activation_status", "ACTIVE_FAIL_CLOSED"),
+            Map.entry("provider_connection_profile_id", "nvidia-nim-hosted"),
+            Map.entry("model_profile_ids", modelProfileIds),
+            Map.entry("workload_id", "customer_summary"),
+            Map.entry("purpose_code", "CUSTOMER_SUPPORT"),
+            Map.entry("destination_profile_ids", destinationIds),
+            Map.entry("destination_profile_digests", destinationDigests),
+            Map.entry("allowed_regions", List.of("KR")),
+            Map.entry("region_required", true),
+            Map.entry("approved_retention_mode", "SESSION_ONLY"),
+            Map.entry("maximum_retention_days", 0),
+            Map.entry("allowed_reuse_purposes", List.of("REQUEST_EXECUTION"))
+        );
+        String digest = canonical.digest(mapper.valueToTree(content));
+        return new com.adp.gateway.ai.domain.AiProviderGovernanceContract(
+            version, digest, "ACTIVE_FAIL_CLOSED", "nvidia-nim-hosted", modelProfileIds,
+            "customer_summary", "CUSTOMER_SUPPORT", destinationIds, destinationDigests,
+            List.of("KR"), true, "SESSION_ONLY", 0, List.of("REQUEST_EXECUTION")
+        );
+    }
+
+    public com.adp.gateway.ai.domain.AiProviderGovernanceDecision evaluateProviderGovernance(
+        DestinationProfile destination
+    ) {
+        var model = models.findByProfileId(destination.providerProfileId())
+            .orElseThrow(() -> mismatch("AI_MODEL_NOT_APPROVED"));
+        String resolvedRegion = "NVIDIA_HOSTED".equals(destination.region()) ? "UNRESOLVED" : destination.region();
+        return providerGovernanceEvaluator.evaluate(
+            providerGovernanceContract(), model.providerConnectionProfileId(), model.profileId(),
+            "customer_summary", "CUSTOMER_SUPPORT", destination.destinationProfileId(),
+            destination.profileDigest(), "KR", resolvedRegion,
+            "SESSION_END_DEFAULT_WITH_SECURITY_EXCEPTION", null, "UNVERIFIED",
+            List.of("REQUEST_EXECUTION", "SECURITY_FRAUD_ABUSE_MONITORING", "AI_MODEL_IMPROVEMENT")
+        );
     }
 
     private LocalDate frozenRetrievalAsOfDate(AiEvaluationContractSnapshot frozen) {
