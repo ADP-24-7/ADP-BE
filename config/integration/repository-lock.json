@@ -4,13 +4,13 @@
     {
       "name": "ADP-BE",
       "path": "ADP-BE",
-      "commit": "1a71f5d5ebd33f81c918cd7152dc70211b91eb1e",
+      "commit": "56cf35f43baf3709e87a5e69d44926fee100b82d",
       "selfHosted": true
     },
     {
       "name": "ADP-FE",
       "path": "ADP-FE",
-      "commit": "f42bc0c30510b278ccbac1c01b324a09f2f11b8f"
+      "commit": "11b1d148e8651d064e6e46e84af07e5c38cee46e"
     },
     {
       "name": "ADP-DA",
