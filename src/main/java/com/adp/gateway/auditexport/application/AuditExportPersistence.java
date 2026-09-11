@@ -8,6 +8,10 @@ import com.adp.gateway.auditexport.domain.AuditExportDetail;
 import com.adp.gateway.auditexport.domain.AuditExportDownload;
 import com.adp.gateway.auditexport.domain.AuditExportJob;
 import com.adp.gateway.auditexport.domain.AuditExportScope;
+import com.adp.gateway.auditexport.domain.AuditExportStatus;
+import com.adp.gateway.auditexport.domain.AuditExportWorkPage;
+import com.adp.gateway.auditexport.domain.AuditExportWorkSummary;
+import com.adp.gateway.auditexport.domain.AuditExportWorkView;
 
 public interface AuditExportPersistence {
     AuditExportScope resolveExecutionScope(
@@ -17,6 +21,26 @@ public interface AuditExportPersistence {
     );
 
     AuditExportJob reserve(AuditExportReservation reservation);
+
+    AuditExportWorkPage searchWork(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String principalId,
+        boolean privileged,
+        AuditExportWorkView view,
+        AuditExportStatus status,
+        int page,
+        int size
+    );
+
+    AuditExportWorkSummary summarizeWork(
+        String institutionId,
+        Set<String> allowedWorkloads,
+        String principalId,
+        boolean privileged,
+        boolean operationsAvailable,
+        OffsetDateTime now
+    );
 
     AuditExportDetail load(String exportId, String institutionId, Set<String> allowedWorkloads);
 

@@ -3,11 +3,17 @@ package com.adp.gateway.auditexport.api;
 import com.adp.gateway.auditexport.application.AuditExportService;
 import com.adp.gateway.auditexport.domain.AuditExportDetail;
 import com.adp.gateway.auditexport.domain.AuditExportJob;
+import com.adp.gateway.auditexport.domain.AuditExportStatus;
+import com.adp.gateway.auditexport.domain.AuditExportWorkPage;
+import com.adp.gateway.auditexport.domain.AuditExportWorkSummary;
+import com.adp.gateway.auditexport.domain.AuditExportWorkView;
 import com.adp.gateway.auth.domain.AuthPrincipal;
 import com.adp.gateway.common.trace.TraceHeaders;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +25,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Validated
@@ -39,6 +46,22 @@ public class AuditExportController {
     ) {
         return service.request(principal(authentication), body.executionId(), body.reportType(), body.format(),
             body.reason(), body.idempotencyKey(), requestId(request), traceId(request));
+    }
+
+    @GetMapping
+    AuditExportWorkPage searchWork(
+        @RequestParam(defaultValue = "MY_REQUESTS") AuditExportWorkView view,
+        @RequestParam(required = false) AuditExportStatus status,
+        @RequestParam(defaultValue = "0") @Min(0) @Max(1000000) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+        Authentication authentication
+    ) {
+        return service.searchWork(principal(authentication), view, status, page, size);
+    }
+
+    @GetMapping("/work-summary")
+    AuditExportWorkSummary workSummary(Authentication authentication) {
+        return service.summarizeWork(principal(authentication));
     }
 
     @GetMapping("/{exportId}")

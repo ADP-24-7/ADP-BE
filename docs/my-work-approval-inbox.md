@@ -1,0 +1,84 @@
+# My Work / Approval Inbox
+
+## 목적
+
+별도 마이페이지나 승인 엔진을 만들지 않고 기존 Audit Export workflow를 운영 업무 단위로 조회한다.
+
+## 화면별 조회 계약
+
+| View | 대상 | 범위 |
+| --- | --- | --- |
+| `MY_REQUESTS` | 감사 증적을 요청한 사용자 | 본인의 진행 중 Job과 아직 다운로드하지 않은 결과 |
+| `MY_HISTORY` | 감사 증적을 요청한 사용자 | 본인의 다운로드 완료, 반려, 실패, 만료, 폐기 이력 |
+| `APPROVAL_QUEUE` | `PRIVILEGED_OPERATOR` | `REQUESTED` 상태이면서 본인 요청이 아닌 Job |
+| `DECISION_HISTORY` | `PRIVILEGED_OPERATOR` | 본인이 승인, 반려 또는 폐기한 Job |
+| `AUDIT_HISTORY` | `AUDITOR` | 감사 목적의 기관 및 Workload 범위 전체 이력 |
+
+모든 조회는 `institution_id`와 호출자에게 허용된 `workload_id`를 SQL에서 강제한다. 승인 큐는
+maker-checker 원칙에 따라 요청자 본인의 Job을 제외한다. 일반 `OPERATOR`는 권한 범위의 실행 증적을 조회하고 본인
+명의로 반출을 요청할 수 있지만 승인, 타인 요청 이력, 기관 감사 이력에는 접근하지 않는다. 생성된 파일은 요청자
+본인만 만료 전까지 반복 다운로드할 수 있으며 모든 다운로드를 Event로 기록한다. 개인 업무 집계는 모든 반출 가능
+역할에 제공하지만 기관 전체 운영 집계는 `PRIVILEGED_OPERATOR`, `AUDITOR`에게만 제공한다. 로컬 계정도
+`operator-local`과 `privileged-operator-local`을 분리해 이 경계를 그대로 재현한다.
+
+## 상태 해석
+
+새 상태를 만들지 않고 `audit_export_job`의 기존 상태를 사용한다.
+
+- 승인 대기: `REQUESTED`
+- 생성 대기/생성 중: `APPROVED`, `GENERATING`
+- 다운로드 가능: `READY`이면서 `downloaded_at`이 없음
+- 다운로드 완료: `READY`이면서 `downloaded_at`이 있음
+- 종료 상태: `REJECTED`, `FAILED`, `EXPIRED`, `REVOKED`
+
+24시간 이상 승인 대기는 `REQUESTED` Job의 `created_at`을 기준으로 계산한다.
+
+## 정렬과 우선 처리
+
+- `APPROVAL_QUEUE`: SLA 초과 요청을 포함해 접수 시각이 오래된 순
+- `MY_REQUESTS`: 다운로드 가능, 승인 대기, 생성 진행 순. 승인 대기끼리는 오래된 순
+- `MY_HISTORY`, `DECISION_HISTORY`, `AUDIT_HISTORY`: 최근 상태 변경 순
+
+정렬은 페이지네이션 전에 DB에서 수행해 다음 페이지의 오래된 요청이 최신 요청 뒤로 밀리지 않도록 한다.
+
+## 승인 취소와 폐기
+
+`PRIVILEGED_OPERATOR`는 잘못 승인된 반출을 `APPROVED`, `GENERATING`, `READY` 상태에서 `REVOKE`할 수 있다.
+폐기 사유는 필수이며 승인자·승인 시각·승인 사유와 별도의 폐기자·폐기 시각·폐기 사유로 보존한다. 각 상태 변경
+Event에도 당시 사유를 함께 저장하므로 후속 전이가 앞선 판단 근거를 덮어쓰지 않는다. `GENERATING` 폐기는 Worker
+lease를 해제하고, 실제 결과 파일이 존재하는 `READY` 폐기는 content를 즉시 삭제한 뒤
+`AUDIT_EXPORT_CONTENT_DELETED` Event를 추가한다.
+
+다운로드는 대상 Job을 행 잠금한 뒤 `READY`, 만료 시각, content digest를 확인한다. 폐기와 다운로드가 동시에
+요청되면 먼저 잠금을 획득해 commit한 전이가 우선하며, 폐기가 먼저 commit된 파일은 반환하지 않는다.
+
+## API
+
+```http
+GET /api/v1/audit-exports?view=MY_REQUESTS&page=0&size=10
+GET /api/v1/audit-exports?view=MY_HISTORY&page=0&size=10
+GET /api/v1/audit-exports?view=APPROVAL_QUEUE&page=0&size=10
+GET /api/v1/audit-exports?view=DECISION_HISTORY&page=0&size=10
+GET /api/v1/audit-exports?view=AUDIT_HISTORY&page=0&size=10
+GET /api/v1/audit-exports/work-summary
+```
+
+Monitoring은 집계와 업무 진입점만 제공한다. 승인, 반려, 폐기 같은 상태 변경은 기존 Audit Export command API를
+통해 Requests & Approvals 화면에서만 수행한다.
+
+## 검증 기준
+
+- Auditor의 본인 요청 조회와 Privileged Operator의 승인 큐 조회
+- 진행 중 본인 요청과 종료된 본인 이력 분리
+- 승인 담당자의 본인 처리 이력과 Auditor의 기관 전체 이력 분리
+- 본인 요청의 승인 큐 제외
+- Institution 및 Workload SQL scope
+- 24시간 이상 대기 집계
+- 승인 Queue와 본인 승인 대기 요청의 오래된 순 정렬
+- `APPROVED`, `GENERATING`, `READY`의 사유 필수 폐기
+- 생성 중 lease 해제와 READY content 삭제 Event
+- 승인·반려·폐기 Event의 사유 원문 보존과 승인/폐기 snapshot 분리
+- 다운로드와 폐기 직렬화 및 반복 다운로드 Event
+- 역할별 개인/기관 운영 집계 분리
+- V51 조회 인덱스와 V52 결정 증적 보존 migration
+- 기존 승인, 생성, 다운로드 command 회귀

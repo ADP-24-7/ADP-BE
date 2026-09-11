@@ -139,5 +139,6 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [Policy · Regulation · Evidence Plane](docs/policy-regulation-evidence-plane.md)
 - [Slice 25 Policy Operations Read Model](docs/slice-25-policy-operations-read-model.md)
 - [Slice 25 Security Finding Read Model](docs/slice-25-security-finding-read-model.md)
+- [My Work / Approval Inbox](docs/my-work-approval-inbox.md)
 - [Troubleshooting Index](docs/troubleshooting/index.md)
 - [Slice 30 Local Integration Reproducibility](docs/slice-30-local-integration-reproducibility.md)

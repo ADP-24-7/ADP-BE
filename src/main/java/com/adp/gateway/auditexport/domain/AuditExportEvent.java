@@ -11,6 +11,7 @@ public record AuditExportEvent(
     AuditExportStatus fromStatus,
     AuditExportStatus toStatus,
     String reasonCode,
+    String reasonText,
     OffsetDateTime occurredAt
 ) {
 }
