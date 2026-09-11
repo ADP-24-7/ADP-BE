@@ -19,6 +19,30 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 | BE-10 | Skeleton In Progress | Policy Lifecycle & Governance |
 | BE-11 | Baseline Completed | Observability Operations |
 | NCP-5 | Completed | BE NCP ContentStore & DA Handoff E2E |
+| Slice 30 | Completed | Local Integration Lock, Profiles & One-command Verification |
+| Slice 32 | Completed | Production Reference Architecture & Claim Boundary |
+
+## Slice 32 Production Reference Architecture
+
+- [x] 중앙 API Gateway와 private ingress를 기본 배치로 정의
+- [x] OIDC Admin Session과 mTLS Service Identity를 설계 전용 범위로 분리
+- [x] PostgreSQL/Object Storage의 Source of Truth와 HA/retention 책임 정의
+- [x] Secret Manager/KMS와 Egress Proxy/Firewall 목표 경계 정의
+- [x] Prometheus/Alertmanager/SIEM 책임과 low-cardinality 원칙 정의
+- [x] additive Migration, immutable image, Policy/Runtime rollback 책임 분리
+- [x] Local/NCP Foundation 검증과 Cloud/HA/DR 미검증 Claim 분리
+- [x] Machine-readable Architecture Contract와 CI drift 검증 추가
+
+## Slice 30 Local Integration Reproducibility
+
+- [x] BE Compose를 네 Repository 통합 실행 Source of Truth로 유지
+- [x] FE·BE·DA·Docs Commit SHA와 Flyway current를 Repository Lock으로 고정
+- [x] Checkout drift, dirty tracked file, 필수 입력 누락, Migration drift 사전 차단
+- [x] `local`, `demo`, `production-like` 환경 Profile 분리
+- [x] Secret `.env`와 versioned non-secret Profile 책임 분리
+- [x] 전체 Container health와 Runtime Profile, Flyway current 검증 명령 추가
+- [x] Demo 합성 데이터 Provenance를 BE metadata와 FE UI에 표시
+- [x] 고정 Commit 상태에서 전체 Docker Stack 재기동 검증
 
 ## AI Runtime Evaluation Tracking
 
@@ -48,6 +72,13 @@ AI-EVAL-0 상세 계약은 [NVIDIA Model Connector And Profiles](ai-eval-0-nvidi
   - DB 전체 저장 실행과 Bundle 최신 선택 실행 수 분리
   - 기존 Runtime API 기반 세 NVIDIA Profile 실행 및 Bundle Export harness
   - 이전 버전 DB의 local principal institution binding 복구
+- [x] AI Experiment 02 BE Calibration Evidence 지원
+  - Branch: `feature/ai-experiment-02-calibration-evidence`
+  - Migration: V50
+  - `RAW_VALUE_REFLECTION`을 Data Class, Transform Strategy, Field Treatment와 privacy-safe하게 결속
+  - Privileged, Institution/Workload-scoped Calibration Evidence API와 versioned JSON Schema
+  - Legacy reflection metadata 누락과 Finding aggregate 불일치를 `calibration_ready=false`로 fail closed
+  - 기존 Evaluation Bundle v2, Response Guard 판정, Runtime Policy는 변경하지 않음
 
 ## Security Cross-cutting Tracking
 

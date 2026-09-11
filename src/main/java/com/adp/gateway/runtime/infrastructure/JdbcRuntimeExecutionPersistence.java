@@ -733,10 +733,14 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
         responseGuardResult.findings().forEach(finding -> jdbcClient.sql("""
             insert into runtime.response_sensitive_finding (
                 connector_execution_id, execution_id, finding_type, location,
-                start_offset, end_offset, detector_version, evidence_digest, created_at
+                start_offset, end_offset, detector_version, evidence_digest,
+                source_data_class, transform_strategy, field_treatment,
+                outbound_field_path_digest, created_at
             ) values (
                 :connectorExecutionId, :executionId, :findingType, :location,
-                :startOffset, :endOffset, :detectorVersion, :evidenceDigest, :createdAt
+                :startOffset, :endOffset, :detectorVersion, :evidenceDigest,
+                :sourceDataClass, :transformStrategy, :fieldTreatment,
+                :outboundFieldPathDigest, :createdAt
             )
             """)
             .param("connectorExecutionId", connectorResult.connectorExecutionId())
@@ -747,6 +751,10 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
             .param("endOffset", finding.endOffset())
             .param("detectorVersion", finding.detectorVersion())
             .param("evidenceDigest", finding.evidenceDigest())
+            .param("sourceDataClass", finding.sourceDataClass())
+            .param("transformStrategy", finding.transformStrategy())
+            .param("fieldTreatment", finding.fieldTreatment())
+            .param("outboundFieldPathDigest", finding.outboundFieldPathDigest())
             .param("createdAt", OffsetDateTime.now(clock))
             .update());
         jdbcClient.sql("""

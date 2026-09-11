@@ -9,6 +9,7 @@ Java 21 / Spring Boot 3 / Gradle 기반 ADP Gateway Runtime입니다.
 - Vault / Connector integration boundary
 - Audit Event 생성
 - Runtime API 제공
+- Production Reference Architecture와 검증 Claim 경계 관리
 
 ## Docker 개발 환경
 
@@ -54,8 +55,13 @@ ADP-BE/
 
 ```bash
 make setup
-make docker-up
+make integration-check INTEGRATION_PROFILE=demo
+make architecture-validate
 ```
+
+`integration-check`는 Repository Lock과 Flyway 기준을 먼저 검증하고 BE·FE·DA·Docs·PostgreSQL·Mock Provider를
+모두 build/start한 뒤 health와 실행 profile을 확인합니다. 일반 개발은 `local`, 합성 데이터 데모는 `demo`, 운영 기본값에
+가까운 fail-closed 설정 확인은 `production-like` profile을 사용합니다.
 
 로컬 통합 환경의 관리자 콘솔은 Session 기반 로그인을 사용합니다. `auditor-local`, `privileged-operator-local`,
 `operator-local` 데모 계정은 local fixture가 활성화된 경우에만 제공되며, Runtime API는 별도의 `X-ADP-API-Key`
@@ -75,12 +81,16 @@ make setup
 make docker-up
 make docker-logs
 make docker-ps
+make integration-check INTEGRATION_PROFILE=demo
+make integration-down INTEGRATION_PROFILE=demo
 make ai-eval-e2e
 make docker-down
 make check
 ```
 
 `make check`는 개발 DB를 오염시키지 않도록 별도 `postgres-test` 컨테이너를 사용합니다.
+
+운영 목표 배치와 현재 검증 범위는 [Production Reference Architecture](docs/production-reference-architecture.md)에서 관리합니다.
 
 ## API 문서
 
@@ -101,6 +111,7 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [AI-EVAL-2 Runtime Evidence Capture](docs/ai-eval-2-runtime-evidence.md)
 - [AI-EVAL-3 DA Evaluation Bundle Export](docs/ai-eval-3-da-evaluation-bundle.md)
 - [AI Evaluation Real E2E Handoff](docs/ai-eval-real-e2e-handoff.md)
+- [AI Experiment 02 Calibration Evidence](docs/ai-experiment-02-calibration-evidence.md)
 - [BE-4 Policy & Decision Core](docs/be-4-policy-decision-core.md)
 - [BE-5 Transform Engine & Vault](docs/be-5-transform-vault.md)
 - [BE-6 Common Egress Boundary](docs/be-6-common-egress-boundary.md)
@@ -129,3 +140,4 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [Slice 25 Policy Operations Read Model](docs/slice-25-policy-operations-read-model.md)
 - [Slice 25 Security Finding Read Model](docs/slice-25-security-finding-read-model.md)
 - [Troubleshooting Index](docs/troubleshooting/index.md)
+- [Slice 30 Local Integration Reproducibility](docs/slice-30-local-integration-reproducibility.md)

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adp.local/contracts/ai-calibration-evidence-v1.schema.json",
+  "title": "ADP AI Calibration Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest", "calibration_ready", "readiness_reason_codes", "executions"],
+  "properties": {
+    "manifest": { "$ref": "#/$defs/manifest" },
+    "calibration_ready": { "type": "boolean" },
+    "readiness_reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "RESPONSE_GUARD_EVIDENCE_MISSING",
+          "REFLECTION_METADATA_MISSING",
+          "FINDING_COUNT_MISMATCH"
+        ]
+      }
+    },
+    "executions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/execution" }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "content_digest", "evaluation_run_id", "evaluation_run_version",
+        "execution_count", "generated_at", "execution_from", "execution_cutoff_at"
+      ],
+      "properties": {
+        "schema_version": { "const": "adp-ai-calibration-evidence/v1" },
+        "content_digest": { "$ref": "#/$defs/digest" },
+        "evaluation_run_id": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "evaluation_run_version": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "execution_count": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "execution_from": { "type": "string", "format": "date-time" },
+        "execution_cutoff_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_id", "eval_case_id", "model_profile_id", "response_guard_status",
+        "controlled_delivery_status", "reason_codes", "detector_version", "finding_count",
+        "observed_finding_count", "missing_reflection_metadata_count", "finding_groups"
+      ],
+      "properties": {
+        "execution_id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "eval_case_id": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "model_profile_id": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "response_guard_status": { "enum": ["PASSED", "REJECTED", "NOT_EVALUATED"] },
+        "controlled_delivery_status": { "enum": ["DELIVERED", "WITHHELD"] },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+        },
+        "detector_version": { "type": ["string", "null"], "maxLength": 120 },
+        "finding_count": { "type": "integer", "minimum": 0 },
+        "observed_finding_count": { "type": "integer", "minimum": 0 },
+        "missing_reflection_metadata_count": { "type": "integer", "minimum": 0 },
+        "finding_groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/findingGroup" }
+        }
+      }
+    },
+    "findingGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_type", "source_data_class", "transform_strategy",
+        "field_treatment", "count"
+      ],
+      "properties": {
+        "finding_type": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "source_data_class": {
+          "type": ["string", "null"],
+          "enum": [
+            "CUSTOMER_IDENTIFIER", "ACCOUNT_IDENTIFIER", "TRANSACTION_IDENTIFIER",
+            "FINANCIAL_AMOUNT", "FINANCIAL_METADATA", "BUSINESS_METADATA", "UNKNOWN", null
+          ]
+        },
+        "transform_strategy": {
+          "type": ["string", "null"],
+          "enum": ["MASK", "HMAC_PSEUDO", "VAULT_TOKEN", "REMOVE", "KEEP", "GENERALIZE", "FIELD_SEPARATION", null]
+        },
+        "field_treatment": {
+          "type": ["string", "null"],
+          "enum": ["REMOVED", "TRANSFORMED", "KEEP_EXACT_PROTECTED", null]
+        },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

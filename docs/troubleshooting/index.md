@@ -1,5 +1,8 @@
 # Troubleshooting Index
 
+- [Local Integration Reproducibility](local-integration-reproducibility.md)
+- [Production Reference Architecture](production-reference-architecture.md)
+
 ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 수정 과정에서 발생한 문제와 해결 근거를 정리한다.
 
 ## 문서
@@ -10,6 +13,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [BE-5 Deep Dives](be-5-deep-dives.md)
 - [BE-6 이후 플랫폼 트러블슈팅](be-6-and-platform-evolution.md)
 - [AI Evaluation 트러블슈팅](ai-evaluation.md)
+- [AI Calibration Evidence 트러블슈팅](ai-calibration-evidence.md)
 - [Approved Transaction Trust Boundary 트러블슈팅](approved-transaction-trust-boundary.md)
 - [Digital Asset Canonical Contract 트러블슈팅](digital-asset-contract-freeze.md)
 - [Digital Asset Artifact Loader 트러블슈팅](digital-asset-artifact-loader.md)
