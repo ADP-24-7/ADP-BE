@@ -54,8 +54,12 @@ ADP-BE/
 
 ```bash
 make setup
-make docker-up
+make integration-check INTEGRATION_PROFILE=demo
 ```
+
+`integration-check`는 Repository Lock과 Flyway 기준을 먼저 검증하고 BE·FE·DA·Docs·PostgreSQL·Mock Provider를
+모두 build/start한 뒤 health와 실행 profile을 확인합니다. 일반 개발은 `local`, 합성 데이터 데모는 `demo`, 운영 기본값에
+가까운 fail-closed 설정 확인은 `production-like` profile을 사용합니다.
 
 로컬 통합 환경의 관리자 콘솔은 Session 기반 로그인을 사용합니다. `auditor-local`, `privileged-operator-local`,
 `operator-local` 데모 계정은 local fixture가 활성화된 경우에만 제공되며, Runtime API는 별도의 `X-ADP-API-Key`
@@ -75,6 +79,8 @@ make setup
 make docker-up
 make docker-logs
 make docker-ps
+make integration-check INTEGRATION_PROFILE=demo
+make integration-down INTEGRATION_PROFILE=demo
 make ai-eval-e2e
 make docker-down
 make check
@@ -129,3 +135,4 @@ BE 실행 후 Swagger UI에서 전체 API 계약을 확인하고 요청을 실�
 - [Slice 25 Policy Operations Read Model](docs/slice-25-policy-operations-read-model.md)
 - [Slice 25 Security Finding Read Model](docs/slice-25-security-finding-read-model.md)
 - [Troubleshooting Index](docs/troubleshooting/index.md)
+- [Slice 30 Local Integration Reproducibility](docs/slice-30-local-integration-reproducibility.md)

@@ -55,7 +55,15 @@ jobs:
         run: |
           sh -n scripts/run-ai-evaluation-e2e.sh
           sh -n scripts/run-ncp-artifact-ingest-e2e.sh
+          sh -n scripts/verify-local-integration.sh
           python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: Validate integration profiles
+        run: |
+          cp .env.example .env
+          for profile in local demo production-like; do
+            docker compose --env-file .env --env-file "config/integration/profiles/${profile}.env" config --quiet
+          done
 
       - name: Validate Prometheus alert rules
         run: >-

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "adp-local-integration-lock/v1",
+  "repositories": [
+    {
+      "name": "ADP-BE",
+      "path": "ADP-BE",
+      "sourceDigest": "sha256:cb0519d7455f74df5ee3512e0f7589e0e79dc4eb2a56cf5c2165ebad4eba0e21",
+      "selfHosted": true
+    },
+    {
+      "name": "ADP-FE",
+      "path": "ADP-FE",
+      "commit": "99dbf4de32787c99ab73ece413c5341e694bc2ae"
+    },
+    {
+      "name": "ADP-DA",
+      "path": "ADP-DA",
+      "commit": "6a23513fdd6cd45382a265dbe232d62a1df7a7e2"
+    },
+    {
+      "name": "ADP-Docs",
+      "path": "ADP-Docs",
+      "commit": "1cbc07de33877ec6686dd804e7c80635c7fc3e7c"
+    }
+  ],
+  "database": {
+    "latestFlywayVersion": "49"
+  },
+  "requiredFiles": [
+    "ADP-FE/package-lock.json",
+    "ADP-DA/pyproject.toml",
+    "ADP-Docs/package-lock.json",
+    "ADP-DA/03_digital_asset/artifacts/local_product_e2e_v1/golden_pass.json",
+    "ADP-DA/03_digital_asset/contracts/da_p0_local_product_e2e_fixture.schema.json"
+  ]
+}

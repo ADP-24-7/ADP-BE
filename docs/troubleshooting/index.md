@@ -1,5 +1,7 @@
 # Troubleshooting Index
 
+- [Local Integration Reproducibility](local-integration-reproducibility.md)
+
 ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 수정 과정에서 발생한 문제와 해결 근거를 정리한다.
 
 ## 문서

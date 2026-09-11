@@ -16,10 +16,16 @@ public class InternalInfoController {
 
     private final Clock clock;
     private final BuildProperties buildProperties;
+    private final RuntimeEnvironment runtimeEnvironment;
 
-    public InternalInfoController(Clock clock, BuildProperties buildProperties) {
+    public InternalInfoController(
+        Clock clock,
+        BuildProperties buildProperties,
+        RuntimeEnvironment runtimeEnvironment
+    ) {
         this.clock = clock;
         this.buildProperties = buildProperties;
+        this.runtimeEnvironment = runtimeEnvironment;
     }
 
     @GetMapping("/info")
@@ -27,6 +33,8 @@ public class InternalInfoController {
         return ResponseEntity.ok(Map.of(
             "service", buildProperties.getName(),
             "version", buildProperties.getVersion(),
+            "runtimeProfile", runtimeEnvironment.profile(),
+            "dataProvenance", runtimeEnvironment.dataProvenance(),
             "timestamp", OffsetDateTime.now(clock).toString()
         ));
     }

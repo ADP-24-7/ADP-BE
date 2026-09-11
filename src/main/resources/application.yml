@@ -17,6 +17,9 @@ spring:
       add-mappings: false
 
 adp:
+  environment:
+    profile: ${ADP_RUNTIME_PROFILE:production-like}
+    data-provenance: ${ADP_DATA_PROVENANCE:NONE}
   audit-export:
     retention: ${ADP_AUDIT_EXPORT_RETENTION:1h}
     lease-duration: ${ADP_AUDIT_EXPORT_LEASE_DURATION:30s}
