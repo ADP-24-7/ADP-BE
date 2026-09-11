@@ -17,27 +17,29 @@ STATUSES = {
     "OPTIONAL_CLOUD_UNVERIFIED",
 }
 OWNERS = {"BE", "INFRA", "BE_INFRA"}
-REQUIRED_COMPONENTS = {
-    "central-api-gateway",
-    "admin-oidc",
-    "service-mtls",
-    "gateway-runtime",
-    "egress-network-control",
-    "provider-adapters",
-    "postgresql-state",
-    "postgresql-ha",
-    "object-storage-handoff",
-    "secret-manager-kms",
-    "prometheus-alerting",
-    "siem-integration",
-    "backup-restore-dr",
-    "deployment-rollback",
+EXPECTED_CLAIMS = {
+    "localProductRuntimeVerified": True,
+    "ncpQaFoundationVerified": True,
+    "productionCloudRuntimeVerified": False,
+    "highAvailabilityVerified": False,
+    "disasterRecoveryVerified": False,
+    "publicDemoVerified": False,
 }
-REQUIRED_FALSE_CLAIMS = {
-    "productionCloudRuntimeVerified",
-    "highAvailabilityVerified",
-    "disasterRecoveryVerified",
-    "publicDemoVerified",
+EXPECTED_COMPONENT_STATUS = {
+    "central-api-gateway": "DESIGN_ONLY",
+    "admin-oidc": "DESIGN_ONLY",
+    "service-mtls": "DESIGN_ONLY",
+    "gateway-runtime": "IMPLEMENTED_LOCAL",
+    "egress-network-control": "DESIGN_ONLY",
+    "provider-adapters": "IMPLEMENTED_LOCAL",
+    "postgresql-state": "IMPLEMENTED_LOCAL",
+    "postgresql-ha": "DESIGN_ONLY",
+    "object-storage-handoff": "VERIFIED_QA_FOUNDATION",
+    "secret-manager-kms": "DESIGN_ONLY",
+    "prometheus-alerting": "IMPLEMENTED_LOCAL",
+    "siem-integration": "DESIGN_ONLY",
+    "backup-restore-dr": "OPTIONAL_CLOUD_UNVERIFIED",
+    "deployment-rollback": "DESIGN_ONLY",
 }
 PRODUCTION_LIKE_VALUES = {
     "ADP_RUNTIME_PROFILE": "production-like",
@@ -75,24 +77,36 @@ def validate(root: Path, contract: dict, profile: dict[str, str]) -> list[str]:
         errors.append("unsupported production reference schema")
 
     claims = contract.get("claims", {})
-    for claim in REQUIRED_FALSE_CLAIMS:
-        if claims.get(claim) is not False:
-            errors.append(f"unverified production claim must remain false: {claim}")
-    if claims.get("localProductRuntimeVerified") is not True:
-        errors.append("local product runtime evidence must remain explicit")
+    for claim, expected in EXPECTED_CLAIMS.items():
+        if claims.get(claim) is not expected:
+            errors.append(
+                f"architecture claim mismatch: {claim} expected={expected} actual={claims.get(claim)}"
+            )
+    unexpected_claims = sorted(set(claims) - set(EXPECTED_CLAIMS))
+    if unexpected_claims:
+        errors.append(f"unexpected architecture claims: {', '.join(unexpected_claims)}")
 
     components = contract.get("components", [])
     component_ids = [component.get("id") for component in components]
     if len(component_ids) != len(set(component_ids)):
         errors.append("production reference component ids must be unique")
-    missing = sorted(REQUIRED_COMPONENTS - set(component_ids))
+    missing = sorted(set(EXPECTED_COMPONENT_STATUS) - set(component_ids))
     if missing:
         errors.append(f"required production reference components are missing: {', '.join(missing)}")
+    unexpected = sorted(set(component_ids) - set(EXPECTED_COMPONENT_STATUS))
+    if unexpected:
+        errors.append(f"unexpected production reference components: {', '.join(unexpected)}")
 
     for component in components:
         component_id = component.get("id", "<missing>")
-        if component.get("status") not in STATUSES:
+        actual_status = component.get("status")
+        if actual_status not in STATUSES:
             errors.append(f"{component_id}: invalid implementation status")
+        expected_status = EXPECTED_COMPONENT_STATUS.get(component_id)
+        if expected_status is not None and actual_status != expected_status:
+            errors.append(
+                f"{component_id}: status mismatch expected={expected_status} actual={actual_status}"
+            )
         if component.get("owner") not in OWNERS:
             errors.append(f"{component_id}: invalid owner")
         evidence = component.get("evidence", [])

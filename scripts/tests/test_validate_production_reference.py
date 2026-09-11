@@ -32,7 +32,32 @@ class ProductionReferenceValidatorTests(unittest.TestCase):
         errors = MODULE.validate(self.root, contract, self.profile)
 
         self.assertIn(
-            "unverified production claim must remain false: productionCloudRuntimeVerified",
+            "architecture claim mismatch: productionCloudRuntimeVerified expected=False actual=True",
+            errors,
+        )
+
+    def test_rejects_qa_foundation_claim_downgrade(self):
+        contract = copy.deepcopy(self.contract)
+        contract["claims"]["ncpQaFoundationVerified"] = False
+
+        errors = MODULE.validate(self.root, contract, self.profile)
+
+        self.assertIn(
+            "architecture claim mismatch: ncpQaFoundationVerified expected=True actual=False",
+            errors,
+        )
+
+    def test_rejects_component_status_promotion_without_validator_change(self):
+        contract = copy.deepcopy(self.contract)
+        component = next(
+            item for item in contract["components"] if item["id"] == "postgresql-ha"
+        )
+        component["status"] = "VERIFIED_QA_FOUNDATION"
+
+        errors = MODULE.validate(self.root, contract, self.profile)
+
+        self.assertIn(
+            "postgresql-ha: status mismatch expected=DESIGN_ONLY actual=VERIFIED_QA_FOUNDATION",
             errors,
         )
 

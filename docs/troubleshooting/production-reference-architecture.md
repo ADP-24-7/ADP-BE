@@ -4,7 +4,8 @@
 
 Local Compose에서 Runtime, PostgreSQL, Prometheus rule이 동작해도 HA, OIDC, mTLS, KMS, SIEM, DR이 검증된 것은 아니다.
 문서 서술만으로 상태를 관리하면 미래 수정에서 설계 항목이 운영 완료로 바뀔 수 있다. 이를 방지하기 위해 구성요소별 상태와
-Cloud 완료 Claim을 `production-reference.json`에 고정하고 CI가 미검증 Claim의 `false` 상태를 검증한다.
+Cloud 완료 Claim을 `production-reference.json`에 고정한다. Validator는 허용 enum만 보는 것이 아니라 v1의 전체 Claim과
+component별 정확한 상태를 비교한다. 상태 승격은 Contract, Validator, 실제 Evidence를 같은 PR에서 의도적으로 변경해야 한다.
 
 ## Production-like Profile을 운영 배포로 오인하는 문제
 

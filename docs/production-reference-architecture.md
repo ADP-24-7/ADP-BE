@@ -14,7 +14,7 @@ Admin Browser / Runtime Workload
   -> OIDC Admin Session / mTLS Service Identity             [DESIGN_ONLY]
   -> ADP Gateway Runtime                                    [IMPLEMENTED_LOCAL]
        -> HA PostgreSQL                                     [DESIGN_ONLY]
-       -> Private Object Storage                            [VERIFIED_QA_FOUNDATION]
+       -> Access-controlled Object Storage bucket           [VERIFIED_QA_FOUNDATION]
        -> Egress control -> approved external providers     [DESIGN_ONLY]
        -> Prometheus/Alertmanager -> SIEM                    [LOCAL / DESIGN_ONLY]
 ```
@@ -31,7 +31,7 @@ Private VPC 배치를 기본으로 하며 On-premise에서는 동일 경계를 �
 | Service Auth | SHA-256 API Key lookup | mTLS workload identity 또는 short-lived service credential |
 | Runtime | Policy/Transform/Egress/Recovery/Audit | immutable image, 다중 instance, readiness 기반 rollout |
 | Database | PostgreSQL/Flyway | private HA PostgreSQL, migration job, 최소권한 role |
-| Artifact | NCP private Object Storage Handoff | versioning, retention, scoped workload identity |
+| Artifact | 비공개 Bucket과 scoped credential Handoff | versioning, retention, scoped workload identity, private-network access는 design-only |
 | Secret | process environment | Secret Manager/KMS reference와 rotation |
 | Egress | server profile, HTTPS/host/SSRF guard | private egress proxy/firewall allowlist와 DNS/IP policy |
 | Monitoring | Micrometer/Prometheus rules/Read Model | private scrape, Alertmanager, SIEM/log retention |
