@@ -9,6 +9,7 @@ Java 21 / Spring Boot 3 / Gradle 기반 ADP Gateway Runtime입니다.
 - Vault / Connector integration boundary
 - Audit Event 생성
 - Runtime API 제공
+- Production Reference Architecture와 검증 Claim 경계 관리
 
 ## Docker 개발 환경
 
@@ -55,6 +56,7 @@ ADP-BE/
 ```bash
 make setup
 make integration-check INTEGRATION_PROFILE=demo
+make architecture-validate
 ```
 
 `integration-check`는 Repository Lock과 Flyway 기준을 먼저 검증하고 BE·FE·DA·Docs·PostgreSQL·Mock Provider를
@@ -87,6 +89,8 @@ make check
 ```
 
 `make check`는 개발 DB를 오염시키지 않도록 별도 `postgres-test` 컨테이너를 사용합니다.
+
+운영 목표 배치와 현재 검증 범위는 [Production Reference Architecture](docs/production-reference-architecture.md)에서 관리합니다.
 
 ## API 문서
 
