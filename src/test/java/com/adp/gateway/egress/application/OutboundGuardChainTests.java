@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 import com.adp.gateway.common.contract.RuntimeRequestContext;
+import com.adp.gateway.context.domain.CanonicalContext;
+import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.DestinationProfile;
@@ -22,6 +24,8 @@ import com.adp.gateway.policy.domain.PolicyAction;
 import com.adp.gateway.policy.domain.SourcePolicyEvaluationArtifactRef;
 import com.adp.gateway.retrieval.domain.DataClass;
 import com.adp.gateway.transform.domain.TransformStrategy;
+import com.adp.gateway.transform.domain.TransformFieldResult;
+import com.adp.gateway.transform.domain.TransformResult;
 import org.junit.jupiter.api.Test;
 
 class OutboundGuardChainTests {
@@ -134,6 +138,39 @@ class OutboundGuardChainTests {
         assertThat(result.reasonCodes()).contains("DESTINATION_PROFILE_NOT_EFFECTIVE", "DESTINATION_PROFILE_NOT_ALLOWED");
     }
 
+    @Test
+    void recordsRequiredExactPreservationBeforeTheProviderBoundary() {
+        var source = exactContext("1234.56", "source-digest");
+        var transformed = exactTransform(TransformStrategy.KEEP, "1234.56", "source-digest", "source-digest");
+        var outbound = exactPayload(TransformStrategy.KEEP, FieldTreatment.KEEP_EXACT_PROTECTED,
+            "1234.56", "source-digest");
+
+        var result = guardChain.guard(exactProfile(), "customer_summary", "CUSTOMER_SUPPORT", requestTime(),
+            decision(FinalAction.TRANSFORM), outbound, source, transformed);
+
+        assertThat(result.status()).isEqualTo("PASSED");
+        assertThat(result.reasonCodes()).isEmpty();
+    }
+
+    @Test
+    void blocksRoundingGeneralizationOrCoercionOfARequiredExactField() {
+        var source = exactContext("1234.56", "source-digest");
+        var transformed = exactTransform(TransformStrategy.GENERALIZE, "1000+", "source-digest", "changed-digest");
+        var outbound = exactPayload(TransformStrategy.GENERALIZE, FieldTreatment.TRANSFORMED,
+            "1000+", "changed-digest");
+
+        var result = guardChain.guard(exactProfile(), "customer_summary", "CUSTOMER_SUPPORT", requestTime(),
+            decision(FinalAction.TRANSFORM), outbound, source, transformed);
+
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.reasonCodes()).contains(
+            "REQUIRED_EXACT_NOT_PRESERVED",
+            "REQUIRED_EXACT_STRATEGY_NOT_KEEP",
+            "REQUIRED_EXACT_VALUE_MISMATCH",
+            "REQUIRED_EXACT_TRANSFORM_MISMATCH"
+        );
+    }
+
     private RuntimeRequestContext request() {
         return new RuntimeRequestContext(
             "req_test",
@@ -194,5 +231,55 @@ class OutboundGuardChainTests {
             List.of(),
             "preferred"
         );
+    }
+
+    private DestinationProfile exactProfile() {
+        return new DestinationProfile(
+            "dest_test", "v1", "profile_digest", "contract-v1", "internal-provider",
+            ExecutionPackType.AI, "schema-v1", "ACTIVE",
+            java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"), null,
+            List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            List.of(new DestinationFieldContract(
+                "account.balance", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true
+            ))
+        );
+    }
+
+    private CanonicalContext exactContext(Object value, String digest) {
+        return new CanonicalContext(
+            "canonical-context/v1", "context", "dataset", "customer_summary", "CUSTOMER_SUPPORT",
+            "customer", "subject-digest",
+            List.of(new CanonicalContextField(
+                "account.balance", "account", "balance", DataClass.FINANCIAL_AMOUNT, value, digest
+            )),
+            "context-digest"
+        );
+    }
+
+    private TransformResult exactTransform(
+        TransformStrategy strategy,
+        Object value,
+        String sourceDigest,
+        String transformedDigest
+    ) {
+        return new TransformResult("trn_test", true, "APPLIED", "transform-digest", List.of(
+            new TransformFieldResult(
+                "account.balance", "account", "balance", DataClass.FINANCIAL_AMOUNT, strategy,
+                "e3-transform-profile/1.2.0", "key-v1", "mapping-v1", "instruction-digest",
+                sourceDigest, transformedDigest, null, value
+            )
+        ));
+    }
+
+    private OutboundCandidatePayload exactPayload(
+        TransformStrategy strategy,
+        FieldTreatment treatment,
+        Object value,
+        String digest
+    ) {
+        return payload(new OutboundCandidateField(
+            "account.balance", DataClass.FINANCIAL_AMOUNT, strategy, FieldObligation.REQUIRED_EXACT,
+            treatment, digest, List.of(), value
+        ));
     }
 }

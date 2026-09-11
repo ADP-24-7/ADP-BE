@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AiModelProfileCatalog {
-    public static final String PROFILE_VERSION = "2026-09-07";
+    public static final String PROFILE_VERSION = "2026-09-12-e3-activation";
+    public static final String DESTINATION_CONTRACT_VERSION = "nvidia-nim-chat-completions/2026-09-12-e3-activation";
 
     private static final String CONNECTION_PROFILE_ID = "nvidia-nim-hosted";
     private final List<AiModelProfile> profiles;
@@ -99,7 +100,7 @@ public class AiModelProfileCatalog {
         );
         String destinationDigest = digest(Map.of(
             "providerProfileId", profileId,
-            "contractVersion", "nvidia-nim-chat-completions/2026-09-07",
+            "contractVersion", DESTINATION_CONTRACT_VERSION,
             "schemaVersion", "ai-provider-response/v1",
             "tenantId", "tenant_local_ai_evaluation",
             "region", "NVIDIA_HOSTED",
@@ -146,11 +147,11 @@ public class AiModelProfileCatalog {
             "customer.segment:BUSINESS_METADATA:CONDITIONAL_EXACT:true:true",
             "account.account_id:ACCOUNT_IDENTIFIER:PSEUDONYMIZABLE:true:false",
             "account.account_type:FINANCIAL_METADATA:CONDITIONAL_EXACT:true:true",
-            "account.balance:FINANCIAL_AMOUNT:PSEUDONYMIZABLE:true:false",
+            "account.balance:FINANCIAL_AMOUNT:REQUIRED_EXACT:true:true",
             "transaction.transaction_id:TRANSACTION_IDENTIFIER:PSEUDONYMIZABLE:true:false",
             "transaction.posted_at:BUSINESS_METADATA:CONDITIONAL_EXACT:true:true",
             "transaction.merchant_category:BUSINESS_METADATA:CONDITIONAL_EXACT:true:true",
-            "transaction.amount:FINANCIAL_AMOUNT:PSEUDONYMIZABLE:true:false"
+            "transaction.amount:FINANCIAL_AMOUNT:REQUIRED_EXACT:true:true"
         );
     }
 
