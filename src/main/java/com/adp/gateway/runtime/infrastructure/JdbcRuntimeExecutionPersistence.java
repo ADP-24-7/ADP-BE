@@ -922,8 +922,8 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
                     where rd.execution_id = runtime_execution.execution_id) as policy_action,
                    (select reason_codes from runtime.runtime_decision rd
                     where rd.execution_id = runtime_execution.execution_id) as policy_reason_codes,
-                   (select requirement_refs from runtime.policy_evaluation pe
-                    where pe.execution_id = runtime_execution.execution_id) as policy_requirement_refs,
+                   (select requirement_refs from governance.policy_snapshot ps
+                    where ps.snapshot_digest = runtime_execution.snapshot_digest) as policy_requirement_refs,
                    (select evidence_refs from runtime.policy_evaluation pe
                     where pe.execution_id = runtime_execution.execution_id) as policy_evidence_refs,
                    final_action,
