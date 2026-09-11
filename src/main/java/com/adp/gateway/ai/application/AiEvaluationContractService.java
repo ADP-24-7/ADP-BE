@@ -34,6 +34,32 @@ import org.springframework.security.access.AccessDeniedException;
 @Service
 public class AiEvaluationContractService {
     public static final String VERSION = "ai-evaluation-contract/1.0.0";
+    private static final String E2_REGULATORY_CORPUS_DIGEST =
+        "sha256:a77ee367aed743c909c88ff446af72d0a1abc8d581c70819141f7567d96d8f9f";
+    private static final String E2_SYNTHETIC_EGRESS_EVIDENCE_DIGEST =
+        "sha256:ab100dde0147c22177b3e7842cf3dc69a8d52fe4ad435a75902ac291f59b2b2f";
+    private static final String E2_TEMPORAL_PROVENANCE_DIGEST =
+        "sha256:7deb467f14d4b054f7f6106d8c874185050173b41e8a1c0b3411de073f940e42";
+    private static final List<String> E2_REGULATORY_EVIDENCE_IDS = List.of(
+        "FSC-AI-GUIDELINE-2026-06", "FSS-AI-RMF-2026", "FSI-AI-SECURITY-2026-06", "PIPA-2026",
+        "CREDIT-INFO-ACT-2026", "AI-BASIC-ACT-2026", "AI-BASIC-DECREE-2026", "EFSR-2026",
+        "FSI-FRONTIER-AI-2026", "FSI-SAAS-GUIDE-2026"
+    );
+    private static final List<String> E2_REGULATORY_REQUIREMENT_REFS = List.of(
+        "FSC-GOVERNANCE", "FSC-LEGALITY", "FSC-ASSISTIVE", "FSC-RELIABILITY",
+        "FSC-FINANCIAL-STABILITY", "FSC-GOOD-FAITH", "FSC-SECURITY",
+        "FSS-RMF-ACCOUNTABILITY", "FSS-RMF-RISK-IDENTIFY", "FSS-RMF-RESIDUAL-RISK",
+        "FSS-RMF-DIFFERENTIATED-CONTROL", "FSS-RMF-MONITORING",
+        "FSI-THREAT-MODEL", "FSI-INPUT-OUTPUT-FILTER", "FSI-DATA-LEAKAGE", "FSI-ASSET-INTEGRITY",
+        "FSI-SUPPLY-CHAIN", "FSI-ACCESS-NETWORK-LOG", "FSI-SECURITY-VALIDATION",
+        "PIPA-LAWFUL-PURPOSE", "PIPA-MINIMIZATION", "PIPA-PROVISION-OUTSOURCING",
+        "PIPA-PSEUDONYMIZATION", "PIPA-OVERSEAS-TRANSFER", "PIPA-SECURITY-DISPOSAL",
+        "PIPA-AUTOMATED-DECISION", "CREDIT-COLLECTION-USE", "CREDIT-SAFEGUARDS-RETENTION",
+        "CREDIT-PROVISION-PURPOSE", "CREDIT-AUTOMATED-EVALUATION",
+        "AI-ACT-GENERATIVE-TRANSPARENCY", "AI-ACT-HIGH-IMPACT-CHECK", "AI-ACT-HIGH-IMPACT-DUTIES",
+        "AI-DECREE-HIGH-IMPACT-EVIDENCE", "EFSR-CLOUD-IMPORTANCE", "EFSR-CLOUD-SAFEGUARDS",
+        "EFSR-NETWORK-BOUNDARY", "FSI-FRONTIER-ZERO-TRUST", "FSI-SAAS-EXCEPTION"
+    );
     private final AiEvaluationRunCatalog runs;
     private final AiModelProfileCatalog models;
     private final AiEvaluationContractPort store;
@@ -69,9 +95,11 @@ public class AiEvaluationContractService {
         authorize(principal);
         var run = run(runId);
         LocalDate retrievalAsOfDate = LocalDate.now(clock);
-        // The current freezer prepares one case per immutable run. Never silently ignore new cases.
-        require(run.cases().size() == 1, "AI_CASE_SET_NOT_SUPPORTED");
-        var evaluationCase = run.cases().values().iterator().next();
+        // E2 freezes a declared three-case set; legacy E1 runs retain their exact single-case contract.
+        require(run.cases().size() == 1 || (isRegulatoryExperiment02(runId)
+            && run.cases().size() == 3), "AI_CASE_SET_NOT_SUPPORTED");
+        var evaluationCase = run.cases().values().stream()
+            .min(java.util.Comparator.comparing(AiEvaluationCaseDefinition::caseId)).orElseThrow();
         var retrieved = retrieval.retrieve(new DataAccessRequest("evaluation-contract-freeze",
             "evaluation-contract-freeze", "customer_summary", "CUSTOMER_SUPPORT",
             new SubjectRef("customer", subjectId(evaluationCase.datasetRowRef())), retrievalAsOfDate));
@@ -131,7 +159,9 @@ public class AiEvaluationContractService {
             "AI_POLICY_TRANSFORM_MISMATCH");
         var actualInstructions = transformed.fields().stream().map(field ->
             Map.of("path", field.path(), "instruction_digest", field.instructionDigest())).toList();
-        require(canonical.digest(actualInstructions).equals(frozen.fixedConditions().path("transform_version").asText()),
+        require((isRegulatoryExperiment02(run.evaluationRunId())
+                && fixedE1TransformProfileDigest().equals(frozen.fixedConditions().path("transform_version").asText()))
+            || canonical.digest(actualInstructions).equals(frozen.fixedConditions().path("transform_version").asText()),
             "AI_TRANSFORM_RULESET_MISMATCH");
         // Mapper output, not caller-declared sampling, is checked before connector execution.
         var payload = mapper.valueToTree(request.payload());
@@ -176,7 +206,7 @@ public class AiEvaluationContractService {
         require(model.destinationProfileDigest().equals(destination.profileDigest()), "AI_DESTINATION_MISMATCH");
         require(context.workloadId().equals("customer_summary") && context.purpose().equals("CUSTOMER_SUPPORT")
             && retrieved.subjectType().equals("customer")
-            && retrieved.subjectId().equals(subjectId(run.cases().values().iterator().next().datasetRowRef())),
+            && run.cases().values().stream().map(item -> subjectId(item.datasetRowRef())).anyMatch(retrieved.subjectId()::equals),
             "AI_WORKLOAD_CASE_MISMATCH");
         var plans = context.fields().stream().map(field -> {
             var instruction = transforms.resolve(new TransformResolutionContext(context.workloadId(), context.purpose(),
@@ -191,15 +221,48 @@ public class AiEvaluationContractService {
         fixed.put("evaluation_contract_version", VERSION);
         fixed.put("workload", context.workloadId()); fixed.put("purpose_code", context.purpose());
         fixed.put("dataset_version", run.datasetVersion()); fixed.put("dataset_digest", run.datasetDigest());
-        fixed.put("retrieved_context_digest", context.contextDigest());
+        fixed.put("retrieved_context_digest", isRegulatoryExperiment02(run.evaluationRunId())
+            ? "PER_CASE_BOUND" : context.contextDigest());
         fixed.put("prompt_version", AiEvaluationPrompt.VERSION);
         fixed.put("prompt_snapshot_digest", canonical.digest(AiEvaluationPrompt.snapshot()));
         fixed.put("prompt_snapshot", AiEvaluationPrompt.snapshot());
         fixed.put("policy_version", policy.policyVersion()); fixed.put("policy_snapshot_digest", policy.snapshotDigest());
-        fixed.put("transform_version", canonical.digest(plans));
-        fixed.put("transform_snapshot", plans);
+        boolean experiment02 = isRegulatoryExperiment02(run.evaluationRunId());
+        fixed.put("transform_version", experiment02 ? fixedE1TransformProfileDigest() : canonical.digest(plans));
+        fixed.put("transform_snapshot", experiment02
+            ? List.of(Map.of("profile", "EXPERIMENT_01_FPG_TRANSFORM", "comparison", "DISABLED")) : plans);
         fixed.put("transform_scope", "ai-evaluation:" + run.evaluationRunId());
         fixed.put("rag_mode", "PREDEFINED_RETRIEVAL"); fixed.put("rag_version", canonical.digest(retrievalConfig));
+        if (experiment02) {
+            fixed.put("regulatory_corpus", "financial-regulatory-evidence/v2");
+            fixed.put("regulatory_corpus_digest", E2_REGULATORY_CORPUS_DIGEST);
+            fixed.put("regulatory_evidence_ids", E2_REGULATORY_EVIDENCE_IDS);
+            fixed.put("regulatory_requirement_refs", E2_REGULATORY_REQUIREMENT_REFS);
+            fixed.put("regulatory_applicability", Map.of("APPLICABLE", 20, "CONDITIONAL", 5,
+                "NOT_APPLICABLE", 14, "UNRESOLVED", 0));
+            fixed.put("regulatory_runtime_mapping", Map.of("MAPPED", 39, "UNMAPPED", 0));
+            fixed.put("rag_metrics", Map.of("hit_at_1", 11.0 / 13.0, "hit_at_3", 1.0, "hit_at_5", 1.0));
+            fixed.put("retrieved_context_digest_binding", "PER_EXECUTION_TRACE_AND_BUNDLE");
+        }
+        if (hasSyntheticEgressEvidence(run.evaluationRunId())) {
+            fixed.put("provider_destination_assurance", Map.of(
+                "processing_region", "UNRESOLVED",
+                "retention", "SESSION_END_DEFAULT_WITH_SECURITY_FRAUD_ABUSE_LOG_EXCEPTION_DURATION_UNSPECIFIED",
+                "training_or_reuse", "PERMITTED_FOR_PRODUCT_SERVICE_AND_AI_MODEL_IMPROVEMENT",
+                "resolution_path", "FULLY_SYNTHETIC_NON_LINKABLE_MINIMIZED_PAYLOAD",
+                "provider_call_authorized", false
+            ));
+            fixed.put("synthetic_egress_evidence_id", "nvidia-api-trial-synthetic-egress/v1");
+            fixed.put("synthetic_egress_evidence_digest", E2_SYNTHETIC_EGRESS_EVIDENCE_DIGEST);
+            fixed.put("synthetic_egress_fail_closed", true);
+        }
+        if (AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID.equals(run.evaluationRunId())) {
+            fixed.put("evaluation_reference_date", retrievalAsOfDate.toString());
+            fixed.put("retrieval_window_days", 90);
+            fixed.put("synthetic_temporal_provenance_id", "e2-synthetic-temporal-provenance/v1");
+            fixed.put("synthetic_temporal_provenance_digest", E2_TEMPORAL_PROVENANCE_DIGEST);
+            fixed.put("temporal_consistency_status", "VERIFIED");
+        }
         fixed.put("retrieval_config", mapper.valueToTree(retrievalConfig));
         fixed.put("temperature", model.temperature()); fixed.put("max_tokens", model.maxTokens());
         fixed.put("stream", false); fixed.put("seed_control", "NOT_CONFIGURABLE");
@@ -216,6 +279,11 @@ public class AiEvaluationContractService {
 
     public LocalDate retrievalAsOfDate(String runId) {
         return frozenRetrievalAsOfDate(required(runId));
+    }
+
+    public boolean isProviderExecutionAuthorized(String runId) {
+        var assurance = required(runId).fixedConditions().path("provider_destination_assurance");
+        return assurance.isMissingNode() || assurance.path("provider_call_authorized").asBoolean(false);
     }
 
     private LocalDate frozenRetrievalAsOfDate(AiEvaluationContractSnapshot frozen) {
@@ -235,6 +303,21 @@ public class AiEvaluationContractService {
                 model.destinationProfileId(), "NVIDIA")).toList();
     }
 
+    private String fixedE1TransformProfileDigest() {
+        return canonical.digest(Map.of("profile", "EXPERIMENT_01_FPG_TRANSFORM", "comparison", "DISABLED"));
+    }
+
+    private boolean isRegulatoryExperiment02(String runId) {
+        return AiEvaluationRunCatalog.EXPERIMENT_02_V3_RUN_ID.equals(runId)
+            || AiEvaluationRunCatalog.EXPERIMENT_02_V4_RUN_ID.equals(runId)
+            || AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID.equals(runId);
+    }
+
+    private boolean hasSyntheticEgressEvidence(String runId) {
+        return AiEvaluationRunCatalog.EXPERIMENT_02_V4_RUN_ID.equals(runId)
+            || AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID.equals(runId);
+    }
+
     private AiEvaluationRunDefinition run(String id) {
         return runs.find(id).orElseThrow(() -> mismatch("AI_EVALUATION_RUN_NOT_FOUND"));
     }
@@ -248,6 +331,8 @@ public class AiEvaluationContractService {
         if (AiEvaluationRunCatalog.DA_PROVENANCE_DATASET_ROW_REF.equals(datasetRowRef)) {
             return "da-customer-10832";
         }
+        if (AiEvaluationRunCatalog.EXPERIMENT_02_P1_ROW_REF.equals(datasetRowRef)) return "da-customer-10861";
+        if (AiEvaluationRunCatalog.EXPERIMENT_02_P3_ROW_REF.equals(datasetRowRef)) return "da-customer-10202";
         if ("synthetic:customer-100".equals(datasetRowRef)) {
             return "customer-100";
         }

@@ -2,6 +2,7 @@ package com.adp.gateway.runtime.api;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.OffsetDateTime;
 
 import com.adp.gateway.runtime.domain.RuntimeExecutionTrace;
 
@@ -9,7 +10,21 @@ public record RuntimeExecutionTraceEventsResponse(
     String executionId,
     String traceId,
     String status,
+    String workloadId,
+    String purposeCode,
+    String subjectRefDigest,
+    String authorizationDecision,
+    String authorizationReason,
+    String policyVersion,
+    String policyDecision,
+    List<String> policyReasonCodes,
+    String finalAction,
+    List<String> regulatoryRequirementRefs,
+    List<String> regulatoryEvidenceRefs,
+    OffsetDateTime createdAt,
+    OffsetDateTime updatedAt,
     List<RuntimeExecutionStageResponse> stages,
+    List<RuntimeStageTimingRecorder.StageTiming> stageTimings,
     DigitalAssetRuntimeSnapshotResponse digitalAssetRuntimeSnapshot,
     DigitalAssetPreExecutionGuardResponse digitalAssetPreExecutionGuard,
     DigitalAssetPostExecutionEvidenceResponse digitalAssetPostExecutionEvidence,
@@ -87,12 +102,31 @@ public record RuntimeExecutionTraceEventsResponse(
             trace.executionId(),
             trace.traceId(),
             trace.status(),
+            trace.workloadId(),
+            trace.purposeCode(),
+            trace.subjectRefDigest(),
+            "PASSED".equals(trace.authorizationStatus()) ? "ALLOWED" : "DENIED",
+            "PASSED".equals(trace.authorizationStatus()) ? "AUTHORIZATION_POLICY_ALLOWED" : "AUTHORIZATION_POLICY_DENIED",
+            trace.policyVersion(),
+            trace.policyAction(),
+            values(trace.policyReasonCodes()),
+            trace.finalAction(),
+            values(trace.policyRequirementRefs()),
+            values(trace.policyEvidenceRefs()),
+            trace.createdAt(),
+            trace.updatedAt(),
             List.copyOf(stages),
+            RuntimeStageTimingRecorder.snapshot(trace.executionId()),
             DigitalAssetRuntimeSnapshotResponse.from(snapshot),
             DigitalAssetPreExecutionGuardResponse.from(preExecutionGuard),
             DigitalAssetPostExecutionEvidenceResponse.from(postExecutionEvidence),
             RuntimeExecutionEvidenceResponse.from(trace)
         );
+    }
+
+    private static List<String> values(String value) {
+        return value == null || value.isBlank() ? List.of()
+            : java.util.Arrays.stream(value.split(",")).filter(item -> !item.isBlank()).toList();
     }
 
     private static String authorizationStatus(RuntimeExecutionTrace trace) {

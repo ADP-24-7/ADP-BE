@@ -22,6 +22,9 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "adp.local-fixtures.enabled", havingValue = "true")
 public class ProjectProvisionalDestinationProfileAdapter implements DestinationProfilePort {
 
+    public static final String PREFLIGHT_POLICY_BLOCK_DESTINATION = "dest_preflight_policy_block";
+    public static final String PREFLIGHT_OUTBOUND_BLOCK_DESTINATION = "dest_preflight_outbound_block";
+
     private final MeterRegistry meterRegistry;
     private final AiModelProfileCatalog aiModelProfiles;
 
@@ -35,6 +38,20 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
 
     @Override
     public DestinationProfile load(String destinationProfileId, OffsetDateTime requestStartedAt) {
+        if (PREFLIGHT_POLICY_BLOCK_DESTINATION.equals(destinationProfileId)) {
+            meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
+            return preflightProfile(destinationProfileId, "preflight-policy-block", fieldContracts());
+        }
+        if (PREFLIGHT_OUTBOUND_BLOCK_DESTINATION.equals(destinationProfileId)) {
+            meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
+            return preflightProfile(
+                destinationProfileId,
+                "internal-provider",
+                fieldContracts().stream()
+                    .filter(contract -> !"customer.customer_id".equals(contract.path()))
+                    .toList()
+            );
+        }
         if (DigitalAssetCanonicalContract.BASELINE_DESTINATION_PROFILE_ID.equals(destinationProfileId)) {
             meterRegistry.counter("destination.profile.lookup.total", "result", "FOUND").increment();
             return digitalAssetProfile(destinationProfileId);
@@ -66,6 +83,31 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             null,
             List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
             fieldContracts()
+        );
+    }
+
+    private DestinationProfile preflightProfile(
+        String destinationProfileId,
+        String providerProfileId,
+        List<DestinationFieldContract> contracts
+    ) {
+        return new DestinationProfile(
+            destinationProfileId,
+            "0.0.0",
+            "local-fixture-" + destinationProfileId,
+            "be-egress-contract/0.0.0",
+            providerProfileId,
+            ExecutionPackType.AI,
+            "project-provisional-egress-schema-v1",
+            "tenant_local_ai",
+            "KR",
+            "NO_RETENTION",
+            false,
+            "ACTIVE",
+            OffsetDateTime.parse("2026-01-01T00:00:00Z"),
+            null,
+            List.of(new DestinationBinding("customer_summary", "CUSTOMER_SUPPORT")),
+            contracts
         );
     }
 

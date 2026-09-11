@@ -31,6 +31,9 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
     private static final String FIXTURE_WORKLOAD_ID = "customer_summary";
     private static final String FIXTURE_PURPOSE = "CUSTOMER_SUPPORT";
     private static final String FIXTURE_PROVIDER = "internal-provider";
+    private static final String PREFLIGHT_POLICY_BLOCK_PROVIDER = "preflight-policy-block";
+    public static final String PREFLIGHT_POLICY_BLOCK_SNAPSHOT_DIGEST =
+        "be-snapshot-local-fixture:preflight-policy-block";
     private static final String ASSET_WORKLOAD_ID = DigitalAssetCanonicalContract.BASELINE_WORKLOAD_ID;
     private static final String ASSET_PURPOSE = DigitalAssetCanonicalContract.BASELINE_PURPOSE_CODE;
     private static final String ASSET_PROVIDER = "mock-asset-platform";
@@ -62,6 +65,15 @@ public class ProjectProvisionalPolicySnapshotAdapter implements PolicySnapshotPo
             }
         }
         var aiModelProfile = aiModelProfiles.findByProfileId(context.providerProfileId());
+        if (FIXTURE_WORKLOAD_ID.equals(context.workloadId()) && FIXTURE_PURPOSE.equals(context.purposeCode())
+            && PREFLIGHT_POLICY_BLOCK_PROVIDER.equals(context.providerProfileId())) {
+            return fixtureSnapshot(
+                PolicyAction.BLOCK,
+                FIXTURE_WORKLOAD_ID,
+                FIXTURE_PURPOSE,
+                PREFLIGHT_POLICY_BLOCK_SNAPSHOT_DIGEST
+            );
+        }
         if (FIXTURE_WORKLOAD_ID.equals(context.workloadId()) && FIXTURE_PURPOSE.equals(context.purposeCode())
             && aiModelProfile.isPresent()) {
             return fixtureSnapshot(

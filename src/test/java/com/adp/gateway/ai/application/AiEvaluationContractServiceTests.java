@@ -115,6 +115,40 @@ class AiEvaluationContractServiceTests {
         java.nio.file.Files.writeString(path, mapper.writeValueAsString(snapshots.getFirst()));
     }
 
+    @Test void experiment02V5BindsTemporalEvidenceWithoutRewritingV4OrV3() {
+        var model = models.profiles().getFirst();
+        var e2V5 = runs.find(AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID).orElseThrow();
+        var e2V4 = runs.find(AiEvaluationRunCatalog.EXPERIMENT_02_V4_RUN_ID).orElseThrow();
+        var e2V3 = runs.find(AiEvaluationRunCatalog.EXPERIMENT_02_V3_RUN_ID).orElseThrow();
+        var e2Retrieved = new RetrievalResult("test-data", "customer_summary", "CUSTOMER_SUPPORT",
+            "customer", "da-customer-10861", "profile_customer_summary_support", 1,
+            List.of(), List.of(), List.of());
+
+        var v5 = service.snapshot(e2V5, model, e2Retrieved, context, policy(), destination(model),
+            LocalDate.of(2026, 9, 11));
+        var v4 = service.snapshot(e2V4, model, e2Retrieved, context, policy(), destination(model),
+            LocalDate.of(2026, 9, 11));
+        var v3 = service.snapshot(e2V3, model, e2Retrieved, context, policy(), destination(model),
+            LocalDate.of(2026, 9, 11));
+
+        assertThat(v5.fixedConditions().path("synthetic_egress_evidence_digest").asText())
+            .isEqualTo("sha256:ab100dde0147c22177b3e7842cf3dc69a8d52fe4ad435a75902ac291f59b2b2f");
+        assertThat(v5.fixedConditions().path("synthetic_egress_fail_closed").asBoolean()).isTrue();
+        assertThat(v5.fixedConditions().path("provider_destination_assurance").path("processing_region").asText())
+            .isEqualTo("UNRESOLVED");
+        assertThat(v5.fixedConditions().path("provider_destination_assurance").path("provider_call_authorized").asBoolean())
+            .isFalse();
+        assertThat(v5.fixedConditions().path("synthetic_temporal_provenance_digest").asText())
+            .isEqualTo("sha256:7deb467f14d4b054f7f6106d8c874185050173b41e8a1c0b3411de073f940e42");
+        assertThat(v5.fixedConditions().path("temporal_consistency_status").asText()).isEqualTo("VERIFIED");
+        assertThat(v4.fixedConditions().has("synthetic_temporal_provenance_digest")).isFalse();
+        assertThat(v3.fixedConditions().has("synthetic_egress_evidence_digest")).isFalse();
+        when(port.load(e2V5.evaluationRunId())).thenReturn(Optional.of(v5));
+        when(port.load(e2V3.evaluationRunId())).thenReturn(Optional.of(v3));
+        assertThat(service.isProviderExecutionAuthorized(e2V5.evaluationRunId())).isFalse();
+        assertThat(service.isProviderExecutionAuthorized(e2V3.evaluationRunId())).isTrue();
+    }
+
     @ParameterizedTest @ValueSource(strings = {"prompt_version", "prompt_snapshot_digest", "policy_version",
         "policy_snapshot_digest", "transform_version", "rag_mode", "rag_version", "dataset_version",
         "dataset_digest", "temperature", "max_tokens", "case_set_version"})

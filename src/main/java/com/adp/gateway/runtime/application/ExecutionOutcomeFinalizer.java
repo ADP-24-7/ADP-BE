@@ -43,13 +43,17 @@ public class ExecutionOutcomeFinalizer {
         ConnectorResult connectorResult,
         ResponseGuardPort responseGuard
     ) {
+        com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "RESPONSE_GUARD");
         ResponseGuardResult responseGuardResult = responseGuard.guard(outboundPayload, connectorResult);
         persistence.recordResponseGuard(executionId, connectorResult, responseGuardResult);
+        com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "RESPONSE_GUARD");
+        com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "DELIVERY");
         ExecutionPackOutcome outcome = controlledDeliveryService.resolve(
             destinationProfile.packType(), executionId, providerRequest, connectorResult, responseGuardResult
         );
         persistence.recordControlledDelivery(executionId, outcome.controlledDelivery());
         persistence.updateStatus(executionId, outcome.runtimeStatus());
+        com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "DELIVERY");
         AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
         return new RuntimeExecutionResult(
             executionId, outcome.runtimeStatus(), decision, transformResult, outboundGuardStatus,

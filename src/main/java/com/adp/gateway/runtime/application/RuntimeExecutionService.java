@@ -271,8 +271,10 @@ public class RuntimeExecutionService {
         recordIdempotency(IdempotencyOutcome.NEW);
 
         try {
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "AUTHORIZATION");
             persistence.recordAuthorization(executionId, "PASSED");
             updateStatus(executionId, RuntimeExecutionStatus.AUTHORIZED);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "AUTHORIZATION");
             var approvalScope = approvalScopePort.load(approvalReference, now);
             DestinationProfile destinationProfile = destinationProfilePort.load(destinationProfileId, now);
             persistence.recordDestinationProfile(executionId, destinationProfile);
@@ -282,6 +284,7 @@ public class RuntimeExecutionService {
             var responseGuard = responseGuardResolver.resolve(destinationProfile.packType());
             packContextBuilder.validate(input);
 
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "RETRIEVAL");
             java.time.LocalDate retrievalAsOfDate = resolvedEvaluation == null
                 ? null
                 : evaluationContracts.retrievalAsOfDate(resolvedEvaluation.evaluationRunId());
@@ -310,7 +313,9 @@ public class RuntimeExecutionService {
             );
             persistence.recordRetrieved(executionId, canonicalContext);
             updateStatus(executionId, RuntimeExecutionStatus.RETRIEVED);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "RETRIEVAL");
 
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "POLICY");
             RuntimePolicyContext runtimePolicyContext = runtimePolicyContextFactory.from(
                 canonicalContext,
                 processingContexts,
@@ -353,6 +358,8 @@ public class RuntimeExecutionService {
                 decision = packPolicyEvaluation.get().decision();
             }
             persistence.recordRuntimeDecision(executionId, decision);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "POLICY");
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "TRANSFORM");
             TransformResult transformResult = resolvedEvaluation == null ? transformEngine.transform(
                 executionId,
                 canonicalContext,
@@ -362,6 +369,7 @@ public class RuntimeExecutionService {
             persistence.recordTransform(executionId, decision, transformResult);
             RuntimeExecutionStatus finalStatus = finalStatus(decision.finalAction(), transformResult);
             updateStatus(executionId, finalStatus);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "TRANSFORM");
             if (decision.finalAction() != FinalAction.ALLOW && decision.finalAction() != FinalAction.TRANSFORM) {
                 var fieldLineage = fieldLineageFactory.create(retrieval, canonicalContext, transformResult, null);
                 var policyHarnessBinding = policyHarnessEvaluator.evaluate(
@@ -462,6 +470,7 @@ public class RuntimeExecutionService {
                     auditContext
                 );
             }
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "OUTBOUND_GUARD");
             OutboundGuardResult outboundGuardResult = outboundGuardChain.guard(
                 destinationProfile,
                 requestContext.workloadId(),
@@ -471,6 +480,7 @@ public class RuntimeExecutionService {
                 outboundPayload
             );
             persistence.recordOutbound(executionId, outboundPayload, outboundGuardResult);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "OUTBOUND_GUARD");
             if (!outboundGuardResult.isPassed()) {
                 persistence.recordPolicyHarness(
                     executionId,
@@ -494,6 +504,23 @@ public class RuntimeExecutionService {
                 );
             }
             persistence.recordPolicyHarness(executionId, policyHarnessBinding);
+            if (resolvedEvaluation != null
+                && !evaluationContracts.isProviderExecutionAuthorized(resolvedEvaluation.evaluationRunId())) {
+                updateStatus(executionId, RuntimeExecutionStatus.REVIEW_REQUIRED);
+                ConnectorResult connectorResult = ConnectorResult.notExecuted("provider-destination-assurance");
+                AuditContext auditContext = auditRecorder.record(executionId, requestContext, decision, connectorResult);
+                return new RuntimeExecutionResult(
+                    executionId,
+                    RuntimeExecutionStatus.REVIEW_REQUIRED,
+                    decision,
+                    transformResult,
+                    "PASSED",
+                    connectorResult,
+                    "NOT_EVALUATED",
+                    ControlledDeliveryResult.withheld(null, "PROVIDER_DESTINATION_UNRESOLVED"),
+                    auditContext
+                );
+            }
             var providerRequest = externalSchemaMapper.map(
                 executionId,
                 resolvedEvaluation == null ? null : new AiEvaluationReference(
@@ -547,12 +574,14 @@ public class RuntimeExecutionService {
                 }
             }
             updateStatus(executionId, RuntimeExecutionStatus.EGRESSING);
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.start(executionId, "PROVIDER");
             ConnectorResult connectorResult = runtimeConnector.execute(
                 requestContext,
                 decision,
                 outboundPayload,
                 providerRequest
             );
+            com.adp.gateway.runtime.api.RuntimeStageTimingRecorder.end(executionId, "PROVIDER");
             persistence.recordConnector(executionId, connectorResult);
             if (resolvedEvaluation != null) {
                 evaluationEvidenceRecorder.recordConnectorEvidence(executionId, connectorResult);
