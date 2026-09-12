@@ -30,16 +30,20 @@ public class JdbcReferenceEvidenceLineagePersistence implements ReferenceEvidenc
         String artifactId,
         String artifactVersion,
         String sourceDigest,
+        List<String> requirementRefs,
+        List<String> controlRefs,
         String actorId,
         OffsetDateTime boundAt
     ) {
         int updated = jdbcClient.sql("""
                 insert into evidence.reference_evidence_policy_artifact (
                     institution_id, evidence_id, evidence_version,
-                    artifact_id, artifact_version, source_digest, bound_by, bound_at
+                    artifact_id, artifact_version, source_digest,
+                    requirement_refs, control_refs, bound_by, bound_at
                 )
                 select e.institution_id, e.evidence_id, e.evidence_version,
-                       p.artifact_id, p.artifact_version, :sourceDigest, :actorId, :boundAt
+                       p.artifact_id, p.artifact_version, :sourceDigest,
+                       :requirementRefs, :controlRefs, :actorId, :boundAt
                 from evidence.reference_evidence e
                 join evidence.reference_evidence_workload ew
                   on ew.institution_id = e.institution_id
@@ -61,6 +65,8 @@ public class JdbcReferenceEvidenceLineagePersistence implements ReferenceEvidenc
             .param("artifactId", artifactId)
             .param("artifactVersion", artifactVersion)
             .param("sourceDigest", sourceDigest)
+            .param("requirementRefs", requirementRefs.toArray(String[]::new))
+            .param("controlRefs", controlRefs.toArray(String[]::new))
             .param("actorId", actorId)
             .param("boundAt", boundAt)
             .update();
@@ -89,8 +95,8 @@ public class JdbcReferenceEvidenceLineagePersistence implements ReferenceEvidenc
                        e.source_locator, e.effective_from,
                        p.artifact_id, p.artifact_version, p.lifecycle_stage,
                        p.execution_pack, p.workload_id, p.purpose_code,
-                       case when p.lifecycle_stage = 'ACTIVE'
-                            then 'CONNECTED' else 'PENDING_REVIEW' end as review_status,
+                       'CONNECTED' as review_status,
+                       b.requirement_refs, b.control_refs,
                        b.bound_at
                 from evidence.reference_evidence_policy_artifact b
                 join evidence.reference_evidence e
@@ -149,7 +155,13 @@ public class JdbcReferenceEvidenceLineagePersistence implements ReferenceEvidenc
             ExecutionPackType.valueOf(rs.getString("execution_pack")),
             rs.getString("workload_id"), rs.getString("purpose_code"),
             rs.getString("review_status"),
+            stringList(rs, "requirement_refs"), stringList(rs, "control_refs"),
             rs.getObject("bound_at", OffsetDateTime.class)
         );
+    }
+
+    private List<String> stringList(ResultSet rs, String column) throws SQLException {
+        Object[] values = (Object[]) rs.getArray(column).getArray();
+        return java.util.Arrays.stream(values).map(String::valueOf).toList();
     }
 }

@@ -2,6 +2,7 @@ package com.adp.gateway.evidence.domain;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import com.adp.gateway.egress.domain.ExecutionPackType;
 import com.adp.gateway.policy.domain.PolicyLifecycleStage;
@@ -23,6 +24,8 @@ public record ReferenceEvidencePolicyLineage(
     String workloadId,
     String purposeCode,
     String reviewStatus,
+    List<String> requirementRefs,
+    List<String> controlRefs,
     OffsetDateTime boundAt
 ) {
 }

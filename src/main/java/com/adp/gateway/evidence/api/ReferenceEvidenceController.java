@@ -82,7 +82,8 @@ public class ReferenceEvidenceController {
     ) {
         return lineageService.bind(
             principal(authentication), evidenceId, evidenceVersion,
-            request.artifactId(), request.artifactVersion(), request.sourceDigest()
+            request.artifactId(), request.artifactVersion(), request.sourceDigest(),
+            request.requirementRefs(), request.controlRefs()
         );
     }
 

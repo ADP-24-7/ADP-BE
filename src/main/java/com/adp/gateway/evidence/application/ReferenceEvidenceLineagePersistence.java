@@ -14,6 +14,8 @@ public interface ReferenceEvidenceLineagePersistence {
         String artifactId,
         String artifactVersion,
         String sourceDigest,
+        List<String> requirementRefs,
+        List<String> controlRefs,
         String actorId,
         OffsetDateTime boundAt
     );

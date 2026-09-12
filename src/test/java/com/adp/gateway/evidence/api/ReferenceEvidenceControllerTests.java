@@ -283,7 +283,9 @@ class ReferenceEvidenceControllerTests {
                     {
                       "artifactId":"%s",
                       "artifactVersion":"1.0.0",
-                      "sourceDigest":"%s"
+                      "sourceDigest":"%s",
+                      "requirementRefs":["REGISTRY-REQUIREMENT-001"],
+                      "controlRefs":["REGISTRY-CONTROL-001"]
                     }
                     """.formatted(artifactId, sourceDigest)))
             .andExpect(status().isOk())
@@ -294,7 +296,10 @@ class ReferenceEvidenceControllerTests {
             .andExpect(jsonPath("$[0].lifecycleState").value("DRAFT"))
             .andExpect(jsonPath("$[0].executionPack").value(executionPack))
             .andExpect(jsonPath("$[0].workloadId").value(workloadId))
-            .andExpect(jsonPath("$[0].purposeCode").value(purposeCode));
+            .andExpect(jsonPath("$[0].purposeCode").value(purposeCode))
+            .andExpect(jsonPath("$[0].requirementRefs[0]").value("REGISTRY-REQUIREMENT-001"))
+            .andExpect(jsonPath("$[0].controlRefs[0]").value("REGISTRY-CONTROL-001"))
+            .andExpect(jsonPath("$[0].reviewStatus").value("CONNECTED"));
 
         mockMvc.perform(get(
                 "/api/admin/reference-evidence/policy-artifacts/{artifactId}/versions/1.0.0",

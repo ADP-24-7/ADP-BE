@@ -33,13 +33,16 @@ public class ReferenceEvidenceLineageService {
         String evidenceVersion,
         String artifactId,
         String artifactVersion,
-        String sourceDigest
+        String sourceDigest,
+        List<String> requirementRefs,
+        List<String> controlRefs
     ) {
         requireRole(principal, AdpRole.PRIVILEGED_OPERATOR);
         evidenceService.load(principal, evidenceId, evidenceVersion);
         boolean found = persistence.bind(
             principal.institutionId(), evidenceId, evidenceVersion,
             artifactId, artifactVersion, sourceDigest,
+            List.copyOf(requirementRefs), List.copyOf(controlRefs),
             principal.principalId(), OffsetDateTime.now(clock)
         );
         if (!found) {

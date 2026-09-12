@@ -18,4 +18,6 @@ Configuration:
 - `POST /api/admin/reference-evidence/{evidenceId}/versions/{evidenceVersion}/policy-bindings`
 - `GET /api/admin/reference-evidence/policy-artifacts/{artifactId}/versions/{artifactVersion}`
 
-The V54 binding preserves the DA `regulatory_evidence_id` as BE `evidence_id`, the official `source_digest`, policy version, lifecycle state, execution pack, workload, and purpose. The read response exposes `reviewStatus`: `ACTIVE` is `CONNECTED`; every pre-active maker-checker stage is `PENDING_REVIEW`.
+The V54/V55 binding preserves the DA `regulatory_evidence_id` as BE `evidence_id`, the official `source_digest`, explicit `requirementRefs` and `controlRefs`, policy version, lifecycle state, execution pack, workload, and purpose. A successfully materialized association is `CONNECTED` independently of its separately reported lifecycle stage.
+
+The binding request requires non-empty Requirement and Control identity lists. Binding is trace metadata only: it cannot transition, approve, activate, overwrite Runtime policy, or bypass maker-checker controls. DRAFT materializations therefore remain DRAFT.
