@@ -13,6 +13,7 @@ import com.adp.gateway.connector.domain.ConnectorResult;
 import com.adp.gateway.connector.domain.ConnectorStatus;
 import com.adp.gateway.recovery.domain.ExternalStatusQueryResult;
 import com.adp.gateway.recovery.domain.RetryDisposition;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,6 +37,11 @@ class JdbcExternalInteractionRecoveryPersistenceTests {
 
     @Autowired
     private JdbcExternalInteractionRecoveryPersistence persistence;
+
+    @BeforeEach
+    void isolateRecoveryQueueFromOtherIntegrationTests() {
+        jdbcClient.sql("delete from runtime.external_interaction_recovery").update();
+    }
 
     @Test
     void reconciliationConvergesRecoveryConnectorAndRuntimeThenAllowsReplay() throws Exception {
