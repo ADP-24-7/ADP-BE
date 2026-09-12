@@ -25,7 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
     "adp.local-fixtures.enabled=true",
-    "adp.mock-runtime.enabled=true"
+    "adp.mock-runtime.enabled=true",
+    "adp.local-user-auth.enabled=true"
 })
 @AutoConfigureMockMvc
 class DigitalAssetLocalProductE2ETests {
@@ -87,6 +88,15 @@ class DigitalAssetLocalProductE2ETests {
             assertSingleIdempotentExecution(request);
         }
 
+        JsonNode adminEvidence = evidence(executionId);
+        assertThat(adminEvidence.path("idempotency").path("existingExecutionReused").asBoolean())
+            .isEqualTo(submissions == 2);
+        assertThat(adminEvidence.path("idempotency").path("replayCount").asInt())
+            .isEqualTo(submissions - 1);
+        assertThat(adminEvidence.path("idempotency").path("additionalExternalEffectCount").asInt())
+            .isZero();
+        assertThat(adminEvidence.toString()).doesNotContain(request.path("body").path("idempotencyKey").asText());
+
         if (fixture.path("expected_reconciliation").path("required").asBoolean()) {
             for (int attempt = 0; attempt < 50 && !reconciled(executionId); attempt++) {
                 assertThat(recoveryService.processNext("da-p0-local-product-e2e"))
@@ -145,6 +155,15 @@ class DigitalAssetLocalProductE2ETests {
     private JsonNode trace(String executionId) throws Exception {
         String response = mockMvc.perform(get("/v1/runtime/executions/{executionId}/trace", executionId)
                 .header("X-ADP-API-Key", "local-dev-api-key"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response);
+    }
+
+    private JsonNode evidence(String executionId) throws Exception {
+        String response = mockMvc.perform(get("/api/admin/audit/executions/{executionId}/evidence", executionId)
+                .header("X-ADP-User-Id", "privileged-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response);

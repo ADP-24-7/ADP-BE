@@ -281,8 +281,16 @@ class RuntimeExecutionControllerTests {
             .param("executionId", firstExecutionId)
             .query(Integer.class)
             .single();
+        Integer replayCount = jdbcClient.sql("""
+                select idempotency_replay_count from runtime.runtime_execution
+                where execution_id = :executionId
+                """)
+            .param("executionId", firstExecutionId)
+            .query(Integer.class)
+            .single();
         assertThat(executionCount).isEqualTo(1);
         assertThat(connectorCount).isEqualTo(1);
+        assertThat(replayCount).isEqualTo(1);
     }
 
     @Test
