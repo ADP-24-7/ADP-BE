@@ -116,7 +116,7 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             modelProfile.destinationProfileId(),
             modelProfile.destinationProfileVersion(),
             modelProfile.destinationProfileDigest(),
-            "nvidia-nim-chat-completions/2026-09-07",
+            AiModelProfileCatalog.DESTINATION_CONTRACT_VERSION,
             modelProfile.profileId(),
             ExecutionPackType.AI,
             "ai-provider-response/v1",
@@ -166,11 +166,11 @@ public class ProjectProvisionalDestinationProfileAdapter implements DestinationP
             new DestinationFieldContract("customer.segment", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
             new DestinationFieldContract("account.account_id", DataClass.ACCOUNT_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
             new DestinationFieldContract("account.account_type", DataClass.FINANCIAL_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
-            new DestinationFieldContract("account.balance", DataClass.FINANCIAL_AMOUNT, FieldObligation.PSEUDONYMIZABLE, true, false),
+            new DestinationFieldContract("account.balance", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true),
             new DestinationFieldContract("transaction.transaction_id", DataClass.TRANSACTION_IDENTIFIER, FieldObligation.PSEUDONYMIZABLE, true, false),
             new DestinationFieldContract("transaction.posted_at", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
             new DestinationFieldContract("transaction.merchant_category", DataClass.BUSINESS_METADATA, FieldObligation.CONDITIONAL_EXACT, true, true),
-            new DestinationFieldContract("transaction.amount", DataClass.FINANCIAL_AMOUNT, FieldObligation.PSEUDONYMIZABLE, true, false)
+            new DestinationFieldContract("transaction.amount", DataClass.FINANCIAL_AMOUNT, FieldObligation.REQUIRED_EXACT, true, true)
         );
     }
 }

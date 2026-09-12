@@ -64,6 +64,8 @@ class TransformEngineTests {
         assertThat(field(result, "fields.hmac").instructionDigest()).hasSize(64);
         assertThat(field(result, "fields.hmac").transformedValueDigest())
             .isNotEqualTo(hasher.hash("HMAC_PSEUDO:" + field(result, "fields.hmac").sourceValueDigest()));
+        assertThat(field(result, "fields.kept").transformedValueDigest())
+            .isEqualTo(field(result, "fields.kept").sourceValueDigest());
     }
 
     @Test

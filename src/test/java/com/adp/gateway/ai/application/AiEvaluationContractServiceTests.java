@@ -17,6 +17,7 @@ import com.adp.gateway.context.domain.CanonicalContextField;
 import com.adp.gateway.decision.domain.FinalAction;
 import com.adp.gateway.decision.domain.RuntimeDecision;
 import com.adp.gateway.egress.domain.DestinationProfile;
+import com.adp.gateway.egress.domain.DestinationBinding;
 import com.adp.gateway.egress.domain.ProviderRequestPayload;
 import com.adp.gateway.policy.domain.PolicySnapshot;
 import com.adp.gateway.retrieval.domain.*;
@@ -41,7 +42,7 @@ class AiEvaluationContractServiceTests {
     final AiEvaluationContractPort port = mock(AiEvaluationContractPort.class);
     final ProjectProvisionalTransformStrategyResolver resolver = new ProjectProvisionalTransformStrategyResolver();
     final AiEvaluationContractService service = new AiEvaluationContractService(runs, models, port, canonical,
-        mapper, null, null, null, null, null, null, resolver,
+        mapper, null, null, null, null, null, null, resolver, new AiProviderGovernanceEvaluator(),
         Clock.fixed(Instant.parse("2026-09-10T00:00:00Z"), ZoneOffset.UTC));
     final CanonicalContext context = new CanonicalContext("canonical-context/v1", "test-context", "test-data",
         "customer_summary", "CUSTOMER_SUPPORT", "customer", "a".repeat(64),
@@ -58,15 +59,18 @@ class AiEvaluationContractServiceTests {
     }
     DestinationProfile destination(AiModelProfile model) {
         var value = mock(DestinationProfile.class);
+        when(value.destinationProfileId()).thenReturn(model.destinationProfileId());
         when(value.providerProfileId()).thenReturn(model.profileId());
         when(value.profileDigest()).thenReturn(model.destinationProfileDigest());
-        when(value.contractVersion()).thenReturn("nvidia-nim-chat-completions/2026-09-07");
+        when(value.contractVersion()).thenReturn(AiModelProfileCatalog.DESTINATION_CONTRACT_VERSION);
         when(value.schemaVersion()).thenReturn("ai-provider-response/v1");
         when(value.tenantId()).thenReturn("tenant_local_ai_evaluation");
         when(value.region()).thenReturn("NVIDIA_HOSTED");
         when(value.retentionPolicy()).thenReturn("PROVIDER_CONTROLLED");
         when(value.fieldContracts()).thenReturn(List.of());
-        when(value.allowedBindings()).thenReturn(List.of());
+        when(value.allowedBindings()).thenReturn(List.of(new DestinationBinding(
+            "customer_summary", "CUSTOMER_SUPPORT"
+        )));
         return value;
     }
     AiEvaluationContractSnapshot snapshot(AiModelProfile model) {
@@ -147,6 +151,60 @@ class AiEvaluationContractServiceTests {
         when(port.load(e2V3.evaluationRunId())).thenReturn(Optional.of(v3));
         assertThat(service.isProviderExecutionAuthorized(e2V5.evaluationRunId())).isFalse();
         assertThat(service.isProviderExecutionAuthorized(e2V3.evaluationRunId())).isTrue();
+    }
+
+    @Test
+    void providerGovernanceBindsApprovedProviderModelAndWorkloadBeforeExecution() {
+        var model = models.profiles().getFirst();
+        var frozen = snapshot(model);
+        when(port.load(run.evaluationRunId())).thenReturn(Optional.of(frozen));
+        var reference = new AiEvaluationReference(run.evaluationRunId(), AiEvaluationRunCatalog.BASELINE_CASE_ID,
+            null, run.contractDigest(), null, null);
+
+        service.validateProviderBinding(reference, "customer_summary", "CUSTOMER_SUPPORT", destination(model),
+            model.providerConnectionProfileId(), model.modelId());
+
+        assertThat(service.isProviderExecutionAuthorized(run.evaluationRunId())).isTrue();
+    }
+
+    @Test
+    void providerGovernanceRejectsProviderModelAndWorkloadDrift() {
+        var model = models.profiles().getFirst();
+        var frozen = snapshot(model);
+        when(port.load(run.evaluationRunId())).thenReturn(Optional.of(frozen));
+        var reference = new AiEvaluationReference(run.evaluationRunId(), AiEvaluationRunCatalog.BASELINE_CASE_ID,
+            null, run.contractDigest(), null, null);
+
+        assertThatThrownBy(() -> service.validateProviderBinding(reference, "customer_summary", "CUSTOMER_SUPPORT",
+            destination(model), "unapproved-provider", model.modelId()))
+            .isInstanceOfSatisfying(AiEvaluationRunMismatchException.class, exception ->
+                assertThat(exception.reasonCode()).isEqualTo("AI_PROVIDER_NOT_APPROVED"));
+        assertThatThrownBy(() -> service.validateProviderBinding(reference, "customer_summary", "CUSTOMER_SUPPORT",
+            destination(model), model.providerConnectionProfileId(), "unapproved/model"))
+            .isInstanceOfSatisfying(AiEvaluationRunMismatchException.class, exception ->
+                assertThat(exception.reasonCode()).isEqualTo("AI_MODEL_NOT_APPROVED"));
+        assertThatThrownBy(() -> service.validateProviderBinding(reference, "other_workload", "CUSTOMER_SUPPORT",
+            destination(model), model.providerConnectionProfileId(), model.modelId()))
+            .isInstanceOfSatisfying(AiEvaluationRunMismatchException.class, exception ->
+                assertThat(exception.reasonCode()).isEqualTo("AI_WORKLOAD_BINDING_MISMATCH"));
+    }
+
+    @Test
+    void currentE2ProviderConditionsRemainFailClosedAndFreezeCanonicalGovernanceContract() throws Exception {
+        var model = models.profiles().getFirst();
+        var current = destination(model);
+        when(current.region()).thenReturn("NVIDIA_HOSTED");
+        var decision = service.evaluateProviderGovernance(current);
+        var contract = service.providerGovernanceContract();
+
+        assertThat(decision.decision()).isEqualTo("BLOCK");
+        assertThat(decision.reasonCodes()).containsExactly(
+            "PROVIDER_REGION_REQUIRED", "RETENTION_UNVERIFIED", "MODEL_TRAINING_NOT_ALLOWED");
+        assertThat(contract.contractVersion()).isEqualTo("e2-provider-governance/1.2.0");
+        assertThat(contract.contractDigest()).matches("sha256:[0-9a-f]{64}");
+        var path = java.nio.file.Path.of("build", "test-provider-governance-contract.json");
+        java.nio.file.Files.createDirectories(path.getParent());
+        java.nio.file.Files.writeString(path, mapper.writeValueAsString(contract));
     }
 
     @ParameterizedTest @ValueSource(strings = {"prompt_version", "prompt_snapshot_digest", "policy_version",

@@ -107,7 +107,9 @@ public class TransformEngine {
             String instructionDigest = instructionDigest(instruction);
             String transformedDigest = transformedValue == null
                 ? null
-                : hasher.hash(field.path() + ":" + instruction.strategy().name() + ":" + transformedValue);
+                : instruction.strategy() == TransformStrategy.KEEP
+                    ? field.valueDigest()
+                    : hasher.hash(field.path() + ":" + instruction.strategy().name() + ":" + transformedValue);
             fields.add(new TransformFieldResult(
                 field.path(),
                 field.datasetName(),

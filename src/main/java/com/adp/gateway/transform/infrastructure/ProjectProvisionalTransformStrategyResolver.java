@@ -17,18 +17,20 @@ public class ProjectProvisionalTransformStrategyResolver implements TransformStr
 
     @Override
     public TransformInstruction resolve(TransformResolutionContext context) {
+        boolean e3CustomerSummary = "customer_summary".equals(context.workloadId())
+            && "CUSTOMER_SUPPORT".equals(context.purposeCode());
         TransformStrategy strategy = "tokenized_asset_purchase".equals(context.workloadId())
             ? digitalAssetStrategy(context)
             : switch (context.dataClass()) {
             case CUSTOMER_IDENTIFIER, ACCOUNT_IDENTIFIER -> TransformStrategy.VAULT_TOKEN;
             case TRANSACTION_IDENTIFIER -> TransformStrategy.HMAC_PSEUDO;
-            case FINANCIAL_AMOUNT -> TransformStrategy.GENERALIZE;
+            case FINANCIAL_AMOUNT -> e3CustomerSummary ? TransformStrategy.KEEP : TransformStrategy.GENERALIZE;
             case FINANCIAL_METADATA, BUSINESS_METADATA -> TransformStrategy.KEEP;
             case UNKNOWN -> TransformStrategy.REMOVE;
         };
         return new TransformInstruction(
             strategy,
-            "project-provisional-strategy-v1",
+            e3CustomerSummary ? "e3-transform-profile/1.2.0" : "project-provisional-strategy-v1",
             "project-provisional-key-v1",
             "project-provisional-mapping-v1",
             Duration.ofHours(24),
