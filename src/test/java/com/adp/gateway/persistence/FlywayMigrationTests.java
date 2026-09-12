@@ -18,6 +18,19 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @SpringBootTest
 class FlywayMigrationTests {
     @Test
+    void v53MigrationRecordsRuntimeIdempotencyReplayCount() {
+        Integer columnCount = jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'runtime'
+                  and table_name = 'runtime_execution'
+                  and column_name = 'idempotency_replay_count'
+                  and is_nullable = 'NO'
+                """).query(Integer.class).single();
+
+        assertThat(columnCount).isEqualTo(1);
+    }
+
+    @Test
     void v51MigrationIndexesAuditExportWorkQueues() {
         Integer indexCount = jdbcClient.sql("""
                 select count(*) from pg_indexes

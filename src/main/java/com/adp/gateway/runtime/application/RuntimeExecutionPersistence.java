@@ -32,6 +32,8 @@ public interface RuntimeExecutionPersistence {
         String idempotencyKey
     );
 
+    void recordIdempotentReplay(String executionId);
+
     void recordDestinationProfile(String executionId, DestinationProfile destinationProfile);
 
     void recordPolicyEvaluation(String executionId, PolicySnapshot snapshot);

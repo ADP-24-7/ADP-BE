@@ -738,6 +738,7 @@ public class RuntimeExecutionService {
                 recordIdempotency(IdempotencyOutcome.IN_PROGRESS);
                 throw new IdempotencyRequestInProgressException();
             }
+            persistence.recordIdempotentReplay(replay.executionId());
             recordIdempotency(IdempotencyOutcome.REPLAY);
             return RuntimeExecutionSubmission.replayed(replay);
         }

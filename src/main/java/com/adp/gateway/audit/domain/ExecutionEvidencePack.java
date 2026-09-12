@@ -14,6 +14,7 @@ public record ExecutionEvidencePack(
     String purposeCode,
     String runtimeStatus,
     String authorizationStatus,
+    IdempotencyEvidence idempotency,
     PolicyEvidence policy,
     DigitalAssetSnapshotEvidence digitalAssetRuntimeSnapshot,
     DataEvidence data,
@@ -23,6 +24,13 @@ public record ExecutionEvidencePack(
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt
 ) {
+    public record IdempotencyEvidence(
+        boolean existingExecutionReused,
+        int replayCount,
+        int additionalExternalEffectCount
+    ) {
+    }
+
     public record PolicyEvidence(
         String approvalReference,
         String approvalVersion,

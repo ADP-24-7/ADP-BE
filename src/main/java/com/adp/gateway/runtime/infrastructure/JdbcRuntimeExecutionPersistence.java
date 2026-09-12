@@ -172,6 +172,22 @@ public class JdbcRuntimeExecutionPersistence implements RuntimeExecutionPersiste
     }
 
     @Override
+    public void recordIdempotentReplay(String executionId) {
+        int updated = jdbcClient.sql("""
+            update runtime.runtime_execution
+            set idempotency_replay_count = idempotency_replay_count + 1,
+                updated_at = :updatedAt
+            where execution_id = :executionId
+            """)
+            .param("executionId", executionId)
+            .param("updatedAt", OffsetDateTime.now(clock))
+            .update();
+        if (updated != 1) {
+            throw new RuntimeExecutionNotFoundException(executionId);
+        }
+    }
+
+    @Override
     public void recordDestinationProfile(String executionId, DestinationProfile destinationProfile) {
         jdbcClient.sql("""
             update runtime.runtime_execution

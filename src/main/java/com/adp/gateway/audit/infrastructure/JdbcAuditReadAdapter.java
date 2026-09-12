@@ -83,7 +83,8 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         JdbcClient.StatementSpec statement = jdbcClient.sql("""
             select re.execution_id, re.request_id, re.trace_id, re.institution_id,
                    re.workload_id, re.purpose_code, re.status as runtime_status,
-                   re.authorization_status, re.approval_reference, re.approval_version,
+                   re.authorization_status, re.idempotency_replay_count,
+                   re.approval_reference, re.approval_version,
                    re.approval_scope_digest, re.policy_version, re.snapshot_digest,
                    das.snapshot_id as digital_asset_snapshot_id,
                    das.snapshot_digest as digital_asset_snapshot_digest,
@@ -190,6 +191,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
     private record EvidenceRow(
         String executionId, String requestId, String traceId, String institutionId,
         String workloadId, String purposeCode, String runtimeStatus, String authorizationStatus,
+        int idempotencyReplayCount,
         String approvalReference, String approvalVersion, String approvalScopeDigest,
         String policyVersion, String snapshotDigest, String decisionId, String finalAction,
         String digitalAssetSnapshotId, String digitalAssetSnapshotDigest,
@@ -217,6 +219,9 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
             return new ExecutionEvidencePack(
                 "adp-execution-evidence/v1", exportContentDigest, executionId, requestId, traceId,
                 institutionId, workloadId, purposeCode, runtimeStatus, authorizationStatus,
+                new ExecutionEvidencePack.IdempotencyEvidence(
+                    idempotencyReplayCount > 0, idempotencyReplayCount, 0
+                ),
                 new ExecutionEvidencePack.PolicyEvidence(
                     approvalReference, approvalVersion, approvalScopeDigest, policyVersion,
                     snapshotDigest, decisionId, finalAction
