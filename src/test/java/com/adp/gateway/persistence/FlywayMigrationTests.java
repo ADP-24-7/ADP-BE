@@ -18,6 +18,34 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @SpringBootTest
 class FlywayMigrationTests {
     @Test
+    void v54MigrationBindsReferenceEvidenceToPolicyLifecycleWithoutRuntimeMutation() {
+        assertThat(jdbcClient.sql("""
+                select count(*) from information_schema.tables
+                where table_schema = 'evidence'
+                  and table_name = 'reference_evidence_policy_artifact'
+                """).query(Integer.class).single()).isEqualTo(1);
+        assertThat(jdbcClient.sql("""
+                select count(*) from information_schema.table_constraints
+                where table_schema = 'evidence'
+                  and table_name = 'reference_evidence_policy_artifact'
+                  and constraint_type = 'FOREIGN KEY'
+                """).query(Integer.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("""
+                select count(*) from pg_indexes
+                where schemaname = 'evidence'
+                  and tablename = 'reference_evidence_policy_artifact'
+                  and indexname = 'idx_reference_evidence_policy_artifact_lookup'
+                """).query(Integer.class).single()).isEqualTo(1);
+        assertThat(jdbcClient.sql("""
+                select count(*) from information_schema.columns
+                where table_schema = 'evidence'
+                  and table_name = 'reference_evidence_policy_artifact'
+                  and column_name = 'source_digest'
+                  and is_nullable = 'NO'
+                """).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
     void v53MigrationRecordsRuntimeIdempotencyReplayCount() {
         Integer columnCount = jdbcClient.sql("""
                 select count(*) from information_schema.columns

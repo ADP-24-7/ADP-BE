@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -86,7 +85,8 @@ class ReferenceEvidenceControllerTests {
                     "auditor", "institution-a", Set.of("customer_summary"), AdpRole.AUDITOR
                 )))
                 .param("workloadId", "customer_summary")
-                .param("evidenceType", "POLICY_GUIDE"))
+                .param("evidenceType", "POLICY_GUIDE")
+                .param("query", evidenceId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.total").value(1))
             .andExpect(jsonPath("$.items[0].evidenceId").value(evidenceId))
@@ -102,7 +102,21 @@ class ReferenceEvidenceControllerTests {
 
         assertThat(count("policy.current_selection")).isEqualTo(selectionCountBefore);
         assertThat(count("runtime.runtime_execution")).isEqualTo(runtimeCountBefore);
-        assertThat(countEvidencePolicyTables()).isZero();
+        assertThat(countEvidencePolicyTables()).isOne();
+    }
+
+    @Test
+    void preservesRegulatoryEvidenceIdentityAcrossAiAndDigitalAssetPolicyLifecycle() throws Exception {
+        assertRegulatoryLineage(
+            "REF-REG-PIPA-2026-09-11",
+            "sha256:b724fb30e599c3a3548375101feed37dbb60f10c810c313d25ae6de43da4dfe6",
+            "AI", "customer_summary", "CUSTOMER_SUPPORT"
+        );
+        assertRegulatoryLineage(
+            "REF-REG-VA-UPA-2024",
+            "sha256:ba8706f31a87570515517f0d215b77f2ddb8273ab576ba546e45308ec2de8e3e",
+            "DIGITAL_ASSET", "tokenized_asset_purchase", "DIGITAL_ASSET_PURCHASE"
+        );
     }
 
     @Test
@@ -213,6 +227,86 @@ class ReferenceEvidenceControllerTests {
         return bundle;
     }
 
+    private void assertRegulatoryLineage(
+        String evidenceId,
+        String sourceDigest,
+        String executionPack,
+        String workloadId,
+        String purposeCode
+    ) throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
+        String artifactId = "regulatory-policy-" + suffix.toLowerCase();
+        var authentication = authentication(principal(
+            "lineage-operator", "institution-a", Set.of(workloadId),
+            AdpRole.OPERATOR, AdpRole.PRIVILEGED_OPERATOR
+        ));
+        ObjectNode regulatoryBundle = bundle(evidenceId, workloadId);
+        ObjectNode regulatoryEvidence = (ObjectNode) regulatoryBundle.path("evidence").get(0);
+        regulatoryEvidence.put("evidence_type", "REGULATION");
+        regulatoryEvidence.put("source_date", "2026-09-01");
+        regulatoryEvidence.put("effective_from", "2026-09-01");
+        regulatoryEvidence.put("source_locator", "Article 15; Article 16");
+        regulatoryEvidence.put("content_digest", evidenceDigest(regulatoryEvidence));
+        regulatoryBundle.put("content_digest", bundleDigest(regulatoryBundle));
+
+        mockMvc.perform(post("/api/admin/reference-evidence/bundles")
+                .with(csrf()).with(authentication)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsBytes(regulatoryBundle)))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/admin/policy-lifecycle")
+                .with(csrf()).with(authentication)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "artifactId":"%s",
+                      "artifactVersion":"1.0.0",
+                      "artifactDigest":"%s",
+                      "policyLayer":"WORKLOAD",
+                      "executionPack":"%s",
+                      "workloadId":"%s",
+                      "purposeCode":"%s"
+                    }
+                    """.formatted(
+                        artifactId, "a".repeat(64), executionPack, workloadId, purposeCode
+                    )))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post(
+                "/api/admin/reference-evidence/{evidenceId}/versions/1.0.0/policy-bindings",
+                evidenceId
+            )
+                .with(csrf()).with(authentication)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "artifactId":"%s",
+                      "artifactVersion":"1.0.0",
+                      "sourceDigest":"%s"
+                    }
+                    """.formatted(artifactId, sourceDigest)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].regulatoryEvidenceId").value(evidenceId))
+            .andExpect(jsonPath("$[0].sourceDigest").value(sourceDigest))
+            .andExpect(jsonPath("$[0].policyArtifactId").value(artifactId))
+            .andExpect(jsonPath("$[0].policyVersion").value("1.0.0"))
+            .andExpect(jsonPath("$[0].lifecycleState").value("DRAFT"))
+            .andExpect(jsonPath("$[0].executionPack").value(executionPack))
+            .andExpect(jsonPath("$[0].workloadId").value(workloadId))
+            .andExpect(jsonPath("$[0].purposeCode").value(purposeCode));
+
+        mockMvc.perform(get(
+                "/api/admin/reference-evidence/policy-artifacts/{artifactId}/versions/1.0.0",
+                artifactId
+            ).with(authentication))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].regulatoryEvidenceId").value(evidenceId))
+            .andExpect(jsonPath("$[0].sourceVersion").value("1.0.0"))
+            .andExpect(jsonPath("$[0].sourceDigest").exists())
+            .andExpect(jsonPath("$[0].effectiveDate").value("2026-09-01"));
+    }
+
     private String evidenceDigest(ObjectNode evidence) {
         ObjectNode target = evidence.deepCopy();
         target.remove("content_digest");
@@ -238,11 +332,16 @@ class ReferenceEvidenceControllerTests {
     }
 
     private AuthenticatedPrincipal principal(
-        String id, String institutionId, Set<String> workloads, AdpRole role
+        String id, String institutionId, Set<String> workloads, AdpRole... roles
     ) {
         AuthPrincipal principal = new AuthPrincipal(
-            id, PrincipalType.USER, id, institutionId, false, workloads, Set.of(role)
+            id, PrincipalType.USER, id, institutionId, false, workloads, Set.of(roles)
         );
-        return new AuthenticatedPrincipal(principal, List.of(() -> "ROLE_" + role.name()));
+        return new AuthenticatedPrincipal(
+            principal,
+            Stream.of(roles).<org.springframework.security.core.GrantedAuthority>map(
+                role -> () -> "ROLE_" + role.name()
+            ).toList()
+        );
     }
 }

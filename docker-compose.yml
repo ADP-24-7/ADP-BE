@@ -88,6 +88,10 @@ services:
       ADP_IDEMPOTENCY_RETENTION: "${ADP_IDEMPOTENCY_RETENTION:-72h}"
       ADP_AUDIT_EXPORT_SCHEDULER_ENABLED: "${ADP_AUDIT_EXPORT_SCHEDULER_ENABLED:-true}"
       ADP_AUDIT_EXPORT_RETENTION: "${ADP_AUDIT_EXPORT_RETENTION:-1h}"
+      REGULATORY_REFRESH_ENABLED: "${REGULATORY_REFRESH_ENABLED:-false}"
+      REGULATORY_REFRESH_CRON: "${REGULATORY_REFRESH_CRON:-0 0 3 * * *}"
+      ADP_REGULATORY_REFRESH_BASE_URL: "${ADP_REGULATORY_REFRESH_BASE_URL:-http://adp-da:8010}"
+      ADP_REGULATORY_REFRESH_TOKEN: "${ADP_REGULATORY_REFRESH_TOKEN:-local-dev-regulatory-token}"
       ADP_DA_ROOT: "${ADP_DA_ROOT:-/contracts/ADP-DA}"
     ports:
       - "${ADP_BE_PORT:-8080}:8080"
@@ -144,6 +148,8 @@ services:
     env_file:
       - path: ../ADP-DA/.env
         required: false
+    environment:
+      ADP_REGULATORY_REFRESH_TOKEN: "${ADP_REGULATORY_REFRESH_TOKEN:-local-dev-regulatory-token}"
     command: ["uvicorn", "adp_da.api:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
     ports:
       - "${ADP_DA_PORT:-8010}:8010"
