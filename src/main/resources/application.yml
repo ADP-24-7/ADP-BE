@@ -67,6 +67,11 @@ adp:
     enabled: ${ADP_LOCAL_USER_AUTH_ENABLED:false}
   local-fixtures:
     enabled: ${ADP_LOCAL_FIXTURES_ENABLED:false}
+  regulatory-refresh:
+    enabled: ${REGULATORY_REFRESH_ENABLED:false}
+    cron: ${REGULATORY_REFRESH_CRON:0 0 3 * * *}
+    base-url: ${ADP_REGULATORY_REFRESH_BASE_URL:http://localhost:8010}
+    internal-token: ${ADP_REGULATORY_REFRESH_TOKEN:}
   mock-runtime:
     enabled: ${ADP_MOCK_RUNTIME_ENABLED:false}
   ai-connector:
