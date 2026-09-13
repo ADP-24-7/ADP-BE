@@ -25,9 +25,10 @@ DA Repository에는 온체인 분석 Sample과 Synthetic 규제 거래 데이터
 Post Evidence가 존재하지 않는다. 전체 실행을 완전한 E2E처럼 표시하면 Sankey와 비율이 과장된다.
 
 Overview 응답은 Evidence별 연결 건수를 `coverage`로 함께 반환한다. Flow는 저장된 Evidence를 사용해
-`요청 -> 정책 판정 -> 외부 실행 -> 최종 Runtime 상태`를 연결한다. 외부 실행 단계는 Connector와 Transaction의
-확정 상태를 기준으로 성공, 실패, 결과 미확정, 복구 확인, 미전송으로 분류한다. 실제 상태 전이 시간 분석은 향후
-append-only 상태 이력이 생기기 전까지 주장하지 않는다.
+`요청 -> 정책 판정 -> 외부 실행 -> 증적 수집 -> 조정 -> 최종 Runtime 상태`를 연결한다. 외부 실행 단계는
+Connector와 Transaction의 확정 상태를 기준으로 성공, 실패, 결과 미확정, 복구 확인, 미전송으로 분류하고,
+증적과 조정 단계는 실제 row 존재 여부와 상태만 사용한다. 실제 상태 전이 시간 분석은 향후 append-only 상태
+이력이 생기기 전까지 주장하지 않는다.
 
 ## 기간 집계의 권한과 비용 경계
 
@@ -55,3 +56,20 @@ Digital Asset 실행에 한정된 partial index를 사용하며, 자산 주소�
 - 개별 Overview 통합 테스트는 개발 컨테이너에서 빠르게 확인할 수 있다.
 - 전체 회귀 검증은 `make test`로 일회성 `postgres-test`를 생성해 CI와 같은 clean database에서 수행한다.
 - 공유 개발 DB의 기존 데이터를 테스트 편의를 위해 삭제하거나 초기화하지 않는다.
+
+## 로컬 대시보드에서 기간 비교 데이터가 부족했다
+
+단발성 E2E fixture만으로는 7일 현재 기간과 직전 기간의 변화율, 시간대별 밀도, 상태별 페이지 검색을 함께
+검증하기 어렵다. FE에 고정 응답을 넣으면 실제 API·SQL·PostgreSQL 경로를 검증할 수 없다.
+
+- `ADP_LOCAL_DASHBOARD_FIXTURES_ENABLED=true`인 로컬 Compose에서만 14일간 420건의 Runtime 활동을 적재한다.
+- 행은 PostgreSQL의 실제 Runtime·Decision·Transaction·Mismatch·Recovery 테이블에 저장하며 FE mock으로 대체하지 않는다.
+- 현재 7일은 245건, 이전 7일은 175건으로 구성하고 완료 비중을 가장 높게 유지한다.
+- 동일 ID를 upsert하고 시간을 시작 시점 기준으로 갱신해 컨테이너 재기동이 행을 무한 증식시키지 않게 한다.
+- 운영 환경은 해당 속성을 활성화하지 않으며 이 데이터로 운영 성능이나 실제 거래량을 주장하지 않는다.
+
+## 최근 실행을 FE에서만 필터링하면 페이지 결과가 왜곡됐다
+
+10건만 받은 뒤 브라우저에서 검색하면 전체 기간이 아니라 현재 페이지 안에서만 찾게 된다. Overview API가
+Request ID, Execution ID, Workload 검색과 Runtime 상태 필터, 페이지·크기를 받아 Institution·Workload 조건과
+같은 SQL에서 처리한다. 검색어 길이, 상태 allowlist, 페이지 범위를 Service에서 먼저 검증한다.

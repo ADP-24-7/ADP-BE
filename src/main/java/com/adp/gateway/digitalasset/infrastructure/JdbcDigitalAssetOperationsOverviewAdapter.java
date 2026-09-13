@@ -30,7 +30,11 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
         Set<String> allowedWorkloads,
         OffsetDateTime from,
         OffsetDateTime to,
-        OffsetDateTime generatedAt
+        OffsetDateTime generatedAt,
+        String executionQuery,
+        String executionStatus,
+        int executionPage,
+        int executionSize
     ) {
         OffsetDateTime previousFrom = from.minus(Duration.between(from, to));
         Counts current = counts(institutionId, allowedWorkloads, from, to);
@@ -43,7 +47,10 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
             violations(institutionId, allowedWorkloads, from, to),
             hourlyStatuses(institutionId, allowedWorkloads, from, to),
             recentSignals(institutionId, allowedWorkloads, from, to),
-            recentExecutions(institutionId, allowedWorkloads, from, to),
+            recentExecutions(
+                institutionId, allowedWorkloads, from, to,
+                executionQuery, executionStatus, executionPage, executionSize
+            ),
             coverage(institutionId, allowedWorkloads, from, to)
         );
     }
@@ -107,6 +114,21 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
             + "when re.status = 'FAILED' or re.connector_status = 'FAILED' then 'EXECUTION_FAILED' "
             + "when re.connector_status in ('ACKNOWLEDGED', 'COMPLETED') then 'EXECUTION_SUCCEEDED' "
             + "else 'EXECUTION_NOT_SENT' end";
+        String evidenceExpression = "case when re.final_action = 'BLOCK' then 'EVIDENCE_NOT_REQUIRED' "
+            + "when exists (select 1 from runtime.digital_asset_mismatch_case mismatch "
+            + "where mismatch.execution_id = re.execution_id) then 'EVIDENCE_REVIEW_REQUIRED' "
+            + "when exists (select 1 from runtime.digital_asset_post_execution_evidence post "
+            + "where post.execution_id = re.execution_id and post.status = 'VERIFIED') then 'EVIDENCE_VERIFIED' "
+            + "when exists (select 1 from runtime.digital_asset_transaction tx "
+            + "where tx.execution_id = re.execution_id) then 'EVIDENCE_COLLECTED' "
+            + "else 'EVIDENCE_NOT_AVAILABLE' end";
+        String reconciliationExpression = "case when re.status = 'EXTERNALLY_RECONCILED' "
+            + "then 'RECONCILIATION_COMPLETED' "
+            + "when exists (select 1 from runtime.external_interaction_recovery recovery "
+            + "where recovery.execution_id = re.execution_id and recovery.recovery_status = 'RECONCILED') "
+            + "then 'RECONCILIATION_COMPLETED' "
+            + "when re.status in ('EGRESSING', 'REVIEW_REQUIRED') then 'RECONCILIATION_REQUIRED' "
+            + "else 'RECONCILIATION_NOT_REQUIRED' end";
         List<DigitalAssetOperationsOverview.FlowLink> result = new ArrayList<>();
         result.addAll(bind(jdbcClient.sql("select 'REQUESTED' as source, " + decisionExpression + " as target, "
                 + "count(*) as count from runtime.runtime_execution re " + scopedWhere(workloads)
@@ -124,6 +146,22 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
                 rs.getString("source"), rs.getString("target"), rs.getLong("count")
             )).list());
         result.addAll(bind(jdbcClient.sql("select " + executionExpression + " as source, "
+                + evidenceExpression + " as target, count(*) as count "
+                + "from runtime.runtime_execution re " + scopedWhere(workloads)
+                + " group by source, target order by source, target"), institutionId, workloads)
+            .param("fromAt", from).param("toAt", to)
+            .query((rs, row) -> new DigitalAssetOperationsOverview.FlowLink(
+                rs.getString("source"), rs.getString("target"), rs.getLong("count")
+            )).list());
+        result.addAll(bind(jdbcClient.sql("select " + evidenceExpression + " as source, "
+                + reconciliationExpression + " as target, count(*) as count "
+                + "from runtime.runtime_execution re " + scopedWhere(workloads)
+                + " group by source, target order by source, target"), institutionId, workloads)
+            .param("fromAt", from).param("toAt", to)
+            .query((rs, row) -> new DigitalAssetOperationsOverview.FlowLink(
+                rs.getString("source"), rs.getString("target"), rs.getLong("count")
+            )).list());
+        result.addAll(bind(jdbcClient.sql("select " + reconciliationExpression + " as source, "
                 + "'FINAL_' || re.status as target, count(*) as count "
                 + "from runtime.runtime_execution re " + scopedWhere(workloads)
                 + " group by source, target order by source, target"), institutionId, workloads)
@@ -145,6 +183,7 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
                 ), counts as (
                     select (re.created_at at time zone 'Asia/Seoul')::date as day,
                            count(*) as total,
+                           count(*) filter (where re.final_action in ('ALLOW', 'TRANSFORM')) as passed,
                            count(*) filter (where re.status = 'COMPLETED') as completed,
                            count(*) filter (where re.status = 'BLOCKED') as blocked,
                            count(*) filter (where re.status = 'FAILED') as failed,
@@ -159,6 +198,7 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
                     from runtime.runtime_execution re
                     """ + scopedWhere(workloads) + " group by day) " + """
                 select days.day, coalesce(counts.total, 0) as total,
+                       coalesce(counts.passed, 0) as passed,
                        coalesce(counts.completed, 0) as completed,
                        coalesce(counts.blocked, 0) as blocked,
                        coalesce(counts.failed, 0) as failed,
@@ -168,7 +208,7 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
                 """), institutionId, workloads)
             .param("fromAt", from).param("toAt", to)
             .query((rs, row) -> new DigitalAssetOperationsOverview.TrendPoint(
-                rs.getObject("day", LocalDate.class), rs.getLong("total"), rs.getLong("completed"),
+                rs.getObject("day", LocalDate.class), rs.getLong("total"), rs.getLong("passed"), rs.getLong("completed"),
                 rs.getLong("blocked"), rs.getLong("failed"), rs.getLong("sent_unknown"),
                 rs.getLong("reconciled")
             )).list();
@@ -268,23 +308,44 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
             )).list();
     }
 
-    private List<DigitalAssetOperationsOverview.RecentExecution> recentExecutions(
-        String institutionId, Set<String> workloads, OffsetDateTime from, OffsetDateTime to
+    private DigitalAssetOperationsOverview.RecentExecutionPage recentExecutions(
+        String institutionId,
+        Set<String> workloads,
+        OffsetDateTime from,
+        OffsetDateTime to,
+        String query,
+        String status,
+        int page,
+        int size
     ) {
-        return bind(jdbcClient.sql("""
+        String filters = " and (:executionQuery = '' or lower(re.request_id) like :executionPattern"
+            + " or lower(re.execution_id) like :executionPattern or lower(re.workload_id) like :executionPattern)"
+            + " and (:executionStatus = '' or re.status = :executionStatus)";
+        JdbcClient.StatementSpec countQuery = bind(jdbcClient.sql("select count(*) from runtime.runtime_execution re "
+                + scopedWhere(workloads) + filters), institutionId, workloads)
+            .param("fromAt", from).param("toAt", to)
+            .param("executionQuery", query).param("executionPattern", "%" + query.toLowerCase() + "%")
+            .param("executionStatus", status);
+        long total = countQuery.query(Long.class).single();
+        List<DigitalAssetOperationsOverview.RecentExecution> items = bind(jdbcClient.sql("""
                 select re.execution_id, re.request_id, re.workload_id, re.policy_version,
                        re.final_action, re.status, re.connector_status, rr.recovery_status, re.created_at
                 from runtime.runtime_execution re
                 left join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
-                """ + scopedWhere(workloads) + " order by re.created_at desc, re.execution_id desc limit 10"),
+                """ + scopedWhere(workloads) + filters
+                + " order by re.created_at desc, re.execution_id desc limit :executionSize offset :executionOffset"),
             institutionId, workloads)
             .param("fromAt", from).param("toAt", to)
+            .param("executionQuery", query).param("executionPattern", "%" + query.toLowerCase() + "%")
+            .param("executionStatus", status).param("executionSize", size).param("executionOffset", page * size)
             .query((rs, row) -> new DigitalAssetOperationsOverview.RecentExecution(
                 rs.getString("execution_id"), rs.getString("request_id"), rs.getString("workload_id"),
                 rs.getString("policy_version"), rs.getString("final_action"), rs.getString("status"),
                 rs.getString("connector_status"), rs.getString("recovery_status"),
                 rs.getObject("created_at", OffsetDateTime.class)
             )).list();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / size);
+        return new DigitalAssetOperationsOverview.RecentExecutionPage(items, page, size, total, totalPages);
     }
 
     private DigitalAssetOperationsOverview.Coverage coverage(

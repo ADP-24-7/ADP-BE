@@ -15,7 +15,7 @@ public record DigitalAssetOperationsOverview(
     List<ViolationCount> violations,
     List<HourlyStatus> hourlyStatuses,
     List<OperationalSignal> recentSignals,
-    List<RecentExecution> recentExecutions,
+    RecentExecutionPage recentExecutions,
     Coverage coverage
 ) {
     public DigitalAssetOperationsOverview {
@@ -24,7 +24,6 @@ public record DigitalAssetOperationsOverview(
         violations = List.copyOf(violations);
         hourlyStatuses = List.copyOf(hourlyStatuses);
         recentSignals = List.copyOf(recentSignals);
-        recentExecutions = List.copyOf(recentExecutions);
     }
 
     public record Metrics(
@@ -43,6 +42,7 @@ public record DigitalAssetOperationsOverview(
     public record TrendPoint(
         LocalDate date,
         long total,
+        long passed,
         long completed,
         long blocked,
         long failed,
@@ -77,6 +77,18 @@ public record DigitalAssetOperationsOverview(
         String recoveryStatus,
         OffsetDateTime requestedAt
     ) { }
+
+    public record RecentExecutionPage(
+        List<RecentExecution> items,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages
+    ) {
+        public RecentExecutionPage {
+            items = List.copyOf(items);
+        }
+    }
 
     public record Coverage(
         long runtimeExecutions,

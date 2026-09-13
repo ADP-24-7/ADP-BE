@@ -29,11 +29,13 @@ class DigitalAssetOperationsOverviewControllerTests {
     private JdbcClient jdbcClient;
 
     private String executionId;
+    private String requestId;
 
     @BeforeEach
     void seedDigitalAssetExecution() {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         executionId = "exec_da_overview_" + suffix;
+        requestId = "request_" + suffix;
         OffsetDateTime now = OffsetDateTime.now();
         jdbcClient.sql("""
                 insert into runtime.runtime_execution (
@@ -49,7 +51,7 @@ class DigitalAssetOperationsOverviewControllerTests {
                 )
                 """)
             .param("executionId", executionId)
-            .param("requestId", "request_" + suffix)
+            .param("requestId", requestId)
             .param("traceId", "trace_" + suffix)
             .param("idempotencyKey", "idempotency_" + suffix)
             .param("requestHash", "a".repeat(64))
@@ -93,14 +95,32 @@ class DigitalAssetOperationsOverviewControllerTests {
             .andExpect(jsonPath("$.flow").isArray())
             .andExpect(jsonPath("$.flow[?(@.source == 'REQUESTED' && @.target == 'DECISION_BLOCK')]").exists())
             .andExpect(jsonPath("$.flow[?(@.source == 'DECISION_BLOCK' && @.target == 'EXECUTION_NOT_SENT')]").exists())
-            .andExpect(jsonPath("$.flow[?(@.source == 'EXECUTION_NOT_SENT' && @.target == 'FINAL_BLOCKED')]").exists())
+            .andExpect(jsonPath("$.flow[?(@.source == 'EXECUTION_NOT_SENT' && @.target == 'EVIDENCE_NOT_REQUIRED')]").exists())
+            .andExpect(jsonPath("$.flow[?(@.source == 'EVIDENCE_NOT_REQUIRED' && @.target == 'RECONCILIATION_NOT_REQUIRED')]").exists())
+            .andExpect(jsonPath("$.flow[?(@.source == 'RECONCILIATION_NOT_REQUIRED' && @.target == 'FINAL_BLOCKED')]").exists())
             .andExpect(jsonPath("$.trend").isArray())
             .andExpect(jsonPath("$.violations[?(@.reasonCode == 'DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED')]").exists())
             .andExpect(jsonPath("$.recentSignals[0].workloadId").isString())
             .andExpect(jsonPath("$.recentSignals[0].stage").isString())
             .andExpect(jsonPath("$.recentSignals[0].reasonCode").isString())
             .andExpect(jsonPath("$.recentSignals[0].nextAction").isString())
+            .andExpect(jsonPath("$.recentExecutions.items").isArray())
+            .andExpect(jsonPath("$.recentExecutions.size").value(10))
             .andExpect(jsonPath("$.coverage.unavailableDimensions[0]").value("ASSET_SYMBOL"));
+    }
+
+    @Test
+    void filtersAndPagesRecentExecutionsOnTheServer() throws Exception {
+        mockMvc.perform(get("/api/admin/digital-assets/overview")
+                .header("X-ADP-User-Id", "auditor-overview")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("query", requestId)
+                .param("status", "BLOCKED")
+                .param("page", "0")
+                .param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.recentExecutions.totalElements").value(1))
+            .andExpect(jsonPath("$.recentExecutions.items[0].executionId").value(executionId));
     }
 
     @Test
@@ -110,6 +130,16 @@ class DigitalAssetOperationsOverviewControllerTests {
                 .header("X-ADP-User-Roles", "AUDITOR")
                 .param("from", "2026-01-01T00:00:00Z")
                 .param("to", "2026-03-01T00:00:00Z"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsUnsupportedRecentExecutionFilters() throws Exception {
+        mockMvc.perform(get("/api/admin/digital-assets/overview")
+                .header("X-ADP-User-Id", "auditor-overview")
+                .header("X-ADP-User-Roles", "AUDITOR")
+                .param("status", "UNKNOWN_STATUS")
+                .param("size", "51"))
             .andExpect(status().isBadRequest());
     }
 }

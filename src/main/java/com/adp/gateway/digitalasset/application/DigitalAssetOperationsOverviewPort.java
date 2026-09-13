@@ -11,6 +11,10 @@ public interface DigitalAssetOperationsOverviewPort {
         Set<String> allowedWorkloads,
         OffsetDateTime from,
         OffsetDateTime to,
-        OffsetDateTime generatedAt
+        OffsetDateTime generatedAt,
+        String executionQuery,
+        String executionStatus,
+        int executionPage,
+        int executionSize
     );
 }

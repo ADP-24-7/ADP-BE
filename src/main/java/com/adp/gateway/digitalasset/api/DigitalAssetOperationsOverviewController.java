@@ -27,8 +27,12 @@ public class DigitalAssetOperationsOverviewController {
         OffsetDateTime from,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         OffsetDateTime to,
+        @RequestParam(required = false) String query,
+        @RequestParam(required = false) String status,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size,
         Authentication authentication
     ) {
-        return service.load((AuthPrincipal) authentication.getPrincipal(), from, to);
+        return service.load((AuthPrincipal) authentication.getPrincipal(), from, to, query, status, page, size);
     }
 }
