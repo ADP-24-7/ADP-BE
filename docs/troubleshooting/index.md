@@ -23,6 +23,7 @@ ADP-BE 구현 단계에서 코드 리뷰, CI, 마이그레이션, 보안 경계 
 - [Digital Asset POST_EXECUTION Evidence 트러블슈팅](digital-asset-post-execution-evidence.md)
 - [Digital Asset Local Product 6-Case E2E 트러블슈팅](digital-asset-local-product-e2e.md)
 - [Digital Asset Current State Read Model 트러블슈팅](digital-asset-current-state-read-model.md)
+- [Digital Asset Operations Overview 트러블슈팅](digital-asset-operations-overview.md)
 - [Pack-aware Operations Scope 트러블슈팅](pack-aware-operations-scope.md)
 - [Review Queue Read Model 트러블슈팅](review-queue-read-model.md)
 - [Security Finding Read Model 트러블슈팅](security-finding-read-model.md)

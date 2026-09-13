@@ -51,6 +51,16 @@ DB Role이 변경돼도 일반 관리자 API의 Spring Authority에는 즉시 �
 생성, 다운로드는 현재 DB Grant를 별도로 재검증한다. Production에서 모든 관리자 권한 회수를 즉시 반영해야 한다면 Principal
 version 또는 IdP session revocation을 도입해야 한다.
 
+## 로컬 개발 중 세션이 너무 빨리 만료되는 것처럼 보였다
+
+서버 기본 세션 제한은 30분이며 BE 컨테이너가 재기동되면 in-memory 세션은 즉시 사라진다. 화면 개발 중에는
+파일 변경과 컨테이너 재기동이 겹쳐 정상적인 시간 만료보다 자주 로그인 화면으로 돌아갈 수 있다.
+
+- 운영 기본값 `30m`은 유지한다.
+- 로컬 Compose만 `ADP_ADMIN_SESSION_TIMEOUT=8h`를 기본 적용한다.
+- 명시적 로그아웃, 계정 비활성화, 서버 재기동 시에는 세션을 계속 유지하지 않는다.
+- 운영에서 장기 세션이나 재기동 생존이 필요하면 JDBC/Redis Session과 IdP 재인증 정책을 별도로 설계한다.
+
 FE는 보호 API에서 401을 받으면 CSRF token과 React Query cache를 제거하고 현재 URL을 `returnTo`로 보존해 로그인 화면으로
 이동한다. 로그아웃 API가 실패해도 브라우저의 보호 데이터는 fail-closed로 제거한다.
 

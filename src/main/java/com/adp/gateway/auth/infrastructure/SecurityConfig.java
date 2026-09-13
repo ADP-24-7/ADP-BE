@@ -164,6 +164,8 @@ public class SecurityConfig {
                     .hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers(HttpMethod.GET, "/api/admin/digital-assets/artifacts/**")
                     .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
+                .requestMatchers(HttpMethod.GET, "/api/admin/digital-assets/overview")
+                    .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                 .requestMatchers("/api/admin/**").hasRole("OPERATOR")
                 .requestMatchers("/api/privileged/**").hasRole("PRIVILEGED_OPERATOR")
                 .anyRequest().denyAll())
