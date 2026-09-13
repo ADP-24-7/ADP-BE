@@ -24,9 +24,10 @@ DA Repository에는 온체인 분석 Sample과 Synthetic 규제 거래 데이터
 로컬 DB에는 Digital Asset 초기 Slice부터 최신 P0 실행까지 함께 남아 있어 모든 실행에 Pre Guard, Transaction,
 Post Evidence가 존재하지 않는다. 전체 실행을 완전한 E2E처럼 표시하면 Sankey와 비율이 과장된다.
 
-Overview 응답은 Evidence별 연결 건수를 `coverage`로 함께 반환한다. FE는 이를 별도 패널에 표시하고, Flow는
-저장된 `final_action`과 현재 Runtime 상태의 연결만 표현한다. 실제 상태 전이 시간 분석은 향후 append-only 상태
-이력이 생기기 전까지 주장하지 않는다.
+Overview 응답은 Evidence별 연결 건수를 `coverage`로 함께 반환한다. Flow는 저장된 Evidence를 사용해
+`요청 -> 정책 판정 -> 외부 실행 -> 최종 Runtime 상태`를 연결한다. 외부 실행 단계는 Connector와 Transaction의
+확정 상태를 기준으로 성공, 실패, 결과 미확정, 복구 확인, 미전송으로 분류한다. 실제 상태 전이 시간 분석은 향후
+append-only 상태 이력이 생기기 전까지 주장하지 않는다.
 
 ## 기간 집계의 권한과 비용 경계
 

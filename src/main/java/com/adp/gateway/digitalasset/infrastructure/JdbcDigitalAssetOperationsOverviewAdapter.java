@@ -97,8 +97,16 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
     private List<DigitalAssetOperationsOverview.FlowLink> flow(
         String institutionId, Set<String> workloads, OffsetDateTime from, OffsetDateTime to
     ) {
-        String decisionExpression = "case when re.final_action in ('ALLOW', 'TRANSFORM') then 'PASS' "
-            + "when re.final_action = 'BLOCK' then 'BLOCK' else 'NOT_EVALUATED' end";
+        String decisionExpression = "case when re.final_action in ('ALLOW', 'TRANSFORM') then 'DECISION_PASS' "
+            + "when re.final_action = 'BLOCK' then 'DECISION_BLOCK' else 'DECISION_NOT_EVALUATED' end";
+        String executionExpression = "case when re.final_action = 'BLOCK' then 'EXECUTION_NOT_SENT' "
+            + "when re.status = 'EXTERNALLY_RECONCILED' then 'EXECUTION_RECONCILED' "
+            + "when re.connector_status = 'SENT_UNKNOWN' or exists ("
+            + "select 1 from runtime.digital_asset_transaction tx where tx.execution_id = re.execution_id "
+            + "and tx.settlement_status = 'SENT_UNKNOWN') then 'EXECUTION_UNCERTAIN' "
+            + "when re.status = 'FAILED' or re.connector_status = 'FAILED' then 'EXECUTION_FAILED' "
+            + "when re.connector_status in ('ACKNOWLEDGED', 'COMPLETED') then 'EXECUTION_SUCCEEDED' "
+            + "else 'EXECUTION_NOT_SENT' end";
         List<DigitalAssetOperationsOverview.FlowLink> result = new ArrayList<>();
         result.addAll(bind(jdbcClient.sql("select 'REQUESTED' as source, " + decisionExpression + " as target, "
                 + "count(*) as count from runtime.runtime_execution re " + scopedWhere(workloads)
@@ -107,9 +115,18 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
             .query((rs, row) -> new DigitalAssetOperationsOverview.FlowLink(
                 rs.getString("source"), rs.getString("target"), rs.getLong("count")
             )).list());
-        result.addAll(bind(jdbcClient.sql("select " + decisionExpression + " as source, re.status as target, "
+        result.addAll(bind(jdbcClient.sql("select " + decisionExpression + " as source, "
+                + executionExpression + " as target, "
                 + "count(*) as count from runtime.runtime_execution re " + scopedWhere(workloads)
-                + " group by source, re.status order by source, re.status"), institutionId, workloads)
+                + " group by source, target order by source, target"), institutionId, workloads)
+            .param("fromAt", from).param("toAt", to)
+            .query((rs, row) -> new DigitalAssetOperationsOverview.FlowLink(
+                rs.getString("source"), rs.getString("target"), rs.getLong("count")
+            )).list());
+        result.addAll(bind(jdbcClient.sql("select " + executionExpression + " as source, "
+                + "'FINAL_' || re.status as target, count(*) as count "
+                + "from runtime.runtime_execution re " + scopedWhere(workloads)
+                + " group by source, target order by source, target"), institutionId, workloads)
             .param("fromAt", from).param("toAt", to)
             .query((rs, row) -> new DigitalAssetOperationsOverview.FlowLink(
                 rs.getString("source"), rs.getString("target"), rs.getLong("count")
