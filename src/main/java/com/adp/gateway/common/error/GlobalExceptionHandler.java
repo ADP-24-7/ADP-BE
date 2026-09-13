@@ -13,6 +13,7 @@ import com.adp.gateway.digitalasset.application.DigitalAssetComplianceContextUna
 import com.adp.gateway.digitalasset.application.ApprovedTransactionUnavailableException;
 import com.adp.gateway.digitalasset.application.DigitalAssetArtifactIngestionException;
 import com.adp.gateway.digitalasset.application.DigitalAssetRuntimeSnapshotException;
+import com.adp.gateway.digitalasset.application.InvalidDigitalAssetOverviewRangeException;
 import com.adp.gateway.policy.application.PolicyLifecycleException;
 import com.adp.gateway.dataaccess.application.DataAccessDeniedException;
 import com.adp.gateway.egress.application.DestinationProfileNotFoundException;
@@ -72,6 +73,7 @@ public class GlobalExceptionHandler {
         MethodArgumentTypeMismatchException.class,
         InvalidAuditSearchException.class,
         InvalidSecurityFindingSearchException.class,
+        InvalidDigitalAssetOverviewRangeException.class,
         InvalidRuntimeHeaderException.class
     })
     ResponseEntity<ErrorResponse> handleMalformedRequest(Exception exception, HttpServletRequest request) {
