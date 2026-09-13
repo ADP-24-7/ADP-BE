@@ -66,6 +66,7 @@ public record AiOperationsOverview(
 
     public record DataClassControl(
         String dataClass,
+        boolean protectionRequired,
         long transformedFields,
         long retainedFields,
         long responseFindings

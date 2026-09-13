@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import com.adp.gateway.ai.application.AiOperationsOverviewPort;
+import com.adp.gateway.ai.domain.AiOverviewDataProtectionPolicy;
 import com.adp.gateway.ai.domain.AiOperationsOverview;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -258,7 +259,8 @@ public class JdbcAiOperationsOverviewAdapter implements AiOperationsOverviewPort
             }).list();
         return controls.entrySet().stream()
             .map(entry -> new AiOperationsOverview.DataClassControl(
-                entry.getKey(), entry.getValue().transformedFields,
+                entry.getKey(), AiOverviewDataProtectionPolicy.requiresProtection(entry.getKey()),
+                entry.getValue().transformedFields,
                 entry.getValue().retainedFields, entry.getValue().responseFindings
             ))
             .sorted((left, right) -> Long.compare(

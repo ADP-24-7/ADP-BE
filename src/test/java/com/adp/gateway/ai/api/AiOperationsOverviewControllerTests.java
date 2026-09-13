@@ -101,6 +101,7 @@ class AiOperationsOverviewControllerTests {
             .andExpect(jsonPath("$.flow[?(@.source == 'RESPONSE_NOT_REQUIRED' && @.target == 'FINAL_BLOCKED')]").exists())
             .andExpect(jsonPath("$.trend").isArray())
             .andExpect(jsonPath("$.dataClassControls").isArray())
+            .andExpect(jsonPath("$.dataClassControls[0].protectionRequired").isBoolean())
             .andExpect(jsonPath("$.latency").isArray())
             .andExpect(jsonPath("$.policyCoverage").isArray())
             .andExpect(jsonPath("$.workloadViolations[?(@.workloadId == 'customer_summary' && @.violationType == 'POLICY_CONTROL')]").exists())
