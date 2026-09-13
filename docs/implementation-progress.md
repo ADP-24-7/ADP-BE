@@ -28,8 +28,9 @@ ADP-BE 구현 단계 진행 현황을 추적한다. README는 프로젝트 개�
 - [x] Institution·Workload 범위를 강제하는 전용 운영 집계 API
 - [x] 1일·7일·30일 현재/이전 기간 KPI와 일별 추이
 - [x] 정책 판정→Runtime 최종 상태 Flow와 사전/사후 위반 사유 집계
-- [x] 시간대별 상태 분포, 최근 운영 신호, 최근 실행 Read Model
-- [x] Evidence 연결 Coverage와 미수집 분석 차원 명시
+- [x] 상태별 위험 색상을 구분하는 시간대 분포와 우선순위 기반 운영 신호
+- [x] 운영 신호의 Workload·조사 단계·구체 원인·권장 다음 조치 계약
+- [x] Evidence 연결 Coverage와 미수집 분석 차원 경계 유지
 - [ ] Privacy-safe Asset/Amount Band/Destination Category 계약
 
 ## Slice 32 Production Reference Architecture

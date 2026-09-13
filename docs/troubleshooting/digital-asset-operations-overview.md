@@ -35,6 +35,18 @@ Overview는 최대 31일만 허용하고 Institution과 허용 Workload 조건�
 Digital Asset 실행에 한정된 partial index를 사용하며, 자산 주소나 금액 같은 고 Cardinality 값을 Metric label이나
 응답에 추가하지 않는다.
 
+## 최신 신호만 나열하면 차단 이벤트가 조사 목록을 독점했다
+
+최근 이벤트를 발생 시각 역순으로만 조회하면 반복 발생한 `BLOCKED`가 목록을 채워 `FAILED`, `EGRESSING`,
+`REVIEW_REQUIRED` 같은 즉시 조치 대상이 밀려날 수 있다. 또한 상태와 Execution ID만으로는 운영자가 무엇을
+확인해야 하는지 판단할 수 없다.
+
+- 신호는 `FAILED -> EGRESSING -> REVIEW_REQUIRED -> BLOCKED -> EXTERNALLY_RECONCILED` 우선순위 안에서 최신순으로 정렬한다.
+- 각 신호에 Workload, 조사 단계, 서버가 저장한 Reason Code와 권장 다음 조치를 함께 제공한다.
+- 사전 Guard JSON 배열과 사후 mismatch JSON 배열은 첫 번째 구체 원인을 사용하고, 정책 판정 CSV는 첫 코드를 사용한다.
+- FE는 원인을 임의 추론하지 않고 이 계약으로 Audit, Recovery, Review Queue 조사 경로를 제시한다.
+- 이 정렬은 심각도 분류를 대체하지 않으며, 동일 우선순위 안에서는 최신 Evidence를 먼저 보여준다.
+
 ## 공유 개발 DB에서 전체 테스트를 실행해 기존 데이터와 충돌했다
 
 실행 중인 `postgres` 서비스에 `gradle test`를 직접 연결하면 기존 Runtime·Fixture row와 테스트의 deterministic key가

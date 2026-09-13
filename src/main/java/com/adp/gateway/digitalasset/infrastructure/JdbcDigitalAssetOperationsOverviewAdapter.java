@@ -226,19 +226,44 @@ public class JdbcDigitalAssetOperationsOverviewAdapter implements DigitalAssetOp
                        case when re.status = 'FAILED' then 'CRITICAL'
                             when re.status in ('BLOCKED', 'REVIEW_REQUIRED', 'EGRESSING') then 'WARNING'
                             else 'INFO' end as severity,
-                       re.status,
-                       coalesce(rd.reason_codes, rr.last_error_code, re.connector_status) as reason_code,
+                       re.status, re.workload_id,
+                       case when re.status = 'FAILED' then 'EXTERNAL_EXECUTION'
+                            when re.status = 'BLOCKED' and pre.execution_id is not null then 'PRE_EXECUTION_GUARD'
+                            when re.status = 'BLOCKED' then 'POLICY_DECISION'
+                            when re.status = 'REVIEW_REQUIRED' and mismatch.execution_id is not null then 'POST_EXECUTION_EVIDENCE'
+                            when re.status = 'REVIEW_REQUIRED' then 'POLICY_DECISION'
+                            else 'RECONCILIATION' end as stage,
+                       case when re.status = 'FAILED' then coalesce(rr.last_error_code, re.connector_status, re.status)
+                            when re.status = 'BLOCKED' and pre.execution_id is not null
+                                then coalesce(pre.reason_codes ->> 0, re.status)
+                            when re.status = 'BLOCKED'
+                                then coalesce(nullif(split_part(rd.reason_codes, ',', 1), ''), re.status)
+                            when re.status = 'REVIEW_REQUIRED' and mismatch.execution_id is not null
+                                then coalesce(mismatch.mismatched_fields ->> 0, re.status)
+                            when re.status = 'REVIEW_REQUIRED'
+                                then coalesce(nullif(split_part(rd.reason_codes, ',', 1), ''), re.status)
+                            else coalesce(rr.last_error_code, re.connector_status, re.status) end as reason_code,
+                       case when re.status = 'FAILED' then 'INSPECT_EXECUTION_FAILURE'
+                            when re.status = 'BLOCKED' then 'REVIEW_POLICY_DECISION'
+                            when re.status = 'REVIEW_REQUIRED' then 'REVIEW_EVIDENCE'
+                            when re.status = 'EGRESSING' then 'RECONCILE_EXTERNAL_STATUS'
+                            else 'VERIFY_RECONCILIATION_EVIDENCE' end as next_action,
                        re.updated_at as occurred_at
                 from runtime.runtime_execution re
                 left join runtime.runtime_decision rd on rd.execution_id = re.execution_id
+                left join runtime.digital_asset_pre_execution_guard pre on pre.execution_id = re.execution_id
+                left join runtime.digital_asset_mismatch_case mismatch on mismatch.execution_id = re.execution_id
                 left join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
                 """ + scopedWhere(workloads) + " and re.status in "
                 + "('FAILED','BLOCKED','REVIEW_REQUIRED','EGRESSING','EXTERNALLY_RECONCILED') "
-                + "order by re.updated_at desc, re.execution_id desc limit 8"), institutionId, workloads)
+                + "order by case re.status when 'FAILED' then 0 when 'EGRESSING' then 1 "
+                + "when 'REVIEW_REQUIRED' then 2 when 'BLOCKED' then 3 else 4 end, "
+                + "re.updated_at desc, re.execution_id desc limit 8"), institutionId, workloads)
             .param("fromAt", from).param("toAt", to)
             .query((rs, row) -> new DigitalAssetOperationsOverview.OperationalSignal(
                 rs.getString("execution_id"), rs.getString("signal_type"), rs.getString("severity"),
-                rs.getString("status"), rs.getString("reason_code"),
+                rs.getString("status"), rs.getString("workload_id"), rs.getString("stage"),
+                rs.getString("reason_code"), rs.getString("next_action"),
                 rs.getObject("occurred_at", OffsetDateTime.class)
             )).list();
     }

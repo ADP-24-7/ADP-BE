@@ -59,7 +59,10 @@ public record DigitalAssetOperationsOverview(
         String signalType,
         String severity,
         String status,
+        String workloadId,
+        String stage,
         String reasonCode,
+        String nextAction,
         OffsetDateTime occurredAt
     ) { }
 

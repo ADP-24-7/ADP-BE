@@ -96,6 +96,10 @@ class DigitalAssetOperationsOverviewControllerTests {
             .andExpect(jsonPath("$.flow[?(@.source == 'EXECUTION_NOT_SENT' && @.target == 'FINAL_BLOCKED')]").exists())
             .andExpect(jsonPath("$.trend").isArray())
             .andExpect(jsonPath("$.violations[?(@.reasonCode == 'DIGITAL_ASSET_APPROVED_AMOUNT_EXCEEDED')]").exists())
+            .andExpect(jsonPath("$.recentSignals[0].workloadId").isString())
+            .andExpect(jsonPath("$.recentSignals[0].stage").isString())
+            .andExpect(jsonPath("$.recentSignals[0].reasonCode").isString())
+            .andExpect(jsonPath("$.recentSignals[0].nextAction").isString())
             .andExpect(jsonPath("$.coverage.unavailableDimensions[0]").value("ASSET_SYMBOL"));
     }
 
