@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 
 import com.adp.gateway.common.trace.TraceHeaders;
 import com.adp.gateway.audit.application.InvalidAuditSearchException;
+import com.adp.gateway.ai.application.InvalidAiOverviewRangeException;
 import com.adp.gateway.auditexport.application.AuditExportException;
 import com.adp.gateway.ai.application.AiEvaluationBundleNotFoundException;
 import com.adp.gateway.ai.application.AiEvaluationBundleIntegrityException;
@@ -72,6 +73,7 @@ public class GlobalExceptionHandler {
         HttpMessageNotReadableException.class,
         MethodArgumentTypeMismatchException.class,
         InvalidAuditSearchException.class,
+        InvalidAiOverviewRangeException.class,
         InvalidSecurityFindingSearchException.class,
         InvalidDigitalAssetOverviewRangeException.class,
         InvalidRuntimeHeaderException.class
