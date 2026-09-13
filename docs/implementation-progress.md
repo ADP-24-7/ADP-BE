@@ -543,6 +543,20 @@ DA Artifact 또는 Digital Asset 정책값에 의존하지 않는 공통 기반�
 
 리뷰 및 검증 과정에서 반복적으로 확인해야 했던 이슈는 [Troubleshooting Index](troubleshooting/index.md)에서 별도로 관리한다.
 
+## AI Operations Overview
+
+상세 집계 기준과 데이터 한계는 [AI Operations Overview 트러블슈팅](troubleshooting/ai-operations-overview.md)에서 관리한다.
+
+- [x] Institution·Workload 범위의 AI 운영 집계 API
+- [x] Workload 진입부터 응답 보호까지 8단계 Evidence 흐름
+- [x] 현재·직전 기간 KPI와 정책·모델·응답 증적률
+- [x] 데이터 클래스별 변환·유지 필드와 응답 탐지 분석
+- [x] Workload별 정책 커버리지 Marimekko 및 시간대별 상태 분포
+- [x] Workload별 대표 정책 위반 구성 및 정책 허용 대비 최종 완료 Dumbbell
+- [x] 최근 14일 SYNTHETIC AI 운영·보안 시나리오 로컬 fixture
+- [x] 위험도 우선 운영 신호와 검색·상태 필터·페이지 목록
+- [x] 최대 31일 조회 검증과 AI 기간 조회 index
+
 ## My Work / Approval Inbox
 
 상세 계약은 [My Work / Approval Inbox](my-work-approval-inbox.md)에서 관리한다.

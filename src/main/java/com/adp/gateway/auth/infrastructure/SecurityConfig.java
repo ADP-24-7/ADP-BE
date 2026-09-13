@@ -125,6 +125,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/admin/ai/overview")
+                    .hasAnyRole("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/bundle").hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/readiness").hasRole("PRIVILEGED_OPERATOR")
                 .requestMatchers("/api/admin/ai/evaluation-runs/*/calibration-evidence")
