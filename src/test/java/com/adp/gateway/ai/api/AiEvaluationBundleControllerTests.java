@@ -111,6 +111,9 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.failure_summary.failed").value(0))
             .andReturn().getResponse().getContentAsString();
 
+        readiness("AUDITOR").andExpect(status().isOk());
+        export("AUDITOR").andExpect(status().isOk());
+
         String secondResponse = export("PRIVILEGED_OPERATOR")
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
@@ -289,6 +292,28 @@ class AiEvaluationBundleControllerTests {
     }
 
     @Test
+    void allAdminReadRolesCanReadTransformGovernanceProfile() throws Exception {
+        for (String role : java.util.List.of("OPERATOR", "PRIVILEGED_OPERATOR", "AUDITOR")) {
+            mockMvc.perform(get(
+                    "/api/admin/ai/evaluation-runs/{runId}/transform-governance-profile",
+                    AiEvaluationRunCatalog.EXPERIMENT_02_RUN_ID
+                )
+                .header("X-ADP-User-Id", "governance-reader")
+                .header("X-ADP-User-Roles", role))
+                .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void auditorCannotFreezeEvaluationContract() throws Exception {
+        mockMvc.perform(post("/api/admin/ai/evaluation-runs/{runId}/contract/freeze",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID)
+                .header("X-ADP-User-Id", "auditor-local")
+                .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void inaccessibleEvaluationRunReturnsNotFound() throws Exception {
         mockMvc.perform(get("/api/admin/ai/evaluation-runs/{runId}/bundle", "missing-run")
                 .header("X-ADP-User-Id", "privileged-local")
@@ -324,6 +349,13 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$..evidence_digest").doesNotExist())
             .andExpect(jsonPath("$..evidence_digests").doesNotExist())
             .andReturn().getResponse().getContentAsString();
+        mockMvc.perform(get(
+                "/api/admin/ai/evaluation-runs/{runId}/calibration-evidence",
+                AiEvaluationRunCatalog.BASELINE_RUN_ID
+            )
+            .header("X-ADP-User-Id", "bundle-exporter")
+            .header("X-ADP-User-Roles", "AUDITOR"))
+            .andExpect(status().isOk());
         JsonNode reflected = java.util.stream.StreamSupport.stream(
                 objectMapper.readTree(response).path("executions").spliterator(), false
             )
