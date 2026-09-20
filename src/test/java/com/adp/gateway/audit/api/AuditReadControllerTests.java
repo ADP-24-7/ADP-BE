@@ -125,6 +125,53 @@ class AuditReadControllerTests {
     }
 
     @Test
+    void evidenceExplainsPolicyReviewAndResponseGuardRejectionWithoutRawValues() throws Exception {
+        String reviewExecutionId = execute("review-explanation");
+        jdbcClient.sql("""
+                update runtime.runtime_execution
+                set final_action = 'REVIEW', status = 'REVIEW_REQUIRED'
+                where execution_id = :executionId
+                """).param("executionId", reviewExecutionId).update();
+        jdbcClient.sql("""
+                update runtime.runtime_decision
+                set final_action = 'REVIEW', reason_codes = 'HUMAN_REVIEW_REQUIRED'
+                where execution_id = :executionId
+                """).param("executionId", reviewExecutionId).update();
+
+        mockMvc.perform(get("/api/admin/audit/executions/{executionId}/evidence", reviewExecutionId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.policy.finalAction").value("REVIEW"))
+            .andExpect(jsonPath("$.policy.reasonCodes[0]").value("HUMAN_REVIEW_REQUIRED"));
+
+        String responseGuardExecutionId = execute("response-guard-explanation");
+        jdbcClient.sql("""
+                update runtime.runtime_execution
+                set status = 'BLOCKED', response_guard_status = 'REJECTED',
+                    response_guard_reason_codes = null
+                where execution_id = :executionId
+                """).param("executionId", responseGuardExecutionId).update();
+        jdbcClient.sql("""
+                update runtime.response_guard_result
+                set status = 'REJECTED', reason_codes = 'SENSITIVE_DATA_REFLECTION'
+                where execution_id = :executionId
+                """).param("executionId", responseGuardExecutionId).update();
+
+        String response = mockMvc.perform(get(
+                "/api/admin/audit/executions/{executionId}/evidence", responseGuardExecutionId)
+                .header("X-ADP-User-Id", "privileged-operator-local")
+                .header("X-ADP-User-Roles", "PRIVILEGED_OPERATOR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.egress.responseGuardStatus").value("REJECTED"))
+            .andExpect(jsonPath("$.egress.responseGuardReasonCodes[0]")
+                .value("SENSITIVE_DATA_REFLECTION"))
+            .andReturn().getResponse().getContentAsString();
+
+        assertThat(response).doesNotContain("$.response.summary");
+    }
+
+    @Test
     void jdbcSearchAlwaysAppliesAllowedWorkloadScope() throws Exception {
         String executionId = execute("workload-scope");
 

@@ -38,8 +38,16 @@ public record ExecutionEvidencePack(
         String policyVersion,
         String snapshotDigest,
         String decisionId,
-        String finalAction
+        String finalAction,
+        List<String> reasonCodes,
+        List<String> matchedRuleIds,
+        List<String> requiredControls
     ) {
+        public PolicyEvidence {
+            reasonCodes = List.copyOf(reasonCodes);
+            matchedRuleIds = List.copyOf(matchedRuleIds);
+            requiredControls = List.copyOf(requiredControls);
+        }
     }
 
     public record DigitalAssetSnapshotEvidence(
@@ -89,9 +97,13 @@ public record ExecutionEvidencePack(
         String providerRequestDigest,
         String providerResponseDigest,
         String responseGuardStatus,
+        List<String> responseGuardReasonCodes,
         String controlledDeliveryStatus,
         String controlledDeliveryResponseDigest
     ) {
+        public EgressEvidence {
+            responseGuardReasonCodes = List.copyOf(responseGuardReasonCodes);
+        }
     }
 
     public record RecoveryEvidence(
