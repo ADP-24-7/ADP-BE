@@ -108,18 +108,35 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                    re.destination_profile_digest, re.outbound_candidate_digest,
                    re.outbound_guard_status, re.connector_execution_id, re.connector_status,
                    re.provider_request_digest, re.provider_response_digest,
-                   re.response_guard_status, re.controlled_delivery_status,
+                   re.response_guard_status,
+                   coalesce(nullif(re.response_guard_reason_codes, ''), rg.reason_codes)
+                       as response_guard_reason_codes,
+                   re.controlled_delivery_status,
                    re.controlled_delivery_response_digest,
                    rr.recovery_status, rr.retry_disposition, rr.attempt_count, rr.max_attempts,
                    rr.last_observed_external_status, rr.last_status_queried_at,
                    rr.status_query_evidence_digest, rr.last_error_code,
-                   ae.audit_id, ae.reason_code, ae.evidence_refs,
+                   rd.reason_codes as policy_reason_codes,
+                   ae.audit_id, ae.reason_code, ae.matched_rule_ids,
+                   ae.required_controls, ae.evidence_refs,
                    re.created_at, re.updated_at
             from runtime.runtime_execution re
             left join runtime.digital_asset_runtime_snapshot das on das.execution_id = re.execution_id
             left join runtime.external_interaction_recovery rr on rr.execution_id = re.execution_id
             left join lateral (
-                select audit_id, reason_code, evidence_refs
+                select reason_codes
+                from runtime.runtime_decision
+                where execution_id = re.execution_id
+                order by created_at desc limit 1
+            ) rd on true
+            left join lateral (
+                select reason_codes
+                from runtime.response_guard_result
+                where execution_id = re.execution_id
+                order by created_at desc limit 1
+            ) rg on true
+            left join lateral (
+                select audit_id, reason_code, matched_rule_ids, required_controls, evidence_refs
                 from audit_event where execution_id = re.execution_id
                 order by created_at desc limit 1
             ) ae on true
@@ -208,11 +225,13 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
         String destinationProfileId, String destinationProfileVersion, String destinationProfileDigest,
         String outboundCandidateDigest, String outboundGuardStatus, String connectorExecutionId,
         String connectorStatus, String providerRequestDigest, String providerResponseDigest,
-        String responseGuardStatus, String controlledDeliveryStatus, String controlledDeliveryResponseDigest,
+        String responseGuardStatus, String responseGuardReasonCodes,
+        String controlledDeliveryStatus, String controlledDeliveryResponseDigest,
         String recoveryStatus, String retryDisposition, Integer attemptCount, Integer maxAttempts,
         String lastObservedExternalStatus, OffsetDateTime lastStatusQueriedAt,
         String statusQueryEvidenceDigest, String lastErrorCode,
-        String auditId, String reasonCode, String evidenceRefs,
+        String policyReasonCodes, String auditId, String reasonCode, String matchedRuleIds,
+        String requiredControls, String evidenceRefs,
         OffsetDateTime createdAt, OffsetDateTime updatedAt
     ) {
         ExecutionEvidencePack toEvidence(String exportContentDigest) {
@@ -224,7 +243,8 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                 ),
                 new ExecutionEvidencePack.PolicyEvidence(
                     approvalReference, approvalVersion, approvalScopeDigest, policyVersion,
-                    snapshotDigest, decisionId, finalAction
+                    snapshotDigest, decisionId, finalAction, values(policyReasonCodes),
+                    values(matchedRuleIds), values(requiredControls)
                 ),
                 digitalAssetSnapshotId == null ? null : new ExecutionEvidencePack.DigitalAssetSnapshotEvidence(
                     digitalAssetSnapshotId, digitalAssetSnapshotDigest, digitalAssetArtifactId,
@@ -242,6 +262,7 @@ public class JdbcAuditReadAdapter implements AuditReadPort {
                     destinationProfileId, destinationProfileVersion, destinationProfileDigest,
                     outboundCandidateDigest, outboundGuardStatus, connectorExecutionId, connectorStatus,
                     providerRequestDigest, providerResponseDigest, responseGuardStatus,
+                    values(responseGuardReasonCodes),
                     controlledDeliveryStatus, controlledDeliveryResponseDigest
                 ),
                 new ExecutionEvidencePack.RecoveryEvidence(

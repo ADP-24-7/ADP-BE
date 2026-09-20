@@ -91,6 +91,9 @@ class AiEvaluationBundleControllerTests {
             .andExpect(jsonPath("$.observed_execution_count").value(3))
             .andExpect(jsonPath("$.complete_evidence_count").value(3))
             .andExpect(jsonPath("$.missing_execution_count").value(0))
+            .andExpect(jsonPath("$.reason_codes.length()").value(0))
+            .andExpect(jsonPath("$.case_models[*].reason_codes.length()")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(0))))
             .andExpect(jsonPath("$.case_models.length()").value(3));
 
         String firstResponse = export("PRIVILEGED_OPERATOR")

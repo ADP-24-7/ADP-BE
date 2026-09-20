@@ -17,9 +17,11 @@ public record AiEvaluationRunReadiness(
     int completeEvidenceCount,
     int missingExecutionCount,
     int unexpectedExecutionCount,
+    List<String> reasonCodes,
     List<CaseModelEvidence> caseModels
 ) {
     public AiEvaluationRunReadiness {
+        reasonCodes = List.copyOf(reasonCodes);
         caseModels = List.copyOf(caseModels);
     }
 
@@ -38,7 +40,11 @@ public record AiEvaluationRunReadiness(
         String executionId,
         String runtimeStatus,
         String providerStatus,
-        String evidenceStatus
+        String evidenceStatus,
+        List<String> reasonCodes
     ) {
+        public CaseModelEvidence {
+            reasonCodes = List.copyOf(reasonCodes);
+        }
     }
 }

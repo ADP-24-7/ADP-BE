@@ -162,11 +162,12 @@ public class AiEvaluationBundleService {
             .filter(row -> !expected.contains(new CaseModelPair(row.evalCaseId(), row.profileId())))
             .count();
         AiEvaluationRunReadiness.Status status = readinessStatus(run, rows);
+        List<String> reasonCodes = readinessReasonCodes(status, matrix, unexpectedExecutionCount);
         return new AiEvaluationRunReadiness(
             run.evaluationRunId(), run.runVersion(), status,
             status == AiEvaluationRunReadiness.Status.READY,
             expected.size(), storedExecutionCount, rows.size(), completeEvidenceCount,
-            expected.size() - observed.size(), unexpectedExecutionCount, matrix
+            expected.size() - observed.size(), unexpectedExecutionCount, reasonCodes, matrix
         );
     }
 
@@ -176,12 +177,76 @@ public class AiEvaluationBundleService {
     ) {
         return row == null
             ? new AiEvaluationRunReadiness.CaseModelEvidence(
-                pair.caseId(), pair.profileId(), null, null, null, null
+                pair.caseId(), pair.profileId(), null, null, null, null,
+                List.of("EVALUATION_EXECUTION_MISSING")
             )
             : new AiEvaluationRunReadiness.CaseModelEvidence(
                 pair.caseId(), pair.profileId(), row.executionId(), row.runtimeStatus(),
-                row.providerStatus(), row.evidenceStatus()
+                row.providerStatus(), row.evidenceStatus(), evidenceReasonCodes(row)
             );
+    }
+
+    private List<String> readinessReasonCodes(
+        AiEvaluationRunReadiness.Status status,
+        List<AiEvaluationRunReadiness.CaseModelEvidence> matrix,
+        int unexpectedExecutionCount
+    ) {
+        var reasons = new java.util.LinkedHashSet<String>();
+        switch (status) {
+            case NOT_STARTED -> reasons.add("EVALUATION_EXECUTION_NOT_STARTED");
+            case INCOMPLETE -> reasons.add("EVALUATION_MATRIX_INCOMPLETE");
+            case PROVENANCE_MISMATCH -> reasons.add("EVALUATION_PROVENANCE_MISMATCH");
+            case MODEL_MISMATCH -> reasons.add("EVALUATION_MODEL_MISMATCH");
+            case READY -> { }
+        }
+        matrix.stream().flatMap(item -> item.reasonCodes().stream()).forEach(reasons::add);
+        if (unexpectedExecutionCount > 0) reasons.add("UNEXPECTED_EVALUATION_EXECUTION");
+        return List.copyOf(reasons);
+    }
+
+    private List<String> evidenceReasonCodes(AiEvaluationBundleSource row) {
+        AiEvaluationRunDefinition run = runCatalog.find(row.evaluationRunId()).orElse(null);
+        if (run == null) return List.of("EVALUATION_RUN_NOT_REGISTERED");
+
+        var reasons = new java.util.LinkedHashSet<String>();
+        var evaluationCase = run.cases().get(row.evalCaseId());
+        if (!same(run.runVersion(), row.evaluationRunVersion())) reasons.add("RUN_VERSION_MISMATCH");
+        if (!same(run.contractDigest(), row.evaluationContractDigest())) reasons.add("CONTRACT_DIGEST_MISMATCH");
+        if (!same(run.datasetId(), row.datasetId())) reasons.add("DATASET_ID_MISMATCH");
+        if (!same(run.datasetVersion(), row.datasetVersion())) reasons.add("DATASET_VERSION_MISMATCH");
+        if (!same(run.datasetDigest(), row.datasetDigest())) reasons.add("DATASET_DIGEST_MISMATCH");
+        if (!same(run.policySnapshotDigest(), row.policySnapshotDigest())) reasons.add("POLICY_SNAPSHOT_MISMATCH");
+        if (evaluationCase == null) {
+            reasons.add("EVALUATION_CASE_NOT_REGISTERED");
+        } else {
+            if (!same(evaluationCase.expectedInputDigest(), row.expectedInputDigest())) {
+                reasons.add("EXPECTED_INPUT_DIGEST_MISMATCH");
+            }
+            if (!same(evaluationCase.expectedInputDigest(), row.actualInputDigest())) {
+                reasons.add("ACTUAL_INPUT_DIGEST_MISMATCH");
+            }
+        }
+        AiModelProfile profile = modelProfileCatalog.findByProfileId(row.profileId()).orElse(null);
+        if (profile == null) {
+            reasons.add("MODEL_PROFILE_NOT_REGISTERED");
+        } else {
+            if (!run.modelProfileIds().contains(row.profileId())) reasons.add("MODEL_NOT_IN_RUN");
+            if (!same(profile.profileVersion(), row.profileVersion())) reasons.add("MODEL_PROFILE_VERSION_MISMATCH");
+            if (!same(profile.modelProfileDigest(), row.profileDigest())) reasons.add("MODEL_PROFILE_DIGEST_MISMATCH");
+            if (!same(profile.modelId(), row.providerModelId())) reasons.add("PROVIDER_MODEL_MISMATCH");
+            if (!same(profile.modelVersion(), row.providerModelVersion())) reasons.add("PROVIDER_MODEL_VERSION_MISMATCH");
+            if (!same(profile.providerConnectionProfileId(), row.connectionProfileId())) reasons.add("CONNECTION_PROFILE_MISMATCH");
+            if (!same(profile.maxTokens(), row.maxTokens())) reasons.add("MAX_TOKENS_MISMATCH");
+            if (row.temperature() == null || Double.compare(profile.temperature(), row.temperature()) != 0) {
+                reasons.add("TEMPERATURE_MISMATCH");
+            }
+            if (!same(profile.profileVersion(), row.samplingProfileVersion())) reasons.add("SAMPLING_PROFILE_MISMATCH");
+            if (!same(profile.destinationProfileDigest(), row.destinationProfileDigest())) {
+                reasons.add("DESTINATION_PROFILE_DIGEST_MISMATCH");
+            }
+        }
+        if (!"COMPLETE".equals(row.evidenceStatus())) reasons.add("EVIDENCE_INCOMPLETE");
+        return List.copyOf(reasons);
     }
 
     private AiEvaluationRunReadiness.Status readinessStatus(
