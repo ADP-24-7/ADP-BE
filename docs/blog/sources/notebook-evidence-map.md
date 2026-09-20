@@ -45,7 +45,7 @@
 
 ## 별도 Artifact에서 만든 그림
 
-- `04-ai-model-quality-latency.png`: `benchmark_model_summary.json`과 `benchmark_validation.json`을 읽어 생성한다. 합성 업무 30 case × 3회 × 3 model, 실제 호출 270회 범위에만 적용한다. Mean뿐 아니라 p50, p95, 성공률을 함께 표시한다.
+- `04-ai-model-quality-latency.png`: `benchmark_model_summary.json`과 `benchmark_validation.json`을 읽어 생성한다. 합성 업무 30 case × 3회 × 3 model을 격리된 benchmark harness에서 수행한 실제 Provider 호출 270회 범위에만 적용한다. Production Runtime 실행이나 외부 실행 승인을 뜻하지 않는다. Mean뿐 아니라 p50, p95, 성공률을 함께 표시한다.
 - `05-digital-asset-six-case-matrix.png`: `local_product_e2e_v1`의 versioned synthetic fixture 6개를 읽어 생성한다. 예상 계약과 로컬 E2E 검증을 보여주며 실자산 실행을 의미하지 않는다.
 
 두 이미지는 [`render_evidence_charts.py`](../assets/charts/render_evidence_charts.py)로 재생성한다. Script는 ADP-DA commit `74af1928d720d4a37addeedab1770d81b4fff8a5`와 benchmark JSON 2개, 6-case fixture 6개의 SHA-256을 먼저 확인한다. commit이나 파일 내용이 바뀌면 PNG를 조용히 덮어쓰지 않고 실패한다.

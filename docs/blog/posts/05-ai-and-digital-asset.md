@@ -66,9 +66,11 @@ Runtime request가 model ID나 임의 endpoint를 직접 전달하지 않는 이
 
 DA는 Provider를 다시 호출하지 않고 BE가 export한 evaluation bundle을 검증하고 비교할 수 있다.
 
-![합성 금융 업무의 모델별 품질과 평균 지연시간](../assets/charts/04-ai-model-quality-latency.png)
+아래 270회 모델 비교는 ADP-DA의 **격리된 benchmark harness**에서 수행한 실제 Provider 호출 결과다. BE Production Runtime을 통과한 270회 실행을 의미하지 않으며, 모델 평가 Evidence와 Runtime의 외부 실행 승인은 별개의 경계로 유지했다. Benchmark 실행 당시 Production governance는 fail-closed 상태였고 Production Runtime은 호출되지 않았다.
 
-고정된 합성 금융 업무 30 case를 모델별 3회씩 실행한 270회 benchmark에서도 하나의 모델이 모든 축을 지배하지 않았다. Muse Glimmer 30B는 평균 품질이 가장 높았고, Gemma 4 31B IT는 평균 지연시간이 가장 짧았다. 비용은 공식 per-model trial 단가를 확인하지 못해 비교에서 제외했다. 이 결과는 모델의 보편적 순위가 아니라 **같은 실행 조건과 metric contract를 고정해야 선택 근거를 다시 검토할 수 있다**는 예시다.
+![합성 금융 업무의 모델별 FPG-defined quality score와 평균 지연시간](../assets/charts/04-ai-model-quality-latency.png)
+
+고정된 합성 금융 업무 30 case를 모델별 3회씩 실행한 270회 benchmark에서도 하나의 모델이 모든 축을 지배하지 않았다. Muse Glimmer 30B는 이번 **FPG-defined quality score**에서 가장 높은 평균값을 보였고, Gemma 4 31B IT는 평균 지연시간이 가장 짧았다. 비용은 공식 per-model trial 단가를 확인하지 못해 비교에서 제외했다. 이 결과는 모델의 보편적 순위가 아니라 **같은 실행 조건과 metric contract를 고정해야 선택 근거를 다시 검토할 수 있다**는 예시다.
 
 평균만으로는 운영 특성이 가려졌다. Nemotron은 p50이 1.46초였지만 p95는 115.3초였고 성공률은 91.1%였다. Gemma도 평균은 8.84초지만 p95는 35.2초였다. 따라서 모델 선택 근거에는 중심값뿐 아니라 tail latency와 실패 비율을 함께 남겨야 한다.
 

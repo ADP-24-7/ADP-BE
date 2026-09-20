@@ -93,8 +93,8 @@ def ai_tradeoff():
     validation = json.loads(validation_source.read_text(encoding="utf-8"))
 
     image, draw = base(
-        "합성 금융 업무에서 확인한 모델별 품질–지연시간 Trade-off",
-        "30 cases × 3 repetitions = 모델별 90회 · 비용은 공식 단가 미확인으로 비교에서 제외",
+        "합성 금융 업무의 FPG-defined quality–지연시간 Trade-off",
+        "Isolated benchmark harness · 30 cases × 3 repetitions = 모델별 90회",
     )
     left, top, right, bottom = 150, 220, 1450, 560
     draw.rounded_rectangle((85, 190, 1515, 805), radius=24, fill=PANEL, outline=LINE, width=2)
@@ -116,7 +116,7 @@ def ai_tradeoff():
         draw.line((left, y, right, y), fill=LINE, width=1)
         draw.text((92, y - 12), str(value), font=F_SMALL, fill=MUTED)
 
-    draw.text((150, 198), "평균 품질 ↑", font=F_BODY, fill=TEXT)
+    draw.text((150, 198), "FPG-defined quality score ↑", font=F_BODY, fill=TEXT)
     for value in [10000, 15000, 20000]:
         x = px(value)
         draw.line((x, bottom, x, bottom + 8), fill=MUTED, width=2)
@@ -156,7 +156,7 @@ def ai_tradeoff():
             draw.text((table_x[index], y), value, font=F_SMALL, fill=TEXT)
     draw.text(
         (92, 835),
-        f"검증 상태: {validation['status']} · 실제 모델 호출 {validation['actual_executions']}회 · synthetic/public data only",
+        f"Isolated benchmark harness · {validation['actual_executions']} actual provider calls · Production Runtime not invoked",
         font=F_SMALL,
         fill=MUTED,
     )

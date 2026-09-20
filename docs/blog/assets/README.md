@@ -43,7 +43,7 @@ python3 docs/blog/assets/diagrams/render_diagrams.py
 - `charts/01-transform-relationship-utility.png`: AI Transform notebook cell 37 embedded output
 - `charts/02-destination-field-minimization.png`: DA-04 notebook cell 12 embedded output
 - `charts/03-recovery-strategy-risk.png`: DA-06 notebook cell 9 embedded output
-- `charts/04-ai-model-quality-latency.png`: model benchmark JSON 기반 재생성 차트
+- `charts/04-ai-model-quality-latency.png`: isolated benchmark harness의 model benchmark JSON 기반 재생성 차트
 - `charts/05-digital-asset-six-case-matrix.png`: local product E2E fixture 6개 기반 재생성 표
 - `charts/06-digital-asset-amount-precision.png`: DA-02 notebook cell 16 embedded output
 - `charts/07-zero-value-movement-evidence.png`: DA-03 notebook cell 29 embedded output
@@ -54,6 +54,8 @@ python3 docs/blog/assets/diagrams/render_diagrams.py
 python3 docs/blog/assets/charts/extract_notebook_figures.py
 python3 docs/blog/assets/charts/render_evidence_charts.py
 ```
+
+Artifact 차트를 재생성할 때는 `ADP-BE`와 `ADP-DA`를 동일한 상위 디렉터리에 두고, `ADP-DA`를 baseline commit `74af1928d720d4a37addeedab1770d81b4fff8a5`로 checkout해야 한다. Script는 이 commit과 입력 JSON/fixture의 SHA-256이 다르면 렌더링하지 않고 실패한다.
 
 Notebook 그림 추출 script는 원본 notebook SHA-256과 cell 번호를 확인한다. Artifact chart script는 ADP-DA commit과 benchmark/validation/fixture 파일별 SHA-256을 함께 확인한다. 정량 수치와 사용 한계는 [`../sources/notebook-evidence-map.md`](../sources/notebook-evidence-map.md)에 기록한다.
 

@@ -439,7 +439,7 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 | IMG-25 | Amount FLOAT64 정밀도 손실 | 5 | DA-02 Notebook embedded chart |
 | IMG-26 | ZERO_VALUE 실제 가치이동 | 5 | DA-03 Notebook embedded chart |
 
-실제 관리자 화면은 일곱 장만 사용한다. 모두 local synthetic fixture와 실제 BE API를 사용하는 2000px 폭의 전용 Chrome 창에서 다시 확보했고, 포인터·브라우저 chrome·잘린 카드가 없도록 panel 단위로 crop했다. 실행 결과를 보여주지 못하는 입력 대기 화면과 현재 편의 주장과 직접 연결되지 않는 승인 화면은 제외했다. 재현 가능한 상태를 고정하지 못한 임시 화면이나 mock fallback 화면은 발행 이미지로 사용하지 않는다.
+실제 관리자 화면은 여덟 장만 사용한다. 모두 local synthetic fixture와 실제 BE API를 사용하는 전용 Chrome 세션에서 다시 확보했고, 포인터·브라우저 chrome·잘린 카드가 없도록 주장에 필요한 영역만 crop했다. 실행 결과를 보여주지 못하는 입력 대기 화면과 현재 편의 주장과 직접 연결되지 않는 승인 화면은 제외했다. 재현 가능한 상태를 고정하지 못한 임시 화면이나 mock fallback 화면은 발행 이미지로 사용하지 않는다.
 
 ### 캡처 원칙
 

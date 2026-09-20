@@ -15,7 +15,7 @@
 | 목적지별 Field 감소 | `N/A` | `SAVED_OUTPUT_HASHED` | DA-04 notebook, current contract | 개인정보 위험 감소율·Provider 성공률로 바꾸지 않음 |
 | Amount FLOAT64 정밀도 손실 | `N/A` | `SAVED_OUTPUT_HASHED` | DA-02 notebook, BigQuery 원본 매칭 73,266건 | 모든 자산·네트워크의 손실률로 일반화하지 않음 |
 | ZERO_VALUE의 별도 가치 이동 | `N/A` | `SAVED_OUTPUT_HASHED` | DA-03 notebook, 2026-01 분석대상 3,452건 | Ethereum 전체 거래 비율로 일반화하지 않음 |
-| AI 3-model benchmark | `N/A` | `VERSIONED_ARTIFACT_REGENERATED` | pinned benchmark/validation JSON, actual calls 270회 | 보편적 모델 순위·운영 승인으로 표현하지 않음 |
+| AI 3-model benchmark | `N/A` | `VERSIONED_ARTIFACT_REGENERATED` | pinned benchmark/validation JSON, isolated harness actual provider calls 270회, Production Runtime 미호출 | 보편적 모델 순위·운영 승인으로 표현하지 않음 |
 | Recovery 98.41% vs 0% | `N/A` | `SAVED_OUTPUT_HASHED` | DA-06 counterfactual notebook output | 실제 timeout·중복률 또는 성능 개선율로 표현하지 않음 |
 | `SENT_UNKNOWN` reconciliation-first | `LOCAL_E2E` | `LOCAL_E2E` | recovery tests, local fake adapter | 실제 Provider adapter와 구분 |
 | Policy Shadow/Maker-Checker/Selection rollback | `LOCAL_E2E` | `LOCAL_E2E` | policy E2E/concurrency tests | 실제 조직 승인 완료라고 쓰지 않음 |
