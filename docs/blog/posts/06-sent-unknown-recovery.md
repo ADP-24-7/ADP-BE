@@ -50,19 +50,19 @@ TCP 연결 종료, client timeout, upstream timeout은 외부 처리 결과를 �
 
 `SENT_UNKNOWN`을 `FAILED`로 축약하면 운영자가 안전하게 재시도할 수 있다고 오해한다.
 
-## 실제 관리자 화면에서는 성공 대신 보류가 보인다
-
-![Gateway Lab SENT_UNKNOWN 실행](../assets/screenshots/FPG_01_GatewayLab_SENT_UNKNOWN.png)
-
-화면에는 Policy Action과 Final Action이 `TRANSFORM`으로 표시되더라도 execution status는 `EGRESSING`, connector status는 `SENT_UNKNOWN`, delivery status는 `WITHHELD`로 남는다.
-
-정책 판단을 통과했다는 사실과 외부 결과를 사용자에게 전달해도 된다는 사실을 분리한 것이다.
+정책 판단을 통과했더라도 connector 결과가 `SENT_UNKNOWN`이면 delivery는 `WITHHELD`로 남긴다. 정책 허용과 외부 결과 전달 가능 여부를 분리한 것이다.
 
 ## T4. Recovery queue도 업무 상태와 분리한다
 
 불확실한 외부 실행은 recovery job으로 등록한다. Job에는 attempt, next retry time, lease owner, lease expiry, retry disposition, last evidence를 저장한다.
 
 여러 worker가 같은 incident를 동시에 처리하지 않도록 PostgreSQL의 claim/lease와 `SKIP LOCKED`를 사용한다. Worker는 terminal update 직전에 lease ownership을 다시 CAS로 확인한다. 오래된 worker가 늦게 돌아와 최신 결과를 덮어쓰는 것을 막기 위해서다.
+
+![Runtime Recovery의 복구 대기·수동 검토·처리 지연 현황](../assets/screenshots/FPG_08_Recovery_Incidents.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+Recovery 화면은 최근 실행과 실행 실패를 구분하고, 복구 대기·수동 검토·처리 지연·최장 대기 시간을 별도 운영 신호로 보여준다. 성공률 하나로 불확실 상태를 감추지 않고, 목록에서 사건을 선택해야만 원문 없는 처리 이력과 재처리 조건을 확인할 수 있다.
 
 ## T5. Status Query가 재전송보다 먼저다
 
@@ -81,15 +81,17 @@ SENT_UNKNOWN
 
 단순히 “조회 API를 한 번 호출한다”가 아니다. 조회 결과가 원래 request correlation과 연결되는지, terminal 상태인지, 독립 Evidence가 completion-safe한지 검증한다.
 
+![SENT_UNKNOWN 복구 전략별 중복 외부효과 위험](../assets/charts/03-recovery-strategy-risk.png)
+
+DA-06은 Ethereum master sample 73,410건에 `외부 제출 뒤 응답이 유실됐다`는 counterfactual을 적용했다. 73,410건 모두 transaction hash와 receipt를 연결할 수 있었고, 그중 이미 성공한 72,241건을 실패로 간주해 즉시 재전송하면 중복 효과 위험이 생겼다. 반대로 `RECONCILIATION_FIRST`는 기존 transaction을 먼저 조회하도록 정의했기 때문에 즉시 재전송과 중복 효과가 0이었다.
+
+이 수치는 실제 네트워크 timeout 발생률이나 운영 환경의 중복률이 아니다. 이미 관측된 transaction에 두 복구 정책을 적용한 구조적 비교다. 그래서 핵심 결론도 “98.41%만큼 성능이 좋아졌다”가 아니라 `UNKNOWN ≠ FAILED`와 `Retry Before Reconciliation 금지`다.
+
 ## T6. Digital Asset은 독립 Evidence가 있어야 수렴한다
 
 Digital Asset status adapter는 transaction status만 `SUCCESS`라고 반환해서는 부족하다. transaction, receipt, finality, transfer evidence를 다시 구성하고 approved/requested/executed tuple을 비교한다.
 
-Evidence adapter가 누락됐거나 결과가 모호하면 Runtime을 성공 상태로 수렴시키지 않는다. Provider 자기 보고만으로 완료를 선언하지 않기 위해서다.
-
-![Audit Trace의 SENT_UNKNOWN Evidence](../assets/screenshots/FPG_02_Audit_Trace_SENT_UNKNOWN.png)
-
-Audit 화면에서도 connector status, response guard, controlled delivery, recovery status를 별도 필드로 확인한다. 아직 status query evidence가 없다는 사실도 빈 성공값으로 바꾸지 않는다.
+Evidence adapter가 누락됐거나 결과가 모호하면 Runtime을 성공 상태로 수렴시키지 않는다. Provider 자기 보고만으로 완료를 선언하지 않기 위해서다. Audit에도 connector status, response guard, controlled delivery, recovery status를 별도 필드로 저장하며, status query evidence가 없다는 사실을 빈 성공값으로 바꾸지 않는다.
 
 ## T7. 상태 전환은 원자적이어야 한다
 

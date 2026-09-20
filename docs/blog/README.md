@@ -6,6 +6,7 @@
 - 원고: [`posts/`](posts/)
 - 이미지: [`assets/`](assets/)
 - 이미지 생성 스크립트: [`assets/diagrams/render_diagrams.py`](assets/diagrams/render_diagrams.py)
+- Notebook·정량 Evidence 검토표: [`sources/notebook-evidence-map.md`](sources/notebook-evidence-map.md)
 
 ## 발행 전 확인
 
@@ -19,5 +20,5 @@
 
 - `assets/covers/financial-privacy-gateway-series.png`: OpenAI 이미지 생성 도구로 제작한 시리즈 커버
 - `assets/diagrams/*.png`: 저장소에 포함된 Python/Pillow 스크립트로 생성한 결정적 다이어그램
-- `assets/screenshots/*.png`: 로컬 합성 데이터 환경의 실제 관리자 UI 캡처
-
+- `assets/charts/*.png`: ADP-DA notebook output 또는 versioned artifact에서 재생성한 정량 Evidence
+- `assets/screenshots/*.{jpg,png}`: 로컬 합성 데이터 환경의 실제 관리자 UI 캡처

@@ -12,6 +12,8 @@ status: review
 
 그래서 정책에 코드와 다른 생명주기를 만들었다.
 
+예를 들어 `customer_summary / CUSTOMER_SUPPORT` scope에 새 Transform 후보를 넣는다고 하자. 운영자는 후보 JSON을 곧바로 ACTIVE로 만드는 대신, 현재 선택된 baseline과 같은 evaluation case에서 비교하고, Shadow Evidence를 검토한 뒤 별도 계정으로 승인해야 한다. 이 한 건을 기준으로 상태 머신을 따라가면 각 단계가 단순 라벨이 아니라 어떤 Evidence를 요구하는지 더 선명해진다.
+
 ![Policy Lifecycle과 Maker-Checker](../assets/diagrams/07-policy-lifecycle.png)
 
 ## 상태 이름보다 허용되는 전이가 중요하다
@@ -90,6 +92,12 @@ selection = artifact_id + version + digest + revision
 
 새 정책을 활성화하면 기존 ACTIVE는 `SUPERSEDED`가 되고 selection revision이 증가한다. Runtime은 요청 시작 시 current selection을 읽어 immutable snapshot으로 고정한다.
 
+![Digital Asset 정책의 Current Selection과 Runtime Evidence](../assets/screenshots/FPG_09_Policy_Lifecycle_Current_Selection.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+정책 현황 화면은 `CURRENT ACTIVE`와 단순 `ACTIVE`/`CANDIDATE` 상태를 구분하고, 같은 scope의 Runtime Evidence를 함께 보여준다. Artifact 상태만 보고 현재 실행 정책이라고 오해하지 않게 하는 projection이다.
+
 ## Optimistic revision이 막는 사고
 
 두 운영자가 같은 revision을 보고 서로 다른 Candidate를 동시에 활성화할 수 있다. 마지막 write가 조용히 이기는 방식은 정책 변경에 적합하지 않다.
@@ -120,6 +128,8 @@ selection = artifact_id + version + digest + revision
 - Shadow Evidence identity
 - activation/rollback history
 - scope와 pack
+
+관리자 콘솔의 정책 현황, 승인 대기, policy event 화면은 이 projection을 서로 다른 업무 관점에서 보여준다. 버튼을 눌렀다는 사실이 Source of Truth인 것은 아니다. 서버가 revision, actor, reason, Shadow Evaluation ID를 검증해 event를 commit한 뒤에만 화면의 현재 selection이 바뀐다.
 
 Metric은 운영 추세를 보여주지만 Source of Truth는 DB event다. Transaction이 commit된 뒤에만 counter를 증가시켜 rollback된 변경을 성공 metric으로 기록하지 않는다.
 

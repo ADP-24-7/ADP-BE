@@ -10,6 +10,8 @@ status: review
 
 원문은 조회 단계, Context 조립, 정책 판단, 변환, 로그, 외부 payload, Provider 응답, 관리자 화면 중 어느 곳에서도 다시 노출될 수 있다. 따라서 문제를 “어떤 알고리즘으로 가릴까”가 아니라 **원문이 신뢰 경계를 넘지 않게 어떻게 연속된 방어선을 만들까**로 바꿨다.
 
+이번에도 `customer_summary` 한 건을 기준으로 본다. 고객 식별자는 외부 응답과 내부 관계를 연결해야 하지만 원문 그대로 나갈 필요는 없고, 상담에 필요하지 않은 Field는 변환보다 먼저 조회 대상에서 빠져야 한다. 즉 한 요청 안에서도 Field마다 `REMOVE`, `HMAC_PSEUDO`, `VAULT_TOKEN`, `KEEP`의 이유가 다르다.
+
 ![Transform과 Egress 데이터 경계](../assets/diagrams/04-transform-egress-boundary.png)
 
 ## 첫 번째 보호조치는 Transform이 아니라 최소 조회다
@@ -42,6 +44,12 @@ Audit와 Trace에는 원문 대신 digest를 남긴다. 동일 값이 사용됐�
 
 전략 이름만 저장해서는 재현할 수 없다. Transform evidence에는 strategy version, parameter, key version, mapping version, source digest, transformed digest를 연결한다.
 
+![Gateway Lab의 승인 참조와 필드별 외부 전송 처리](../assets/screenshots/FPG_07_GatewayLab_Field_Treatment.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+Gateway Lab은 합성 `customer_summary` 요청을 불러오면 승인 참조와 외부 실행 대상을 먼저 결속하고, Account Number·Customer Name·Transaction Detail처럼 요청된 각 항목에 `TOKEN`, `MASK`, `GENERALIZE` 처리 근거를 나란히 보여준다. 원문 값 자체보다 어떤 항목이 왜 어떤 전략을 거치는지가 검토 대상이다.
+
 ## Privacy가 높다고 항상 좋은 Transform은 아니다
 
 분석 저장소에서는 Transform 방식별 privacy와 utility를 함께 평가한다. 원문을 모두 제거하면 보호 수준은 높아지지만, 업무가 수행되지 않을 수 있다. 반대로 utility가 높다는 이유로 원문을 유지하면 외부 전송 통제가 무의미해진다.
@@ -49,6 +57,14 @@ Audit와 Trace에는 원문 대신 digest를 남긴다. 동일 값이 사용됐�
 그래서 “최고 점수의 기법”을 전역 기본값으로 고르지 않는다. workload와 field treatment별 validated profile을 만들고, Runtime은 승인된 mapping만 사용한다.
 
 평가에서 확인하지 못한 기법은 `NOT_EVALUABLE` 또는 unresolved 상태로 남긴다. 결과가 없다는 사실을 0점이나 실패로 바꾸지 않는 것도 중요하다.
+
+### 합성 관계형 데이터에서 실제로 달라진 것
+
+![식별자 Transform 이후 관계 Utility](../assets/charts/01-transform-relationship-utility.png)
+
+합성 금융 fixture의 고객 1,100명, 계좌 1,651개, 거래 48,510건을 기준으로 고객→계좌→거래→대출 관계를 다시 연결했다. 이 실험의 부분 MASK는 Account ID 1,651개를 끝자리 기준 100개 값으로 축소했고, 모호하지 않은 관계 보존율이 0%가 됐다. 반면 같은 fixture에서 HMAC과 TOKEN은 100%를 유지했다.
+
+이 결과를 “HMAC이 언제나 가장 안전하다”로 읽으면 안 된다. 이 그래프가 말하는 것은 **표시용 부분 마스킹을 관계 추적용 식별자에 그대로 재사용하면 utility가 깨질 수 있다**는 점이다. HMAC에는 key lifecycle이, TOKEN에는 Vault 접근·보관·폐기 통제가 따로 필요하다.
 
 ## 외부 목적지는 요청자가 고르지 못한다
 
@@ -64,6 +80,12 @@ Outbound Guard는 connector 직전에 다음을 다시 검사한다.
 - request 시작 시 고정한 profile digest가 유지되는가
 
 Guard를 policy decision 뒤에 한 번 더 두는 이유는 TOCTOU 문제 때문이다. 판단 이후 payload 조립이나 profile lookup 과정에서 값이 바뀌어도 connector 직전 경계에서 차단해야 한다.
+
+![목적지별 외부 전달 Field 감소](../assets/charts/02-destination-field-minimization.png)
+
+Digital Asset DA-04 분석에서는 외부화 가능한 공통 superset 8개 Field와 목적지별 profile을 비교했다. Blockchain execution system은 4개, External VASP는 2개, Travel Rule provider는 5개만 전달 대상으로 남아 각각 50%, 75%, 37.5%의 Field 감소를 보였다. 계약이 요구한 Field 보존율은 세 목적지 모두 100%였다.
+
+여기서 감소율은 개인정보 위험이 같은 비율로 줄었다는 뜻이 아니다. 실제 Provider wire schema, off-chain identity 확보율, 전송 성공률도 이 노트북이 검증한 범위가 아니다. 측정한 것은 현재 contract에서 목적지·phase별 Field 집합을 분리했을 때의 노출 면적이다.
 
 ## Provider 응답도 신뢰하지 않는다
 

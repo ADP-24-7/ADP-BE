@@ -256,5 +256,50 @@ def verification():
     save(im, "08-verification-claims.png")
 
 
-for render in [architecture, lineage, runtime_sequence, boundary, pack_comparison, recovery, lifecycle, verification]:
+def ci_security_pipeline():
+    im, d = canvas("검증 Pipeline은 서로 다른 실패를 막는다", "기능 검증과 보안·공급망 검사를 분리하고, 재현할 계약은 commit SHA로 고정한다")
+
+    d.text((82, 220), "CI", font=F_HEAD, fill=BLUE)
+    ci_steps = [
+        ("Compose", "config"),
+        ("Integration", "profiles"),
+        ("Prometheus", "rules"),
+        ("JUnit", "PostgreSQL"),
+        ("Negative", "matrix"),
+        ("bootJar", "package"),
+    ]
+    x = 170
+    for index, (title, body) in enumerate(ci_steps):
+        box(d, (x, 200, x + 190, 320), title, body, BLUE if index < 3 else TEAL)
+        if index < len(ci_steps) - 1:
+            arrow(d, (x + 190, 260), (x + 214, 260), BLUE, 3)
+        x += 214
+
+    d.text((82, 365), "Security Gate", font=F_HEAD, fill=RED)
+    security_steps = [
+        ("Gitleaks", "history"),
+        ("CodeQL", "Java/Kotlin"),
+        ("Trivy FS", "vuln · config"),
+        ("Image", "build"),
+        ("CycloneDX", "SBOM"),
+        ("Trivy Image", "HIGH · CRITICAL"),
+    ]
+    x = 170
+    for index, (title, body) in enumerate(security_steps):
+        box(d, (x, 410, x + 190, 530), title, body, RED if index in (0, 1, 5) else AMBER)
+        if index < len(security_steps) - 1:
+            arrow(d, (x + 190, 470), (x + 214, 470), RED, 3)
+        x += 214
+
+    d.rounded_rectangle((170, 650, 1430, 775), radius=20, fill=PANEL, outline=LINE, width=2)
+    d.text((205, 675), "두 종류의 고정", font=F_HEAD, fill=TEXT)
+    d.text((475, 676), "Repository baseline lock", font=F_BODY, fill=TEAL)
+    d.text((475, 716), "로컬 통합 조합 전체를 재현", font=F_SMALL, fill=MUTED)
+    d.text((930, 676), "CI producer / fixture pin", font=F_BODY, fill=AMBER)
+    d.text((930, 716), "검증 대상 계약만 freeze", font=F_SMALL, fill=MUTED)
+    footer(d, "Production 운영 검증은 이 pipeline의 범위 밖이다")
+    save(im, "09-ci-security-pipeline.png")
+
+
+for render in [architecture, lineage, runtime_sequence, boundary, pack_comparison, recovery, lifecycle, verification, ci_security_pipeline]:
     render()

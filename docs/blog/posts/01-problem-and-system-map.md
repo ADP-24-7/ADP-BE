@@ -21,6 +21,14 @@ status: review
 
 전송 직전에 문자열 몇 개를 가리는 방식으로는 이 질문들을 함께 다룰 수 없었다. 그래서 프로젝트의 중심을 “외부 API 연동”이 아니라 **외부 연결 전 통제 경계**로 다시 잡았다.
 
+그 결과는 백엔드 정책 엔진 하나로 끝나지 않았다. 로컬 통합 환경에서는 운영자가 `/overview`에서 AI와 Digital Asset Pack의 상태를 구분해 보고, `/data-access`에서 업무별 조회 범위를 확인하며, `/policies`에서 후보·Shadow·승인·활성화를 처리하고, `/audit`와 `/analysis`에서 실행과 복구 Evidence를 추적한다. UI의 존재 자체보다 중요한 것은 아래 네 Plane의 책임이 실제 운영자의 확인·승인·조사 업무까지 이어졌다는 점이다.
+
+![AI Pack 운영 Overview의 통제 흐름](../assets/screenshots/FPG_03_Overview_AI_Control_Flow.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+Overview는 하나의 성공률로 시스템을 요약하지 않는다. 정책 적용, 외부 실행, 응답 검사, Controlled Delivery를 서로 다른 단계로 보여주고, 단계 사이에서 줄어든 요청을 조사할 출발점으로 삼는다.
+
 ## 하나의 요청에는 네 종류의 책임이 섞여 있었다
 
 ![네 개의 Plane과 저장소 책임](../assets/diagrams/01-four-planes-repositories.png)
@@ -91,6 +99,8 @@ Dataset과 실험 조건을 고정하고, Detector·Transform·모델 후보를 
 - AI Evaluation과 Digital Asset 6-case는 고정된 합성 fixture로 연결을 검증한다.
 - NCP에서는 VPC, subnet, ACG, Object Storage foundation과 Artifact 저장 경로 일부를 제한적으로 확인했다.
 - Production Runtime 배포, HA PostgreSQL, failover, backup restore, private monitoring은 아직 운영 검증 완료로 말하지 않는다.
+
+이 글에서 언급하는 화면과 실행 ID는 모두 local integration environment의 synthetic fixture와 실제 BE API를 사용한 결과다. 실제 고객 데이터나 실자산 운영을 뜻하지 않는다.
 
 이 구분은 문서의 주의 문구가 아니라 아키텍처의 일부다. 검증되지 않은 기능을 정상처럼 보이게 하지 않는 UI 상태, fail-closed adapter, architecture validation도 같은 원칙에서 나왔다.
 

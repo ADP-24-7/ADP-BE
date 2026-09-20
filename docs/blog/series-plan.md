@@ -1,8 +1,8 @@
 # ADP Velog 시리즈 구성안
 
-> 상태: 구조 설계 단계  
-> 목적: 블로그 본문을 쓰기 전에 전체 저장소의 구현 범위, 시리즈 서사, 편별 근거와 이미지 계획을 고정한다.  
-> 주의: 이 문서는 블로그 원고가 아니다. 제목과 목차는 작성 단계에서 근거를 재확인한 뒤 다듬는다.
+> 상태: 원고·Evidence 보강 후 검토 단계
+> 목적: 전체 저장소의 구현 범위, 시리즈 서사, 편별 근거와 이미지 계획을 함께 관리한다.
+> 주의: 수치와 이미지 출처는 발행 직전에 다시 확인한다.
 
 ## 1. 결론
 
@@ -86,7 +86,7 @@ ADP는 **AI, SaaS, Digital Asset 같은 외부 시스템으로 금융 데이터�
 
 - `ADP-BE`: Java main source 585개, test source 116개, Flyway migration 57개
 - `ADP-BE`: 테스트 메서드 약 539개
-- `ADP-DA`: AI Python 파일 49개, Digital Asset Python 파일 24개, notebook 24개
+- `ADP-DA`: AI Python 파일 49개, Digital Asset Python 파일 24개, notebook 25개
 - `ADP-FE`: 11개 page 디렉터리와 20개 domain feature 디렉터리
 - 로컬 통합 실행: BE, FE, DA, Docs, PostgreSQL, Mock AI Provider
 
@@ -228,6 +228,7 @@ Transform과 Egress를 “알고리즘 소개”가 아니라 데이터 경계 �
 - 원문→Canonical Context→Transform→Outbound 후보의 필드 변화 표
 - 공격 경로와 Guard 위치를 겹친 데이터 흐름도
 - Transform 방식별 Privacy/Utility/운영 복잡도 비교 차트
+- DA-04 목적지별 externalizable superset과 payload Field 비교 차트
 
 ## 5편. 같은 Gateway로 AI와 디지털 자산을 통제할 수 있을까
 
@@ -305,9 +306,8 @@ T7 기존 요청 replay, additional external effect 0 확인
 
 - `SENT_UNKNOWN` 장애·복구 timeline
 - `NEW / REPLAY / CONFLICT / IN_PROGRESS` idempotency resolution 표
-- 기존 `docs/portfolio/images/FPG_01_GatewayLab_SENT_UNKNOWN.png`
-- 기존 `docs/portfolio/images/FPG_02_Audit_Trace_SENT_UNKNOWN.png`
-- 복구 전후 동일 execution ID와 external effect count를 보여주는 검증 캡처
+- `assets/screenshots/FPG_08_Recovery_Incidents.jpg`
+- DA-06 counterfactual 복구 전략 비교 차트(실제 장애 발생률로 오해하지 않게 한계 병기)
 
 ## 7편. 정책 배포를 코드 배포와 분리하자 상태 머신이 필요해졌다
 
@@ -343,9 +343,9 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 - 상태 전이도
 - Maker/Checker swimlane
 - ACTIVE 교체와 rollback 시 selection revision 변화 그림
-- FE 정책·승인 화면의 Candidate, Shadow MATCH, ACTIVE 상태 캡처
+- FE 정책 현황의 Current Selection과 Runtime Evidence panel
 
-## 8편. 539개 테스트보다 중요한 것은 어디까지 검증했다고 말할 수 있는가였다
+## 8편. 테스트 개수보다 중요한 것은 어디까지 검증했다고 말할 수 있는가였다
 
 ### 핵심 질문
 
@@ -408,7 +408,7 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 ### 이미지 종류
 
 1. **구조 다이어그램**: 저장소 관계, 4-Plane, Runtime sequence, lifecycle, recovery timeline
-2. **실제 제품 화면**: Gateway Lab, Policy Governance, AI/Digital Asset Overview, Monitoring, Audit Trace
+2. **실제 제품 화면**: Gateway Lab, Policy Current Selection, AI/Digital Asset Overview, Recovery, Monitoring
 3. **검증 결과**: 6-case matrix, evaluation comparison, claim boundary matrix
 4. **코드/계약 확대**: 짧은 record/schema/enum 조각만 사용하고 IDE 전체 화면은 피한다.
 
@@ -416,21 +416,30 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 
 | ID | 이미지 | 사용 편 | 방식 |
 | --- | --- | --- | --- |
-| IMG-01 | 4-Plane + 5-repository map | 1 | Mermaid 원본 + PNG export |
-| IMG-02 | Evidence lineage | 2 | Mermaid flowchart |
-| IMG-03 | 한 요청 Runtime sequence | 3 | Mermaid sequence diagram |
+| IMG-01 | 4-Plane + 5-repository map | 1 | Pillow 기반 PNG |
+| IMG-02 | Evidence lineage | 2 | Pillow 기반 PNG |
+| IMG-03 | 한 요청 Runtime sequence | 3 | Pillow 기반 PNG |
 | IMG-04 | Policy/Final action monotonic table | 3 | 문서 표 또는 SVG |
-| IMG-05 | Transform/Egress data boundary | 4 | Mermaid flowchart |
-| IMG-06 | Transform privacy-utility comparison | 4 | DA 실제 평가값 기반 chart |
-| IMG-07 | Common Gateway + AI/DA Pack split | 5 | architecture diagram |
-| IMG-08 | Digital Asset 6-case matrix | 5 | 결과 표 |
-| IMG-09 | `SENT_UNKNOWN` recovery timeline | 6 | Mermaid sequence/state diagram |
-| IMG-10 | Gateway Lab `SENT_UNKNOWN` | 6 | 기존 실제 캡처 재사용 |
-| IMG-11 | Audit Trace `SENT_UNKNOWN` | 6 | 기존 실제 캡처 재사용 |
-| IMG-12 | Policy lifecycle state machine | 7 | Mermaid state diagram |
-| IMG-13 | Maker-Checker swimlane | 7 | Mermaid sequence diagram |
-| IMG-14 | Integration stack | 8 | deployment diagram |
-| IMG-15 | Verification claim matrix | 8 | 표 또는 SVG |
+| IMG-05 | Transform/Egress data boundary | 4 | Pillow 기반 PNG |
+| IMG-06 | Transform 관계 보존 + 목적지별 Field 감소 | 4 | Notebook embedded chart |
+| IMG-07 | Common Gateway + AI/DA Pack split | 5 | Pillow 기반 PNG |
+| IMG-08 | AI 품질-지연시간 + Digital Asset 6-case | 5 | Versioned artifact 기반 PNG |
+| IMG-09 | `SENT_UNKNOWN` recovery timeline | 6 | Pillow 기반 PNG |
+| IMG-12 | Policy lifecycle state machine | 7 | Pillow 기반 PNG |
+| IMG-13 | Recovery 전략별 중복 효과 위험 | 6 | Notebook embedded chart |
+| IMG-14 | CI + Security Gate pipeline | 8 | workflow 기반 Pillow PNG |
+| IMG-15 | Verification claim matrix | 8 | Pillow 기반 PNG |
+| IMG-16 | AI Pack Overview 통제 흐름 | 1 | 실제 로컬 관리자 UI crop |
+| IMG-17 | Reference Evidence 계보 상세 | 2 | 실제 로컬 관리자 UI crop |
+| IMG-19 | Gateway Lab 필드 처리 | 4 | 실제 로컬 관리자 UI crop |
+| IMG-20 | Digital Asset Overview 6단계 흐름 | 5 | 실제 로컬 관리자 UI crop |
+| IMG-21 | Recovery incident 현황 | 6 | 실제 로컬 관리자 UI crop |
+| IMG-22 | Policy Current Selection | 7 | 실제 로컬 관리자 UI crop |
+| IMG-24 | Security Monitoring 탐지 현황 | 8 | 실제 로컬 관리자 UI crop |
+| IMG-25 | Amount FLOAT64 정밀도 손실 | 5 | DA-02 Notebook embedded chart |
+| IMG-26 | ZERO_VALUE 실제 가치이동 | 5 | DA-03 Notebook embedded chart |
+
+실제 관리자 화면은 일곱 장만 사용한다. 모두 local synthetic fixture와 실제 BE API를 사용하는 2000px 폭의 전용 Chrome 창에서 다시 확보했고, 포인터·브라우저 chrome·잘린 카드가 없도록 panel 단위로 crop했다. 실행 결과를 보여주지 못하는 입력 대기 화면과 현재 편의 주장과 직접 연결되지 않는 승인 화면은 제외했다. 재현 가능한 상태를 고정하지 못한 임시 화면이나 mock fallback 화면은 발행 이미지로 사용하지 않는다.
 
 ### 캡처 원칙
 
@@ -497,7 +506,7 @@ docs/blog/
     └── screenshots/                # privacy-safe 실제 화면
 ```
 
-현재 단계에서는 `posts/` 원고를 생성하지 않는다.
+현재 `posts/` 8편 원고와 시각 자료가 생성되어 있으며 검토·발행 전 보강 단계다.
 
 ## 9. 권장 작성 순서
 

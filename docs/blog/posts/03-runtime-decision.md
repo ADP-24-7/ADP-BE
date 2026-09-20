@@ -10,6 +10,8 @@ status: review
 
 그래서 `ALLOW`는 최종 결과가 아니라 정책 계층의 입력 중 하나로 다뤘다. 최종 실행은 요청 시점의 권한과 applicability를 함께 평가하고, 원래 정책보다 느슨해질 수 없게 만들었다.
 
+2편에서 본 `customer_summary` 요청을 계속 따라가 보자. 목적은 `CUSTOMER_SUPPORT`, 대상은 합성 고객 한 명, 목적지는 서버가 등록한 AI profile이다. 호출자가 원하는 모든 고객 정보를 넘기는 대신, 이 workload에 연결된 조회 계약과 현재 ACTIVE snapshot이 허용하는 Field만 다음 단계로 이동한다.
+
 ![Runtime 요청 처리 순서](../assets/diagrams/03-runtime-sequence.png)
 
 ## 권한 확인 전에는 조회하지 않는다
@@ -107,16 +109,9 @@ Digital Asset Pack은 여기에 approved policy, destination profile, runtime co
 
 특히 `NOT_APPLICABLE`과 `INCOMPLETE`를 구분한다. 적용 대상이 아니라는 사실과 적용 여부를 판단할 정보가 부족하다는 사실은 운영 의미가 다르다. 정보가 부족한 상태를 `NOT_APPLICABLE`로 처리하면 사실상 우회 경로가 된다.
 
-## 같은 요청인지도 body까지 확인한다
+## 이 단계에서는 “누가 무엇을 조회할 수 있는가”에 집중한다
 
-Idempotency key가 같다는 이유만으로 같은 요청이라 보지 않는다. institution, workload, purpose, subject, approval reference, destination, processing context, input, evaluation reference를 canonical request hash로 묶는다.
-
-- 같은 namespace, 같은 key, 같은 hash → 기존 execution replay
-- 같은 namespace, 같은 key, 다른 hash → `409 Conflict`
-- 같은 요청이 아직 처리 중 → in-progress 결과
-- 새 key → 새 execution
-
-이렇게 해야 호출자가 같은 key로 금액이나 목적지를 바꾸는 상황을 재시도로 오인하지 않는다.
+동일 요청 replay와 body hash 충돌도 Runtime 계약에 포함되지만, 이 주제는 외부 효과와 복구를 다루는 6편에서 자세히 본다. 여기서 더 중요한 경계는 Authorization이 Retrieval보다 앞서고, 자유 SQL이 아니라 등록된 조회 계약이 데이터 범위를 결정하며, 그 결과가 Policy Snapshot과 함께 Decision Trace에 남는다는 점이다.
 
 ## Trace는 로그 목록이 아니라 단계별 계약이다
 

@@ -34,6 +34,12 @@ Authentication / Authorization
 
 미등록 Pack이나 adapter는 일반 connector로 fallback하지 않고 fail closed한다.
 
+![Digital Asset Pack의 6단계 운영 흐름](../assets/screenshots/FPG_04_Overview_DigitalAsset_Control_Flow.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+Digital Asset Overview는 공통 Runtime의 결과를 `요청 → 정책 검사 → 외부 실행 → 증적 수집 → 조정 → 최종 상태`로 투영한다. AI Overview의 응답 검사·Controlled Delivery 흐름과 화면 구조까지 억지로 같게 만들지 않고, 운영자가 각 Pack의 완료 조건을 그대로 읽게 했다.
+
 ## AI Pack은 실행 조건을 평가 단위로 고정한다
 
 AI 모델 비교에서 prompt만 같다고 같은 실험이라 할 수 없다. Model profile, destination, timeout, transform scope, dataset version, evaluation case가 함께 고정되어야 한다.
@@ -59,6 +65,10 @@ Runtime request가 model ID나 임의 endpoint를 직접 전달하지 않는 이
 - runtime execution, case, model의 binding
 
 DA는 Provider를 다시 호출하지 않고 BE가 export한 evaluation bundle을 검증하고 비교할 수 있다.
+
+![합성 금융 업무의 모델별 품질과 평균 지연시간](../assets/charts/04-ai-model-quality-latency.png)
+
+고정된 합성 금융 업무 30 case를 모델별 3회씩 실행한 270회 benchmark에서도 하나의 모델이 모든 축을 지배하지 않았다. Muse Glimmer 30B는 평균 품질이 가장 높았고, Gemma 4 31B IT는 평균 지연시간이 가장 짧았다. 비용은 공식 per-model trial 단가를 확인하지 못해 비교에서 제외했다. 이 결과는 모델의 보편적 순위가 아니라 **같은 실행 조건과 metric contract를 고정해야 선택 근거를 다시 검토할 수 있다**는 예시다.
 
 ## AI에서 완료는 응답 수신과 같지 않다
 
@@ -96,6 +106,16 @@ Policy Decision을 통과한 뒤에도 payload mapping 과정에서 값이 바�
 
 이 검사는 도메인 rule을 중복 구현하려는 것이 아니다. decision 시점과 실제 external call 시점 사이의 변조를 막는 TOCTOU 방어다.
 
+## 금액은 표시값이 아니라 실행값이다
+
+Digital Asset에서 amount를 일반 실수형으로 다루면 승인값과 실행값이 화면에서는 같아 보여도 최소 단위에서 달라질 수 있다. DA-02는 BigQuery 원본 amount와 매칭된 73,266건을 비교했다. Decimal 기반 처리는 전체 값을 보존했지만, FLOAT64 변환에서는 3,280건의 원본 wei가 달라졌다. Positive amount 28,953건으로 범위를 좁히면 손실률은 11.33%였다.
+
+![FLOAT64 안전 정수 경계별 Amount 정밀도 손실](../assets/charts/06-digital-asset-amount-precision.png)
+
+`2^53` 이하 16,784건에서는 손실이 관측되지 않았고, 이를 초과한 12,169건 중 3,280건에서 손실이 발생했다. 이 결과는 모든 자산이나 네트워크의 손실률을 추정한 것이 아니다. 현재 표본에서 **FLOAT64 안전 정수 경계를 넘으면 exact preservation을 계약으로 보장할 수 없다**는 구조적 위험을 확인한 것이다.
+
+그래서 Runtime은 amount를 정수 최소 단위로 보존하고, 사람이 읽는 decimal 표현과 분리한다. 승인값·요청값·실행값도 같은 canonical integer를 기준으로 비교하며, 외부 전송 과정의 FLOAT64 변환을 허용하지 않는다.
+
 ## transaction hash가 있어도 성공은 아니다
 
 외부 시스템이 transaction hash를 반환했다고 해서 settlement가 완료됐다고 단정할 수 없다. Post-execution 단계는 서로 독립적인 resolver를 통해 다음 Evidence를 수집한다.
@@ -107,6 +127,14 @@ Policy Decision을 통과한 뒤에도 payload mapping 과정에서 값이 바�
 - approved/requested/executed tuple의 re-binding
 
 receipt가 실패했거나 finality가 미확정이면 `COMPLETED`로 전환하지 않는다. amount, asset, network, destination이 다르면 mismatch로 격리하고 Controlled Delivery를 보류한다.
+
+Transaction의 직접 `value`가 0이라는 사실도 “가치 이동 없음”을 뜻하지 않았다. DA-03의 2026년 1월 ZERO_VALUE 분석대상 3,452건을 Receipt·Trace·Token Transfer와 연결했을 때, 2,131건에서 Token Transfer, 추가 102건에서 Internal ETH Movement가 확인됐다.
+
+![ZERO_VALUE Transaction의 실제 가치이동 분류](../assets/charts/07-zero-value-movement-evidence.png)
+
+분석대상 안에서는 64.69%가 별도 가치 이동 Evidence를 가졌고 3,452건 모두 Receipt와 연결됐다. 다만 이 표본은 Ethereum 전체의 단순확률표본이 아니므로 전체 거래 비율로 일반화하지 않는다. 설계에 반영한 결론은 비율 자체가 아니라 `Transaction Record ≠ Execution Result`, `Transaction Value ≠ Total Asset Movement`라는 두 경계다.
+
+두 그래프는 DA 저장소에 보존된 실행 output을 notebook SHA-256과 cell 번호로 고정해 추출했다. 이번 문서 작업에서 원천 데이터를 다시 조회하거나 새 실험 결과를 만든 것은 아니다.
 
 ## 같은 상태 이름도 Pack마다 완료 조건이 다르다
 
@@ -136,6 +164,10 @@ receipt가 실패했거나 finality가 미확정이면 `COMPLETED`로 전환하�
 
 각 case는 API status만 보지 않는다. PostgreSQL의 execution, provider request, connector evidence, recovery, audit lineage와 external effect count를 함께 검증한다.
 
+![Digital Asset 6-case 완료 조건](../assets/charts/05-digital-asset-six-case-matrix.png)
+
+`BLOCK_AMOUNT`와 `BLOCK_DESTINATION`은 connector 이전에 멈춰 외부 효과가 0이어야 한다. `EXECUTION_FAILED`는 외부 효과가 있었지만 receipt 실패로 완료가 아니며, `SENT_UNKNOWN_RECOVERED`는 새 전송 없이 기존 효과 1건을 Evidence로 수렴시킨다. `DUPLICATE_REQUEST`의 1은 두 번째 효과가 아니라 최초 execution의 replay다.
+
 공통 Gateway를 재사용한다는 것은 두 도메인을 같은 것으로 취급한다는 뜻이 아니다. 공통화할 것은 신뢰 경계와 운영 불변조건이고, 분리할 것은 완료의 의미다.
 
 다음 글에서는 그 차이가 가장 크게 드러나는 `SENT_UNKNOWN`을 다룬다. 외부 전송 결과를 모를 때 왜 실패 처리나 즉시 재시도 모두 위험한지 장애 타임라인으로 살펴본다.
@@ -144,6 +176,8 @@ receipt가 실패했거나 finality가 미확정이면 `COMPLETED`로 전환하�
 
 - 공통 Runtime API와 Pack resolver
 - AI Evaluation Run/Bundle의 case×model 완전성
+- 정수 최소 단위 Amount 보존과 FLOAT64 경계 분석
+- Transaction·Receipt·Trace·Token Transfer 결속
 - Digital Asset의 pre/post execution Evidence
 - 고정된 합성 fixture 6-case 로컬 E2E
 

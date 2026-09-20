@@ -12,6 +12,8 @@ status: review
 
 그래서 규정과 Runtime 사이를 하나의 값이 아니라 추적 가능한 계보로 만들었다.
 
+이번 글에서는 합성 AI 업무 `customer_summary`에 연결된 `REF-FSC-POLICY-TREND-001` 한 건을 따라간다. 이 Evidence는 금융위원회 공개 정책자료의 변화 추이를 정리한 version `1.1.0` 참고자료이고 상태는 `REFERENCE_ONLY`다. `content_digest`와 workload reference는 추적할 수 있지만, 이 레코드만으로 고객 요약 요청을 허용할 수는 없다.
+
 ![Evidence에서 Active Snapshot까지](../assets/diagrams/02-evidence-lineage.png)
 
 ## Official Source와 Evidence는 같은 것이 아니다
@@ -27,6 +29,14 @@ Evidence에는 최소한 다음 정보가 필요했다.
 - source digest와 content digest
 - 관련 workload와 processing context
 - 분석 상태와 review 상태
+
+예시 레코드에서 관리자가 보는 핵심은 제목보다 경계다. `authority=금융위원회`, `workload=customer_summary`, 분석 위치, claim scope, content digest가 함께 있어야 “무슨 문서를 봤는가”와 “어디까지 주장하는가”를 분리할 수 있다. Source URL 하나만 저장하면 문서 개정과 분석 버전의 차이를 설명할 수 없다.
+
+![Reference Evidence의 Source·Analysis·Claim·Digest 계보](../assets/screenshots/FPG_05_Reference_Evidence_Lineage.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+화면에서도 Source와 Analysis를 별도 칸으로 두고, claim scope와 content digest를 함께 표시한다. 목록의 제목만 보고 정책을 해석하지 않고, 선택한 Evidence가 어느 workload와 버전에 결속됐는지 확인하기 위한 구성이다.
 
 원문 전체를 Runtime DB에 넣지 않은 이유도 여기에 있다. Runtime이 Notebook이나 Markdown을 직접 읽기 시작하면 분석 저장소의 구조가 운영 계약이 되고, 문서 표현의 작은 변경까지 실행 결과에 영향을 줄 수 있다. BE는 신뢰한 JSON Schema와 canonical digest를 검증한 bounded artifact만 받아들인다.
 
