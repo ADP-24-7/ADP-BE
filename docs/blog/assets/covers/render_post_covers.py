@@ -3,7 +3,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 BASE = ROOT / "financial-privacy-gateway-series.png"
-FONT_PATH = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
 
 POSTS = [
     ("01", "문제와 시스템 지도", "금융 데이터는 API 호출 직전에야 위험해지는 것이 아니다"),
@@ -18,7 +17,20 @@ POSTS = [
 
 
 def font(size, bold=False):
-    return ImageFont.truetype(FONT_PATH, size=size, index=7 if bold else 0)
+    paths = [
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    for path in paths:
+        if Path(path).exists():
+            return ImageFont.truetype(
+                path,
+                size=size,
+                index=7 if bold and "AppleSD" in path else 0,
+            )
+    return ImageFont.load_default()
 
 
 def cover(number, kicker, title):

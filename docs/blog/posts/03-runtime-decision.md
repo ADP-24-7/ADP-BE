@@ -12,6 +12,12 @@ status: review
 
 2편에서 본 `customer_summary` 요청을 계속 따라가 보자. 목적은 `CUSTOMER_SUPPORT`, 대상은 합성 고객 한 명, 목적지는 서버가 등록한 AI profile이다. 호출자가 원하는 모든 고객 정보를 넘기는 대신, 이 workload에 연결된 조회 계약과 현재 ACTIVE snapshot이 허용하는 Field만 다음 단계로 이동한다.
 
+![Field Allowlist와 Context Digest를 확인하는 Data Access 결과](../assets/screenshots/FPG_12_Data_Access_Field_Allowlist.jpg)
+
+*Local integration environment · synthetic fixture · actual BE API*
+
+Data Access 화면은 원문 Record를 보여주지 않는다. 승인된 조회 계약 ID, 선택된 Field 수와 Data Class별 범위, 민감정보 탐지 결과, detector version과 canonical context digest만 표시한다. 운영자는 어떤 조회 계약이 적용됐는지 확인할 수 있지만 자유 SQL이나 원문 고객정보를 화면에서 다시 구성할 수 없다.
+
 ![Runtime 요청 처리 순서](../assets/diagrams/03-runtime-sequence.png)
 
 ## 권한 확인 전에는 조회하지 않는다

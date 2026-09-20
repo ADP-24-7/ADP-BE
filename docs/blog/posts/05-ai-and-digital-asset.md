@@ -70,6 +70,14 @@ DA는 Provider를 다시 호출하지 않고 BE가 export한 evaluation bundle�
 
 고정된 합성 금융 업무 30 case를 모델별 3회씩 실행한 270회 benchmark에서도 하나의 모델이 모든 축을 지배하지 않았다. Muse Glimmer 30B는 평균 품질이 가장 높았고, Gemma 4 31B IT는 평균 지연시간이 가장 짧았다. 비용은 공식 per-model trial 단가를 확인하지 못해 비교에서 제외했다. 이 결과는 모델의 보편적 순위가 아니라 **같은 실행 조건과 metric contract를 고정해야 선택 근거를 다시 검토할 수 있다**는 예시다.
 
+평균만으로는 운영 특성이 가려졌다. Nemotron은 p50이 1.46초였지만 p95는 115.3초였고 성공률은 91.1%였다. Gemma도 평균은 8.84초지만 p95는 35.2초였다. 따라서 모델 선택 근거에는 중심값뿐 아니라 tail latency와 실패 비율을 함께 남겨야 한다.
+
+| Model | Mean | p50 | p95 | 성공률 |
+| --- | ---: | ---: | ---: | ---: |
+| Nemotron 3.5 Lightning | 23.61s | 1.46s | 115.3s | 91.1% |
+| Muse Glimmer 30B | 13.31s | 12.99s | 30.6s | 100.0% |
+| Gemma 4 31B IT | 8.84s | 4.79s | 35.2s | 100.0% |
+
 ## AI에서 완료는 응답 수신과 같지 않다
 
 Provider가 200을 반환해도 응답에 원문 개인정보가 반사되거나, 기대한 schema를 만족하지 않거나, evaluation case binding이 다르면 Controlled Delivery를 허용할 수 없다.
@@ -106,7 +114,11 @@ Policy Decision을 통과한 뒤에도 payload mapping 과정에서 값이 바�
 
 이 검사는 도메인 rule을 중복 구현하려는 것이 아니다. decision 시점과 실제 external call 시점 사이의 변조를 막는 TOCTOU 방어다.
 
-## 금액은 표시값이 아니라 실행값이다
+## 왜 Digital Asset에는 별도의 Completion Contract가 필요한가
+
+AI 응답의 완료 조건과 달리 Digital Asset은 승인한 값, 외부 transaction, receipt와 실제 가치 이동이 서로 맞는지 확인해야 한다. Amount exactness와 ZERO_VALUE 분석은 이 Pack의 완료 조건을 단순 HTTP status나 transaction hash로 정의할 수 없는 이유를 보여준다.
+
+### 금액은 표시값이 아니라 실행값이다
 
 Digital Asset에서 amount를 일반 실수형으로 다루면 승인값과 실행값이 화면에서는 같아 보여도 최소 단위에서 달라질 수 있다. DA-02는 BigQuery 원본 amount와 매칭된 73,266건을 비교했다. Decimal 기반 처리는 전체 값을 보존했지만, FLOAT64 변환에서는 3,280건의 원본 wei가 달라졌다. Positive amount 28,953건으로 범위를 좁히면 손실률은 11.33%였다.
 
@@ -116,7 +128,7 @@ Digital Asset에서 amount를 일반 실수형으로 다루면 승인값과 실�
 
 그래서 Runtime은 amount를 정수 최소 단위로 보존하고, 사람이 읽는 decimal 표현과 분리한다. 승인값·요청값·실행값도 같은 canonical integer를 기준으로 비교하며, 외부 전송 과정의 FLOAT64 변환을 허용하지 않는다.
 
-## transaction hash가 있어도 성공은 아니다
+### transaction hash가 있어도 성공은 아니다
 
 외부 시스템이 transaction hash를 반환했다고 해서 settlement가 완료됐다고 단정할 수 없다. Post-execution 단계는 서로 독립적인 resolver를 통해 다음 Evidence를 수집한다.
 

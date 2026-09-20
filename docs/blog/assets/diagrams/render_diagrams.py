@@ -169,7 +169,7 @@ def boundary():
         ("Canonical Zone", "Data class\nValue digest", AMBER),
         ("Privacy Transform", "MASK · HMAC\nVAULT · REMOVE", TEAL),
         ("Egress Boundary", "Server-owned destination\nSchema · secret guard", RED),
-        ("External Provider", "AI · SaaS\nDigital Asset", "#A78BFA"),
+        ("External Provider", "AI\nDigital Asset", "#A78BFA"),
     ]
     x = 60
     for i, (title, body, color) in enumerate(zones):
@@ -237,22 +237,37 @@ def lifecycle():
 
 
 def verification():
-    im, d = canvas("구현했다는 말과 운영 검증했다는 말 사이", "Claim을 다섯 단계로 나눠 현재 증거보다 앞서 말하지 않는다")
-    rows = [
+    im, d = canvas("시스템 검증과 분석 Evidence의 출처를 분리한다", "기능을 어디까지 실행했는지와 수치가 어디에서 왔는지는 서로 다른 축이다")
+    system_rows = [
         ("IMPLEMENTED", "코드와 자동 테스트", BLUE),
-        ("LOCAL_VERIFIED", "고정된 로컬 통합 E2E", TEAL),
+        ("LOCAL_E2E", "고정된 로컬 통합 E2E", TEAL),
         ("QA_LIMITED", "NCP QA 일부 자원·경로", AMBER),
         ("DESIGN_ONLY", "문서와 계약으로 정의", "#A78BFA"),
         ("UNVERIFIED", "Production · HA · DR 등", RED),
     ]
-    y = 230
-    for label, desc, color in rows:
-        d.rounded_rectangle((190, y, 1410, y + 95), radius=18, fill=PANEL, outline=LINE, width=2)
-        d.rounded_rectangle((215, y + 18, 535, y + 77), radius=14, fill=color)
-        d.text((245, y + 31), label, font=F_BODY, fill=BG)
-        d.text((600, y + 30), desc, font=F_HEAD, fill=TEXT)
-        y += 115
-    footer(d, "검증 범위는 기능 수보다 중요한 시스템 설명의 일부다")
+    provenance_rows = [
+        ("SAVED_OUTPUT_HASHED", "저장 Notebook output · source SHA", BLUE),
+        ("VERSIONED_ARTIFACT_REGENERATED", "고정 JSON/fixture로 재생성", TEAL),
+        ("LOCAL_E2E", "BE · FE · DB 통합 실행", AMBER),
+        ("NCP_QA", "제한된 Cloud 검증", "#A78BFA"),
+    ]
+    d.text((85, 205), "System verification", font=F_HEAD, fill=TEXT)
+    y = 250
+    for label, desc, color in system_rows:
+        d.rounded_rectangle((80, y, 760, y + 88), radius=16, fill=PANEL, outline=LINE, width=2)
+        d.rounded_rectangle((100, y + 16, 365, y + 72), radius=13, fill=color)
+        d.text((120, y + 29), label, font=F_SMALL, fill=BG)
+        d.text((395, y + 27), desc, font=F_BODY, fill=TEXT)
+        y += 101
+    d.text((845, 205), "Evidence provenance", font=F_HEAD, fill=TEXT)
+    y = 250
+    for label, desc, color in provenance_rows:
+        d.rounded_rectangle((840, y, 1520, y + 105), radius=16, fill=PANEL, outline=LINE, width=2)
+        d.rounded_rectangle((860, y + 15, 1210, y + 63), radius=13, fill=color)
+        d.text((877, y + 26), label, font=F_SMALL, fill=BG)
+        d.text((865, y + 72), desc, font=F_SMALL, fill=TEXT)
+        y += 120
+    footer(d, "검증 강도와 출처 유형을 섞지 않아야 Claim의 경계가 보인다")
     save(im, "08-verification-claims.png")
 
 

@@ -45,14 +45,14 @@
 
 ## 별도 Artifact에서 만든 그림
 
-- `04-ai-model-quality-latency.png`: `benchmark_model_summary.json`과 `benchmark_validation.json`을 읽어 생성한다. 합성 업무 30 case × 3회 × 3 model, 실제 호출 270회 범위에만 적용한다.
+- `04-ai-model-quality-latency.png`: `benchmark_model_summary.json`과 `benchmark_validation.json`을 읽어 생성한다. 합성 업무 30 case × 3회 × 3 model, 실제 호출 270회 범위에만 적용한다. Mean뿐 아니라 p50, p95, 성공률을 함께 표시한다.
 - `05-digital-asset-six-case-matrix.png`: `local_product_e2e_v1`의 versioned synthetic fixture 6개를 읽어 생성한다. 예상 계약과 로컬 E2E 검증을 보여주며 실자산 실행을 의미하지 않는다.
 
-두 이미지는 [`render_evidence_charts.py`](../assets/charts/render_evidence_charts.py)로 재생성한다.
+두 이미지는 [`render_evidence_charts.py`](../assets/charts/render_evidence_charts.py)로 재생성한다. Script는 ADP-DA commit `74af1928d720d4a37addeedab1770d81b4fff8a5`와 benchmark JSON 2개, 6-case fixture 6개의 SHA-256을 먼저 확인한다. commit이나 파일 내용이 바뀌면 PNG를 조용히 덮어쓰지 않고 실패한다.
 
 ## 재현성 한계
 
 - 이번 검토에서는 25개 notebook의 저장된 cell/output과 error output을 전수 확인했지만, 전체 notebook을 현재 macOS 환경에서 top-to-bottom 재실행하지는 않았다.
 - 특히 `DA_06_recovery_idempotency.ipynb`는 입력 경로가 Windows 절대 경로로 저장돼 있어 경로를 매개변수화하기 전에는 그대로 재실행할 수 없다.
 - 따라서 1~3번과 6~7번 chart는 “이번 작업에서 새로 산출한 결과”가 아니라 source SHA와 cell을 고정해 추출한 기존 실행 output이다. 본문은 이 차이를 숨기지 않고 notebook의 모집단·실험 방식·한계를 함께 적는다.
-- 4~5번 chart는 저장된 versioned JSON/fixture를 현재 환경에서 다시 읽어 생성했으며, 원천 Provider 호출이나 Product E2E를 다시 수행한 것은 아니다.
+- 4~5번 chart는 commit과 SHA가 고정된 versioned JSON/fixture를 현재 환경에서 다시 읽어 생성했으며, 원천 Provider 호출이나 Product E2E를 다시 수행한 것은 아니다.

@@ -10,21 +10,32 @@ status: review
 
 단위 테스트가 많아도 실제 저장소 버전이 맞지 않을 수 있고, 로컬 E2E가 성공해도 Production HA를 검증한 것은 아니다. Cloud resource가 존재해도 Runtime이 그 위에서 정상 동작한다고 단정할 수 없다.
 
-그래서 기능 목록보다 먼저 **Claim의 등급**을 나눴다.
+그래서 기능 목록보다 먼저 **시스템 검증 등급**과 **분석 Evidence provenance**를 나눴다.
 
-![검증 Claim 다섯 단계](../assets/diagrams/08-verification-claims.png)
+![시스템 검증과 분석 Evidence provenance](../assets/diagrams/08-verification-claims.png)
 
 ## 구현과 검증은 같은 문장이 아니다
 
 | 등급 | 의미 | 사용하는 표현 |
 | --- | --- | --- |
 | `IMPLEMENTED` | main 코드와 자동 테스트가 존재 | 구현했다 |
-| `LOCAL_VERIFIED` | 고정된 로컬 통합 환경에서 E2E 확인 | 로컬 통합 환경에서 검증했다 |
+| `LOCAL_E2E` | 고정된 로컬 통합 환경에서 E2E 확인 | 로컬 통합 환경에서 검증했다 |
 | `QA_LIMITED` | NCP QA의 특정 자원·경로만 확인 | 해당 범위에서 제한적으로 검증했다 |
 | `DESIGN_ONLY` | 문서와 계약만 존재 | 목표 구조로 설계했다 |
 | `UNVERIFIED` | 실행 Evidence가 없음 | 아직 검증하지 않았다 |
 
 이 구분이 없으면 `docker compose`에서 동작한 기능이 어느 순간 “운영 검증 완료”로 표현된다. 시스템의 약점을 숨기는 것이 아니라, 다음 검증 작업의 위치를 잃게 된다.
+
+하지만 시스템 검증 등급만으로는 분석 수치의 출처를 설명할 수 없었다. 저장된 Notebook output, 버전이 고정된 JSON, 실제 로컬 통합 실행을 모두 `LOCAL_E2E`로 부르면 “어디에서 나온 수치인가”와 “어디까지 시스템을 실행했는가”가 섞인다.
+
+| Evidence provenance | 의미 |
+| --- | --- |
+| `SAVED_OUTPUT_HASHED` | 기존 Notebook의 저장 output을 source SHA와 cell 번호로 고정해 추출 |
+| `VERSIONED_ARTIFACT_REGENERATED` | 고정된 commit과 파일 SHA를 확인한 JSON/fixture로 차트를 재생성 |
+| `LOCAL_E2E` | BE·FE·DB를 연결한 로컬 통합 실행에서 직접 확인 |
+| `NCP_QA` | NCP QA의 제한된 자원·경로에서 확인 |
+
+예를 들어 Amount 정밀도와 ZERO_VALUE 그림은 `SAVED_OUTPUT_HASHED`다. 이번 문서 작업에서 Notebook을 다시 실행한 결과가 아니다. AI benchmark와 Digital Asset 6-case 그림은 `VERSIONED_ARTIFACT_REGENERATED`이며, 생성 스크립트가 ADP-DA commit과 입력 파일 SHA를 모두 확인한 뒤 렌더링한다. 반면 관리자 화면과 Runtime 흐름은 `LOCAL_E2E`다. 이 두 축을 분리해야 Evidence보다 앞서 말하지 않는다는 원칙이 실제 문장에도 유지된다.
 
 ## 전체 조합을 고정하는 일과 CI 계약을 고정하는 일은 다르다
 

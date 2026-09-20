@@ -1,4 +1,6 @@
 import json
+import hashlib
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -16,6 +18,17 @@ BLUE = "#4F8CFF"
 TEAL = "#34D3C2"
 AMBER = "#F4B860"
 RED = "#FF7285"
+EXPECTED_ADP_DA_COMMIT = "74af1928d720d4a37addeedab1770d81b4fff8a5"
+PINNED_SOURCES = {
+    "02_ai/artifacts/model_benchmark/benchmark_model_summary.json": "32be45ba88809a7c78311e7d3ab9ceb89a4b5f6e49e786ac1f50a63246594b4f",
+    "02_ai/artifacts/model_benchmark/benchmark_validation.json": "a64efe4545a96f6ce73f188fa14081109403fae9bb96fa734a58d579d14310ba",
+    "03_digital_asset/artifacts/local_product_e2e_v1/golden_pass.json": "85945455b9dc0848f4cbb6fef2d1ec29579f866101bc606af8ee5ca214736aa7",
+    "03_digital_asset/artifacts/local_product_e2e_v1/block_amount.json": "cde0dbb0a7d42cf8b854ae367a80f8adddf3ad7c6fd49c0886b2337ebb6695d0",
+    "03_digital_asset/artifacts/local_product_e2e_v1/block_destination.json": "3e31816ba3fdb581aead5bfbcc615801f2390a5526aafc281700bcf0ce2656a7",
+    "03_digital_asset/artifacts/local_product_e2e_v1/execution_failed.json": "788e63f29a10dd4f2f2b33d8bdd95e1cdf9aac273d19efd103ee4464b1be77a4",
+    "03_digital_asset/artifacts/local_product_e2e_v1/sent_unknown_recovered.json": "71a374dec2850e0e9c2cb873025f3faa4e8e1d53688670a432b82398a2916f89",
+    "03_digital_asset/artifacts/local_product_e2e_v1/duplicate_request.json": "52e9056ccf3b36b155f77bf7e8be932a3788f9d1bb075101471343f11cb6100c",
+}
 
 
 def font(size: int, bold: bool = False):
@@ -50,6 +63,29 @@ def base(title: str, subtitle: str):
     return image, draw
 
 
+def verify_pinned_sources() -> None:
+    repository = WORKSPACE / "ADP-DA"
+    actual_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if actual_commit != EXPECTED_ADP_DA_COMMIT:
+        raise RuntimeError(
+            "ADP-DA commit changed:\n"
+            f"expected {EXPECTED_ADP_DA_COMMIT}\nactual   {actual_commit}"
+        )
+    for relative_path, expected_hash in PINNED_SOURCES.items():
+        path = repository / relative_path
+        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            raise RuntimeError(
+                f"source artifact changed: {path}\n"
+                f"expected {expected_hash}\nactual   {actual_hash}"
+            )
+
+
 def ai_tradeoff():
     source = WORKSPACE / "ADP-DA/02_ai/artifacts/model_benchmark/benchmark_model_summary.json"
     validation_source = WORKSPACE / "ADP-DA/02_ai/artifacts/model_benchmark/benchmark_validation.json"
@@ -60,8 +96,8 @@ def ai_tradeoff():
         "합성 금융 업무에서 확인한 모델별 품질–지연시간 Trade-off",
         "30 cases × 3 repetitions = 모델별 90회 · 비용은 공식 단가 미확인으로 비교에서 제외",
     )
-    left, top, right, bottom = 150, 230, 1450, 720
-    draw.rounded_rectangle((85, 195, 1515, 785), radius=24, fill=PANEL, outline=LINE, width=2)
+    left, top, right, bottom = 150, 220, 1450, 560
+    draw.rounded_rectangle((85, 190, 1515, 805), radius=24, fill=PANEL, outline=LINE, width=2)
     draw.line((left, bottom, right, bottom), fill=MUTED, width=2)
     draw.line((left, top, left, bottom), fill=MUTED, width=2)
 
@@ -101,9 +137,25 @@ def ai_tradeoff():
             fill=MUTED,
         )
 
-    draw.text((620, 742), "평균 응답 지연시간 (짧을수록 왼쪽)", font=F_BODY, fill=TEXT)
+    draw.text((620, 582), "평균 응답 지연시간 (짧을수록 왼쪽)", font=F_BODY, fill=TEXT)
+    table_x = [110, 570, 790, 1010, 1230, 1490]
+    headers = ["Model", "Mean", "p50", "p95", "Success"]
+    for index, header in enumerate(headers):
+        draw.text((table_x[index], 640), header, font=F_SMALL, fill=MUTED)
+    draw.line((110, 670, 1490, 670), fill=LINE, width=2)
+    for row_index, model in enumerate(models):
+        y = 686 + row_index * 36
+        values = [
+            model["model"],
+            f"{model['latency_mean_ms'] / 1000:.2f}s",
+            f"{model['latency_p50_ms'] / 1000:.2f}s",
+            f"{model['latency_p95_ms'] / 1000:.1f}s",
+            f"{model['stability_success_rate']:.1f}%",
+        ]
+        for index, value in enumerate(values):
+            draw.text((table_x[index], y), value, font=F_SMALL, fill=TEXT)
     draw.text(
-        (92, 820),
+        (92, 835),
         f"검증 상태: {validation['status']} · 실제 모델 호출 {validation['actual_executions']}회 · synthetic/public data only",
         font=F_SMALL,
         fill=MUTED,
@@ -158,5 +210,6 @@ def digital_asset_cases():
     image.save(OUT / "05-digital-asset-six-case-matrix.png", "PNG", optimize=True)
 
 
+verify_pinned_sources()
 ai_tradeoff()
 digital_asset_cases()

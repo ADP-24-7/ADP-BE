@@ -62,7 +62,7 @@
 
 ### 핵심 제품 문장
 
-ADP는 **AI, SaaS, Digital Asset 같은 외부 시스템으로 금융 데이터나 실행 요청이 나가기 전에, 근거가 있는 정책으로 최소 조회·변환·목적지·실행을 통제하고 그 판단과 결과를 복구 가능한 Evidence로 남기는 Financial Privacy Gateway**다.
+ADP는 **AI와 Digital Asset 외부 시스템으로 금융 데이터나 실행 요청이 나가기 전에, 근거가 있는 정책으로 최소 조회·변환·목적지·실행을 통제하고 그 판단과 결과를 복구 가능한 Evidence로 남기는 Financial Privacy Gateway**다.
 
 ### 공통 실행 흐름
 
@@ -98,7 +98,7 @@ ADP는 **AI, SaaS, Digital Asset 같은 외부 시스템으로 금융 데이터�
 
 ### 핵심 질문
 
-금융사가 AI·SaaS·Digital Asset을 쓰려 할 때, 왜 단순 DLP나 API Gateway만으로는 충분하지 않은가?
+금융사가 AI와 Digital Asset 외부 실행을 연결할 때, 왜 단순 DLP나 API Gateway만으로는 충분하지 않은가?
 
 ### 이 편의 역할
 
@@ -452,15 +452,26 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 
 ## 7. 사실성 및 보안 검수 규칙
 
-### Claim 등급
+### 시스템 검증 등급
 
 | 등급 | 의미 | 문장 표현 |
 | --- | --- | --- |
 | `IMPLEMENTED` | main 코드와 테스트가 존재 | “구현했다” |
-| `LOCAL_VERIFIED` | 고정된 로컬 통합 환경에서 E2E 확인 | “로컬 통합 환경에서 검증했다” |
+| `LOCAL_E2E` | 고정된 로컬 통합 환경에서 E2E 확인 | “로컬 통합 환경에서 검증했다” |
 | `QA_LIMITED` | 특정 NCP QA 자원 또는 경로만 검증 | “NCP QA의 해당 범위에서 제한적으로 검증했다” |
 | `DESIGN_ONLY` | 문서·계약만 존재 | “목표 구조로 설계했다” |
 | `UNVERIFIED` | 운영 환경 검증 없음 | “아직 검증하지 않았다” |
+
+### 분석 Evidence provenance
+
+| Provenance | 의미 | 사용할 수 있는 표현 |
+| --- | --- | --- |
+| `SAVED_OUTPUT_HASHED` | 저장된 Notebook output을 source SHA와 cell로 고정해 추출 | “저장된 실행 output에서 확인했다” |
+| `VERSIONED_ARTIFACT_REGENERATED` | 고정 commit과 SHA를 통과한 JSON/fixture로 현재 차트를 재생성 | “버전이 고정된 Artifact에서 재생성했다” |
+| `LOCAL_E2E` | BE·FE·DB 통합 실행에서 직접 확인 | “로컬 통합 환경에서 확인했다” |
+| `NCP_QA` | NCP QA의 제한된 자원 또는 경로에서 확인 | “NCP QA의 해당 범위에서 확인했다” |
+
+시스템 기능의 검증 강도와 분석 수치의 출처는 별도 축으로 기록한다. 저장된 Notebook output에 SHA가 있다고 해서 시스템 기능을 로컬 E2E로 실행한 것은 아니다.
 
 ### 금지 표현
 
@@ -477,7 +488,7 @@ Governance 운영 모델과 사람의 승인 책임을 설명한다.
 2. 인용할 문서, 코드, migration, test가 현재 main에 존재하는지 확인한다.
 3. 표의 수치와 상태명을 자동 또는 명령으로 재산출한다.
 4. 실제 화면을 새로 캡처하고 합성 데이터 provenance를 확인한다.
-5. 구현/로컬 검증/설계 전용 표현을 구분한다.
+5. 시스템 검증 등급과 분석 Evidence provenance를 구분한다.
 6. 공개하면 안 되는 credential, 내부 endpoint, 원문 데이터가 없는지 확인한다.
 
 ## 8. `docs/blog` 권장 구조
@@ -523,11 +534,10 @@ docs/blog/
 
 발행은 1편부터 8편 순서로 진행한다.
 
-## 10. 다음 작업 범위
+## 10. 발행 전 최종 작업
 
-다음 단계에서는 글을 바로 쓰기 전에 아래 두 문서를 먼저 만든다.
-
-1. `sources/repository-evidence-map.md`: 각 편에서 인용할 코드, API, migration, test, 실행 명령과 기준 commit 정리
-2. `sources/claim-register.md`: 블로그에 사용할 핵심 주장마다 Claim 등급과 재현 명령 연결
-
-두 문서가 준비된 뒤 6편부터 초안을 작성한다. 이 순서를 따르면 글의 표현이 실제 구현과 어긋나는 것을 줄이고, 이후 코드 변경 시 어느 문장을 다시 검증해야 하는지도 추적할 수 있다.
+1. AI·Digital Asset 2축과 어긋나는 과거 범위 표현이 없는지 확인한다.
+2. 시스템 검증 등급과 분석 Evidence provenance가 섞이지 않았는지 확인한다.
+3. Notebook, benchmark JSON, validation JSON, fixture의 source SHA와 ADP-DA commit pin을 검증한다.
+4. 이미지의 글자 잘림, 포인터, 브라우저 chrome, 실제 식별정보 노출 여부를 확인한다.
+5. Markdown 상대 경로를 Velog 업로드 URL로 변환하고 본문과 이미지 순서를 최종 검수한다.

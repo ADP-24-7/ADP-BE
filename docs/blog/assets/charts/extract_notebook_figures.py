@@ -3,6 +3,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from PIL import Image, ImageDraw, ImageFont
+
 
 OUT = Path(__file__).resolve().parent
 WORKSPACE = OUT.parents[4]
@@ -60,6 +62,43 @@ def extract_png(notebook_path: Path, cell_index: int) -> bytes:
     return base64.b64decode(payload)
 
 
+def font(size: int, bold: bool = False):
+    paths = [
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    for path in paths:
+        if Path(path).exists():
+            return ImageFont.truetype(
+                path,
+                size=size,
+                index=7 if bold and "AppleSD" in path else 0,
+            )
+    return ImageFont.load_default()
+
+
+def add_counterfactual_notice(path: Path) -> None:
+    image = Image.open(path).convert("RGB")
+    draw = ImageDraw.Draw(image, "RGBA")
+    notice = "Counterfactual experiment · 실제 timeout 발생률/중복률 아님"
+    label_font = font(max(13, image.width // 70), True)
+    bbox = draw.textbbox((0, 0), notice, font=label_font)
+    width = bbox[2] - bbox[0]
+    height = bbox[3] - bbox[1]
+    x = max(24, image.width - width - 26)
+    y = 56
+    draw.rounded_rectangle(
+        (x - 12, y - 6, x + width + 12, y + height + 9),
+        radius=9,
+        fill=(8, 20, 38, 225),
+        outline=(244, 184, 96, 255),
+        width=2,
+    )
+    draw.text((x, y), notice, font=label_font, fill=(255, 244, 220, 255))
+    image.save(path, "PNG", optimize=True)
+
+
 for figure in FIGURES:
     source = figure["source"]
     actual_hash = sha256(source)
@@ -70,4 +109,6 @@ for figure in FIGURES:
         )
     target = OUT / figure["output"]
     target.write_bytes(extract_png(source, figure["cell"]))
+    if figure["output"] == "03-recovery-strategy-risk.png":
+        add_counterfactual_notice(target)
     print(f"wrote {target.relative_to(WORKSPACE)}")
